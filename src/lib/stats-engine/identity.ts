@@ -1,0 +1,75 @@
+import type { NameResolution, PlayerIdentity } from "./types";
+
+/**
+ * Report text is the primary key for stats attribution (see kaiser_BUILD_SPEC.md).
+ * Vadim disambiguates duplicate first names himself in-report (e.g. "Sasha SI" vs
+ * "Sasha Ru"), so an exact match against a known alias is trusted as-is. Anything
+ * that isn't an exact match only ever comes back "flagged" — never auto-merged —
+ * because short names are especially risky (Leo/Neo, Alan/Alen could be different
+ * real people).
+ */
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i]![0] = i;
+  for (let j = 0; j <= n; j++) dp[0]![j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i]![j] = Math.min(
+        dp[i - 1]![j]! + 1,
+        dp[i]![j - 1]! + 1,
+        dp[i - 1]![j - 1]! + cost,
+      );
+    }
+  }
+  return dp[m]![n]!;
+}
+
+function normalize(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+const SHORT_NAME_MAX_LENGTH = 5;
+const FUZZY_MATCH_MAX_DISTANCE = 1;
+
+export function resolvePlayerName(
+  raw: string,
+  knownPlayers: PlayerIdentity[],
+): NameResolution {
+  const rawNorm = normalize(raw);
+
+  for (const player of knownPlayers) {
+    const allNames = [player.displayName, ...player.aliases];
+    if (allNames.some((n) => normalize(n) === rawNorm)) {
+      return { raw, status: "exact", canonicalId: player.canonicalId, candidates: [] };
+    }
+  }
+
+  const candidates: NameResolution["candidates"] = [];
+  for (const player of knownPlayers) {
+    const allNames = [player.displayName, ...player.aliases];
+    let best = Infinity;
+    for (const n of allNames) {
+      const d = levenshtein(rawNorm, normalize(n));
+      if (d < best) best = d;
+    }
+    // Short names get a tighter (still non-zero) tolerance: a 1-character edit
+    // on a 4-5 letter name is exactly the Leo/Neo, Alan/Alen failure mode, so it
+    // still surfaces as a flagged candidate for a human to confirm, not a match.
+    const maxDistance = rawNorm.length <= SHORT_NAME_MAX_LENGTH
+      ? FUZZY_MATCH_MAX_DISTANCE
+      : FUZZY_MATCH_MAX_DISTANCE + 1;
+    if (best <= maxDistance) {
+      candidates.push({ canonicalId: player.canonicalId, displayName: player.displayName, distance: best });
+    }
+  }
+  candidates.sort((a, b) => a.distance - b.distance);
+
+  if (candidates.length > 0) {
+    return { raw, status: "flagged", canonicalId: null, candidates };
+  }
+  return { raw, status: "unresolved", canonicalId: null, candidates: [] };
+}
