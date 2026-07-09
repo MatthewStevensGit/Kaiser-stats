@@ -1,3 +1,12 @@
+# Private / real player data — never commit (real names, emails, attendance/stats
+# tied to identifiable people). Keep real data here or in other gitignored
+# private folders; only fake/anonymized sample data belongs in the repo proper.
+private/
+soccer*.xlsx
+soccer*.xlsx.pdf
+kaiser_player_identity.csv
+kaiser_email_index.csv
+
 # Logs
 logs
 *.log
