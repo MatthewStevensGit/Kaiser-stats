@@ -30,6 +30,8 @@ The output contract. Whatever ingests new data, this is what it must produce.
 | `assists` | Counting stat only, never an input to `mvpCount` or the power ranking (see `kaiser_BUILD_SPEC.md` for why). **Always `0` from the spreadsheet-backfill path** — the historical spreadsheets never tracked assists, in any of the 5 years on file (confirmed in `kaiser_stats_engine_notes.md`). Only `rollupGameRecords()` can populate a nonzero value. |
 | `plusMinus` | `wins − losses`. A derived stat, not an independent measure — see `findPlusMinusMismatches`. |
 | `mvpCount` | Number of games this player was the app-derived MVP. **Always `0` from the spreadsheet-backfill path**, same reasoning as `assists` — MVP is computed from per-game report narrative, which the season spreadsheets never had. |
+| `avgDraftPosition` | Average snake-draft pick number across every game this player was drafted in (1 = picked first that game), or `null` if never drafted / unknown. **Always `null` from the spreadsheet-backfill path** — draft order doesn't exist at season-aggregate granularity. Display-only: shown next to the power ranking as a performance-vs-draft-slot comparison (like fantasy sports' value-over-ADP), computed *after* ranking and never fed back into the sort — see `computePowerRankings()` in `rankings.ts` and `kaiser_BUILD_SPEC.md` on why draft order must never be a ranking input. |
+| `notableMentions` | Verbatim report-narrative snippets naming this player (e.g. a standout zero-goal performance). **Always `[]` from the spreadsheet-backfill path.** Same reasoning as `assists`: coverage is too sparse/inconsistent (a mention only exists if a report happened to narrate that moment) to be a fair scored input, so it's qualitative context only — never folded into `mvpCount` or the power ranking. |
 | `sources` | Provenance strings (one per contributing row/game) — e.g. `"soccer_2023.xlsx#Sheet1"` or `"email:19f3315cf733a148"`. Not user-facing; useful for debugging where a number came from. |
 
 **Current limitation, honestly documented rather than hidden:** `aggregateStandings()`
@@ -55,10 +57,11 @@ considered valid, not after.
 | `gameId` | Stable id for this game. |
 | `date` | ISO 8601, e.g. `"2026-07-05"`. |
 | `league` | `"saturday"` \| `"sunday"` \| `"unknown"`. |
-| `homeRoster` / `awayRoster` | Arrays of `canonicalId`. |
+| `homeRoster` / `awayRoster` | Arrays of `RosterSpot` = `{ canonicalId, pickNumber }`. `pickNumber` is the 1-indexed *overall* snake-draft pick for that game (not per-team) — this is what `rollupGameRecords()` averages into `avgDraftPosition`. |
 | `homeScore` / `awayScore` | Final score. |
 | `goals` | Array of `{ scorerCanonicalId, assistCanonicalId, team }`. `assistCanonicalId` is `null` when the report didn't narrate one — never guessed. |
 | `mvpCanonicalId` | The app's own derived MVP call, or `null`. Never a fact Vadim stated, never another player's stated opinion (see `kaiser_BUILD_SPEC.md`). |
+| `notableMentions` | Array of `{ canonicalId, quote }` — report-narrative snippets naming a player, kept separate from `mvpCanonicalId`. Rolls up into `PlayerSeasonStats.notableMentions`. |
 | `source` | Provenance, e.g. `"email:<gmailThreadId>"`. |
 
 `rollupGameRecords()` (`game-records.ts`) turns `GameRecord[]` into
@@ -86,7 +89,7 @@ and tested against the right shape today.
   year's file, the schema drifts (see `kaiser_stats_engine_notes.md`).
 - **New real identity/email data**: goes in `private/`, following the existing
   `kaiser_player_identity.csv` / `kaiser_email_index.csv` shape. Never at the
-  repo root — see `kaiser_github_setup.md` for why.
+  repo root — see `kaiser_BUILD_SPEC.md`'s GitHub/repo-handling section for why.
 - **New fake/sample data** (for tests or the public demo): goes in
   `data/sample/`, committed normally. **Naming footgun to avoid:** don't name a
   sample file `soccer*.xlsx` — the repo's `.gitignore` blanket-excludes that

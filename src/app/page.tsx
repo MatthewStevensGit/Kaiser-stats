@@ -7,8 +7,25 @@ import { computePowerRankings } from "@/lib/stats-engine/rankings";
 import { parsePrimaryStandingsSheet } from "@/lib/stats-engine/season-standings-parser";
 import type { GameRecord, PlayerIdentity, StatsView } from "@/lib/stats-engine/types";
 
-const MIN_GAMES_FOR_RANKING = 10;
+const MIN_GAMES_FOR_RANKING = 2;
 const MVP_MIN_GAMES = 2;
+
+function formatDraftPosition(avgDraftPosition: number | null): string {
+  return avgDraftPosition === null ? "—" : `#${avgDraftPosition.toFixed(1)}`;
+}
+
+/**
+ * Disparity is display-only, computed from the rank computePowerRankings()
+ * already produced — never a second ranking, never fed back into the sort.
+ */
+function formatDisparity(draftDisparity: number | null): { label: string; tone: "good" | "warning" | "muted" } {
+  if (draftDisparity === null) return { label: "No draft data", tone: "muted" };
+  const rounded = Math.round(draftDisparity);
+  if (Math.abs(rounded) <= 1) return { label: "On par with draft slot", tone: "muted" };
+  return rounded > 0
+    ? { label: `▼ Underperforming by ${rounded}`, tone: "warning" }
+    : { label: `▲ Overperforming by ${Math.abs(rounded)}`, tone: "good" };
+}
 
 const VIEWS: { id: StatsView; label: string }[] = [
   { id: "merged", label: "Merged" },
@@ -42,16 +59,21 @@ export default async function Home({
   const { players, rows, games } = loadSampleData();
   const { players: totals, unresolvedNames } = aggregateStandings(rows, players, view);
   const mismatches = findPlusMinusMismatches(rows.filter((r) => view === "merged" || r.league === view));
-  const rankings = computePowerRankings(totals, MIN_GAMES_FOR_RANKING);
 
   const gameStats = rollupGameRecords(
     games.filter((g) => view === "merged" || g.league === view),
     players,
   );
+  // Power ranking is computed from the GameRecord path, not the spreadsheet
+  // path — draft position and notable mentions only exist at per-game
+  // granularity, which season-standings spreadsheets never had (see
+  // docs/data-contract.md).
+  const rankings = computePowerRankings(gameStats, MIN_GAMES_FOR_RANKING);
   const mvpBoard = [...gameStats]
     .filter((p) => p.games >= MVP_MIN_GAMES && p.mvpCount > 0)
     .sort((a, b) => b.mvpCount - a.mvpCount);
   const assistBoard = [...gameStats].filter((p) => p.assists > 0).sort((a, b) => b.assists - a.assists);
+  const mentionBoard = [...gameStats].filter((p) => p.notableMentions.length > 0);
 
   const totalGames = totals.reduce((sum, p) => sum + p.games, 0);
   const totalGoals = totals.reduce((sum, p) => sum + p.goals, 0);
@@ -156,7 +178,15 @@ export default async function Home({
           <section className="card">
             <h2>Power ranking</h2>
             <p className="note">
-              {rankings.formula}, minimum {rankings.minGames} games.
+              {rankings.formula}, minimum {rankings.minGames} games. From the same sample
+              game data as MVP &amp; assists below — draft position only exists at
+              per-game granularity, so this table (unlike Season standings above) reads
+              from the <code>GameRecord</code> pipeline.
+            </p>
+            <p className="note">
+              &quot;Avg. Draft Position&quot; and the disparity column are shown for
+              context only — sort order stays performance-only (plus-minus per game); draft
+              position is never a ranking input, see the <a href="/rules">rulebook</a>.
             </p>
             {rankings.entries.length === 0 ? (
               <p className="note">No player has reached the minimum-games floor yet.</p>
@@ -168,16 +198,27 @@ export default async function Home({
                       <th className="num">#</th>
                       <th>Player</th>
                       <th className="num">+/- per game</th>
+                      <th className="num">Avg. Draft Position</th>
+                      <th>Vs. draft slot</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rankings.entries.map((e) => (
-                      <tr key={e.canonicalId} className={e.rank === 1 ? "rank-first" : undefined}>
-                        <td className="num">{e.rank}</td>
-                        <td>{e.displayName}</td>
-                        <td className="num">{e.plusMinusPerGame.toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {rankings.entries.map((e) => {
+                      const disparity = formatDisparity(e.draftDisparity);
+                      return (
+                        <tr key={e.canonicalId} className={e.rank === 1 ? "rank-first" : undefined}>
+                          <td className="num">{e.rank}</td>
+                          <td>{e.displayName}</td>
+                          <td className="num">{e.plusMinusPerGame.toFixed(2)}</td>
+                          <td className="num">{formatDraftPosition(e.avgDraftPosition)}</td>
+                          <td>
+                            <span className={`status-tag status-tag-text status-${disparity.tone}`}>
+                              {disparity.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -228,6 +269,32 @@ export default async function Home({
                 )}
               </div>
             </div>
+          </section>
+
+          <section className="card">
+            <h2>Notable mentions</h2>
+            <p className="note">
+              Verbatim report-narrative snippets naming a player — qualitative context
+              only, same reasoning as assists: mentions are sparse and inconsistent (only
+              show up when a report happens to narrate a moment), so they&apos;re never
+              scored or folded into MVP or the power ranking above.
+            </p>
+            {mentionBoard.length === 0 ? (
+              <p className="note">No notable mentions in this view yet.</p>
+            ) : (
+              <ul className="mention-list">
+                {mentionBoard.map((p) => (
+                  <li key={p.canonicalId}>
+                    <strong>{p.displayName}</strong>
+                    <ul>
+                      {p.notableMentions.map((quote) => (
+                        <li key={quote}>&quot;{quote}&quot;</li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </>
       )}

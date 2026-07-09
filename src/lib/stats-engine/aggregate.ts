@@ -85,10 +85,12 @@ export function aggregateStandings(
       ties: 0,
       goals: 0,
       // Never populated by this path — season-standings spreadsheets don't
-      // track either (see kaiser_stats_engine_notes.md). Only the future
-      // GameRecord -> rollupGameRecords() path can fill these in.
+      // have per-game granularity (see kaiser_stats_engine_notes.md). Only
+      // the future GameRecord -> rollupGameRecords() path can fill these in.
       assists: 0,
       mvpCount: 0,
+      avgDraftPosition: null,
+      notableMentions: [],
       plusMinus: 0,
       sources: [],
     };

@@ -81,7 +81,25 @@ export default function RulesPage() {
                 Plus-minus per game, with a minimum-games floor so small sample sizes
                 can&apos;t dominate. Formula is disclosed on the standings page, not
                 claimed as objective — Vadim&apos;s own ranking formula has changed more
-                than once.
+                than once. Average snake-draft pick position is shown alongside it for
+                context (like fantasy sports&apos; performance-vs-ADP) — never a ranking
+                input, since it encodes the captains&apos; priors, not performance.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span className="icon" aria-hidden="true">
+              💬
+            </span>
+            <div>
+              <strong>Notable mentions</strong>
+              <p className="note">
+                Verbatim report-narrative snippets naming a player (e.g. a standout
+                zero-goal performance), shown as qualitative context next to the power
+                ranking — never scored or folded into MVP or the ranking itself. Same
+                reasoning as assists: coverage is too sparse and inconsistent (a mention
+                only exists if a report happens to narrate that moment) to use as a fair
+                ranking input.
               </p>
             </div>
           </li>
