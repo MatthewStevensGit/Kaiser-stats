@@ -1,0 +1,58 @@
+[
+  {
+    "canonicalId": "s001",
+    "displayName": "Ari Fox",
+    "aliases": ["Ari"],
+    "knownEmails": ["ari.fox@example.com"],
+    "leagues": ["sunday"],
+    "status": "regular"
+  },
+  {
+    "canonicalId": "s002",
+    "displayName": "Bex Tanaka",
+    "aliases": ["Bex"],
+    "knownEmails": ["bex.tanaka@example.com"],
+    "leagues": ["sunday"],
+    "status": "regular"
+  },
+  {
+    "canonicalId": "s003",
+    "displayName": "Cy Okafor",
+    "aliases": ["Cy"],
+    "knownEmails": ["cy.okafor@example.com"],
+    "leagues": ["saturday", "sunday"],
+    "status": "regular"
+  },
+  {
+    "canonicalId": "s004",
+    "displayName": "Dana Petrov",
+    "aliases": ["Dana"],
+    "knownEmails": ["dana.petrov@example.com"],
+    "leagues": ["saturday"],
+    "status": "regular"
+  },
+  {
+    "canonicalId": "s005",
+    "displayName": "Theo Lindqvist",
+    "aliases": ["Theo"],
+    "knownEmails": ["theo.lindqvist@example.com"],
+    "leagues": ["saturday"],
+    "status": "regular"
+  },
+  {
+    "canonicalId": "s006",
+    "displayName": "Robin Achebe",
+    "aliases": ["Robin"],
+    "knownEmails": ["robin.achebe@example.com"],
+    "leagues": ["sunday"],
+    "status": "regular"
+  },
+  {
+    "canonicalId": "s007",
+    "displayName": "GUEST TEMPLATE",
+    "aliases": [],
+    "knownEmails": [],
+    "leagues": ["saturday", "sunday"],
+    "status": "guest"
+  }
+]
