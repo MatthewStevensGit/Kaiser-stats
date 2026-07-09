@@ -1,8 +1,8 @@
 import { resolvePlayerName } from "./identity";
 import type {
   NameResolution,
-  PlayerAggregate,
   PlayerIdentity,
+  PlayerSeasonStats,
   PlusMinusMismatch,
   SeasonStandingRow,
   StatsView,
@@ -40,7 +40,7 @@ function rowMatchesView(row: SeasonStandingRow, view: StatsView): boolean {
 }
 
 export interface AggregateResult {
-  players: PlayerAggregate[];
+  players: PlayerSeasonStats[];
   unresolvedNames: NameResolution[];
 }
 
@@ -56,7 +56,7 @@ export function aggregateStandings(
   knownPlayers: PlayerIdentity[],
   view: StatsView,
 ): AggregateResult {
-  const totals = new Map<string, PlayerAggregate>();
+  const totals = new Map<string, PlayerSeasonStats>();
   const unresolvedNames: NameResolution[] = [];
   const seenUnresolved = new Set<string>();
 
@@ -84,6 +84,11 @@ export function aggregateStandings(
       losses: 0,
       ties: 0,
       goals: 0,
+      // Never populated by this path — season-standings spreadsheets don't
+      // track either (see kaiser_stats_engine_notes.md). Only the future
+      // GameRecord -> rollupGameRecords() path can fill these in.
+      assists: 0,
+      mvpCount: 0,
       plusMinus: 0,
       sources: [],
     };
@@ -108,10 +113,10 @@ export function aggregateStandings(
  * dominate (see kaiser_BUILD_SPEC.md) — this is the fix.
  */
 export function rankByRate(
-  players: PlayerAggregate[],
+  players: PlayerSeasonStats[],
   statKey: "goals",
   minGames: number,
-): (PlayerAggregate & { rate: number })[] {
+): (PlayerSeasonStats & { rate: number })[] {
   return players
     .filter((p) => p.games >= minGames)
     .map((p) => ({ ...p, rate: p[statKey] / p.games }))
