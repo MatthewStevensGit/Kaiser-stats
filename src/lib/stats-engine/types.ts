@@ -45,10 +45,13 @@ export interface NameResolution {
  *   - future per-game report parsing -> GameRecord[] -> rollupGameRecords() (game-records.ts)
  * See docs/data-contract.md for the full field-by-field explanation.
  *
- * `assists` and `mvpCount` only ever come from the GameRecord path — the
- * historical spreadsheets never tracked either (confirmed absent in all 5
- * years, see kaiser_stats_engine_notes.md), so spreadsheet-only aggregates
- * report both as 0 rather than omitting the fields.
+ * `assists`, `mvpCount`, `avgDraftPosition`, and `notableMentions` only ever
+ * come from the GameRecord path — the historical spreadsheets never tracked
+ * any of them (assists/MVP confirmed absent in all 5 years, see
+ * kaiser_stats_engine_notes.md; draft position and report narrative simply
+ * don't exist at season-aggregate granularity). Spreadsheet-only aggregates
+ * report `assists`/`mvpCount` as 0, `avgDraftPosition` as null, and
+ * `notableMentions` as an empty array, rather than omitting the fields.
  */
 export interface PlayerSeasonStats {
   canonicalId: string;
@@ -61,6 +64,25 @@ export interface PlayerSeasonStats {
   assists: number;
   plusMinus: number;
   mvpCount: number;
+  /**
+   * Average snake-draft pick number across every game this player was
+   * drafted in (1 = picked first that game), or null if never drafted /
+   * unknown. Display-only — see kaiser_BUILD_SPEC.md on why draft position
+   * must never be a ranking *input* (it encodes the captains' priors, not
+   * performance): it's shown alongside the performance rank as a value-over-
+   * draft-position comparison, the same way fantasy sports compares
+   * performance to ADP, never folded into the rank itself.
+   */
+  avgDraftPosition: number | null;
+  /**
+   * Verbatim narrative snippets from report text that mention this player
+   * (e.g. a standout zero-goal performance). Qualitative context only, same
+   * reasoning as assists: mentions are sparse and inconsistent (only appear
+   * when a report happens to narrate a moment), so using them as a scored
+   * ranking input would reward whoever got a sentence, not whoever played
+   * well. Never fed into mvpCount or the power ranking.
+   */
+  notableMentions: string[];
   sources: string[];
 }
 
@@ -80,6 +102,19 @@ export interface GoalEvent {
   team: "home" | "away";
 }
 
+/** One roster spot: who, and which overall snake-draft pick number got them. */
+export interface RosterSpot {
+  canonicalId: string;
+  /** 1-indexed overall pick number for this game's draft (not per-team). */
+  pickNumber: number;
+}
+
+/** A verbatim report-narrative snippet naming a player, for a single game. */
+export interface NotableMention {
+  canonicalId: string;
+  quote: string;
+}
+
 /**
  * The stable data contract: "one game's worth of data," in its final clean
  * form. This is the shape the future LLM report-parser is expected to
@@ -91,13 +126,19 @@ export interface GameRecord {
   gameId: string;
   date: string; // ISO 8601, e.g. "2026-07-05"
   league: League;
-  homeRoster: string[]; // canonicalIds
-  awayRoster: string[]; // canonicalIds
+  homeRoster: RosterSpot[];
+  awayRoster: RosterSpot[];
   homeScore: number;
   awayScore: number;
   goals: GoalEvent[];
   /** App-derived MVP call for this game, or null if not yet computed. */
   mvpCanonicalId: string | null;
+  /**
+   * Report-narrative snippets mentioning a player, kept separate from
+   * mvpCanonicalId — see PlayerSeasonStats.notableMentions for why these are
+   * qualitative context, never a ranking input.
+   */
+  notableMentions: NotableMention[];
   /** Provenance, e.g. "email:19f3315cf733a148" or "spreadsheet:soccer_2023.xlsx#Sheet1". */
   source: string;
 }

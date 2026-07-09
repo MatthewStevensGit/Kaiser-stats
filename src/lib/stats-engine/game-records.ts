@@ -19,6 +19,10 @@ export function rollupGameRecords(
 ): PlayerSeasonStats[] {
   const totals = new Map<string, PlayerSeasonStats>();
   const playersById = new Map(knownPlayers.map((p) => [p.canonicalId, p]));
+  // avgDraftPosition needs a running sum/count that isn't part of the public
+  // PlayerSeasonStats shape, so it's tracked here and folded in at the end.
+  const draftPickSums = new Map<string, number>();
+  const draftPickCounts = new Map<string, number>();
 
   function statsFor(canonicalId: string): PlayerSeasonStats {
     const existing = totals.get(canonicalId);
@@ -34,6 +38,8 @@ export function rollupGameRecords(
       goals: 0,
       assists: 0,
       mvpCount: 0,
+      avgDraftPosition: null,
+      notableMentions: [],
       plusMinus: 0,
       sources: [],
     };
@@ -49,8 +55,8 @@ export function rollupGameRecords(
       ["home", game.homeRoster],
       ["away", game.awayRoster],
     ] as const) {
-      for (const canonicalId of roster) {
-        const stats = statsFor(canonicalId);
+      for (const spot of roster) {
+        const stats = statsFor(spot.canonicalId);
         stats.games += 1;
         stats.sources.push(game.source);
         if (result === "tie") {
@@ -62,6 +68,9 @@ export function rollupGameRecords(
           stats.losses += 1;
           stats.plusMinus -= 1;
         }
+
+        draftPickSums.set(spot.canonicalId, (draftPickSums.get(spot.canonicalId) ?? 0) + spot.pickNumber);
+        draftPickCounts.set(spot.canonicalId, (draftPickCounts.get(spot.canonicalId) ?? 0) + 1);
       }
     }
 
@@ -75,6 +84,16 @@ export function rollupGameRecords(
     if (game.mvpCanonicalId) {
       statsFor(game.mvpCanonicalId).mvpCount += 1;
     }
+
+    for (const mention of game.notableMentions) {
+      statsFor(mention.canonicalId).notableMentions.push(mention.quote);
+    }
+  }
+
+  for (const stats of totals.values()) {
+    const count = draftPickCounts.get(stats.canonicalId);
+    const sum = draftPickSums.get(stats.canonicalId);
+    stats.avgDraftPosition = count && sum !== undefined ? sum / count : null;
   }
 
   return Array.from(totals.values());

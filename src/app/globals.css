@@ -12,10 +12,14 @@
   --accent: #2a78d6;
 
   --status-good: #0ca30c;
+  --status-good-bg: #0ca30c;
+  --status-good-fg: #ffffff;
   --status-warning-bg: #fab219;
   --status-warning-fg: #5a4200;
   --status-critical-bg: #d03b3b;
   --status-critical-fg: #ffffff;
+  --status-muted-bg: var(--surface-1);
+  --status-muted-fg: var(--text-secondary);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -31,10 +35,14 @@
     --accent: #3987e5;
 
     --status-good: #0ca30c;
+    --status-good-bg: #0ca30c;
+    --status-good-fg: #ffffff;
     --status-warning-bg: #c98500;
     --status-warning-fg: #fff8e6;
     --status-critical-bg: #e66767;
     --status-critical-fg: #1a1a19;
+    --status-muted-bg: var(--surface-1);
+    --status-muted-fg: var(--text-secondary);
   }
 }
 
@@ -365,6 +373,36 @@ tr.rank-first td {
   gap: 0.5rem;
 }
 
+/* Notable-mentions list: player name, then their quotes indented under it */
+.mention-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mention-list > li > strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.mention-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mention-list ul li {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
 .flag-list li {
   font-size: 0.9rem;
   display: flex;
@@ -389,6 +427,26 @@ tr.rank-first td {
 .status-warning {
   background: var(--status-warning-bg);
   color: var(--status-warning-fg);
+}
+
+.status-good {
+  background: var(--status-good-bg);
+  color: var(--status-good-fg);
+}
+
+.status-muted {
+  background: var(--status-muted-bg);
+  color: var(--status-muted-fg);
+  border: 1px solid var(--border);
+}
+
+/* A status tag carrying a full phrase (e.g. draft-disparity labels) reads
+   better sentence-case than shouting in small caps. */
+.status-tag-text {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.78rem;
+  white-space: normal;
 }
 
 .status-critical {
