@@ -344,6 +344,17 @@ tr.rank-first td {
   color: var(--accent);
 }
 
+/* Verbatim-quoted source material (e.g. Vadim's own words) */
+.rule-quote {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--page-plane);
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
 /* Data-quality flag list */
 .flag-list {
   list-style: none;
