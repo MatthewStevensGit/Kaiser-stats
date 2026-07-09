@@ -1,0 +1,90 @@
+[
+  {
+    "gameId": "sample-g1",
+    "date": "2026-06-07",
+    "league": "sunday",
+    "homeRoster": ["s001", "s002"],
+    "awayRoster": ["s003", "s004"],
+    "homeScore": 3,
+    "awayScore": 1,
+    "goals": [
+      { "scorerCanonicalId": "s001", "assistCanonicalId": null, "team": "home" },
+      { "scorerCanonicalId": "s001", "assistCanonicalId": null, "team": "home" },
+      { "scorerCanonicalId": "s002", "assistCanonicalId": "s001", "team": "home" },
+      { "scorerCanonicalId": "s003", "assistCanonicalId": null, "team": "away" }
+    ],
+    "mvpCanonicalId": "s001",
+    "source": "sample-game-1"
+  },
+  {
+    "gameId": "sample-g2",
+    "date": "2026-06-14",
+    "league": "sunday",
+    "homeRoster": ["s005", "s006"],
+    "awayRoster": ["s001", "s003"],
+    "homeScore": 2,
+    "awayScore": 2,
+    "goals": [
+      { "scorerCanonicalId": "s005", "assistCanonicalId": "s006", "team": "home" },
+      { "scorerCanonicalId": "s006", "assistCanonicalId": null, "team": "home" },
+      { "scorerCanonicalId": "s001", "assistCanonicalId": null, "team": "away" },
+      { "scorerCanonicalId": "s003", "assistCanonicalId": "s001", "team": "away" }
+    ],
+    "mvpCanonicalId": null,
+    "source": "sample-game-2"
+  },
+  {
+    "gameId": "sample-g3",
+    "date": "2026-06-21",
+    "league": "sunday",
+    "homeRoster": ["s002", "s004"],
+    "awayRoster": ["s005", "s003"],
+    "homeScore": 1,
+    "awayScore": 4,
+    "goals": [
+      { "scorerCanonicalId": "s002", "assistCanonicalId": null, "team": "home" },
+      { "scorerCanonicalId": "s005", "assistCanonicalId": "s003", "team": "away" },
+      { "scorerCanonicalId": "s005", "assistCanonicalId": null, "team": "away" },
+      { "scorerCanonicalId": "s003", "assistCanonicalId": null, "team": "away" },
+      { "scorerCanonicalId": "s003", "assistCanonicalId": "s005", "team": "away" }
+    ],
+    "mvpCanonicalId": "s005",
+    "source": "sample-game-3"
+  },
+  {
+    "gameId": "sample-g4",
+    "date": "2026-06-28",
+    "league": "sunday",
+    "homeRoster": ["s001", "s005"],
+    "awayRoster": ["s002", "s006"],
+    "homeScore": 5,
+    "awayScore": 0,
+    "goals": [
+      { "scorerCanonicalId": "s001", "assistCanonicalId": "s005", "team": "home" },
+      { "scorerCanonicalId": "s001", "assistCanonicalId": "s005", "team": "home" },
+      { "scorerCanonicalId": "s001", "assistCanonicalId": null, "team": "home" },
+      { "scorerCanonicalId": "s005", "assistCanonicalId": "s001", "team": "home" },
+      { "scorerCanonicalId": "s005", "assistCanonicalId": null, "team": "home" }
+    ],
+    "mvpCanonicalId": "s001",
+    "source": "sample-game-4"
+  },
+  {
+    "gameId": "sample-g5",
+    "date": "2026-07-05",
+    "league": "sunday",
+    "homeRoster": ["s003", "s006"],
+    "awayRoster": ["s001", "s004"],
+    "homeScore": 2,
+    "awayScore": 3,
+    "goals": [
+      { "scorerCanonicalId": "s003", "assistCanonicalId": null, "team": "home" },
+      { "scorerCanonicalId": "s006", "assistCanonicalId": "s003", "team": "home" },
+      { "scorerCanonicalId": "s001", "assistCanonicalId": null, "team": "away" },
+      { "scorerCanonicalId": "s001", "assistCanonicalId": "s004", "team": "away" },
+      { "scorerCanonicalId": "s004", "assistCanonicalId": null, "team": "away" }
+    ],
+    "mvpCanonicalId": "s001",
+    "source": "sample-game-5"
+  }
+]

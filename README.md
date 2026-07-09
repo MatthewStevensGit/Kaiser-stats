@@ -14,8 +14,13 @@ this repo** — see the Privacy section below.
   aggregation across Saturday/Sunday/Merged views, a plus-minus sanity check,
   and a transparent, disclosed power-ranking formula with a minimum-games
   floor.
-- `src/app/` — a minimal Next.js page rendering the engine's output against
-  the fake sample dataset.
+- `src/app/` — a Next.js demo (`/`) rendering the engine's output against a
+  fake sample dataset, plus a `/rules` page explaining how the stats are
+  computed.
+- See [`docs/data-contract.md`](docs/data-contract.md) for the stable data
+  shapes (`PlayerSeasonStats`, `GameRecord`) both the spreadsheet backfill and
+  the future live-report parser are expected to converge on, and for where new
+  raw data files should go.
 - Not yet built: LLM-based report-email parsing (needs a Claude API key,
   see `kaiser_BUILD_SPEC.md`), the admin-editable per-game review screen, and
   Phase 2 (the check-in app — blocked on the owner conversation).
@@ -28,13 +33,15 @@ npm test        # stats-engine unit tests
 npm run dev      # demo page at localhost:3000
 ```
 
-`data/sample/` holds a small fake/anonymized dataset (`players.json` +
-`sample_season.xlsx`, regenerated via `scripts/generate-sample-data.mjs`) so
-the engine and demo page run without any real data present.
+`data/sample/` holds a small fake/anonymized dataset (`players.json`,
+`sample_season.xlsx`, `games.json`) so the engine and demo page run without any
+real data present. The spreadsheet regenerates via
+`scripts/generate-sample-data.mjs`.
 
 ## Privacy
 
 Real player names, emails, and attendance/stats data never get committed
 here. They're gitignored and, if present, live only in a local `private/`
-folder — see `kaiser_github_setup.md` for the full policy and
-`kaiser_BUILD_SPEC.md` for the project design.
+folder (new raw files go in `private/incoming/`, see
+[`docs/data-contract.md`](docs/data-contract.md)) — see `kaiser_BUILD_SPEC.md`
+for the full project design and privacy policy.

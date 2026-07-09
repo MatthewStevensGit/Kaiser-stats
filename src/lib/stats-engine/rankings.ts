@@ -1,4 +1,4 @@
-import type { PlayerAggregate } from "./types";
+import type { PlayerSeasonStats } from "./types";
 
 /**
  * Power ranking formula, chosen and disclosed transparently (see
@@ -15,13 +15,13 @@ import type { PlayerAggregate } from "./types";
 const RANKING_FORMULA_DESCRIPTION =
   "plus-minus per game (wins minus losses, divided by games played), minimum-games floor applied, assists and draft position excluded";
 
-export interface PowerRankingEntry extends PlayerAggregate {
+export interface PowerRankingEntry extends PlayerSeasonStats {
   plusMinusPerGame: number;
   rank: number;
 }
 
 export function computePowerRankings(
-  players: PlayerAggregate[],
+  players: PlayerSeasonStats[],
   minGames: number,
 ): { formula: string; minGames: number; entries: PowerRankingEntry[] } {
   const entries = players
