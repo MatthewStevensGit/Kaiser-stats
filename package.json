@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "backfill": "tsx scripts/backfill-to-supabase.ts",
-    "backfill:preview": "tsx scripts/preview-backfill-coverage.ts"
+    "backfill:preview": "tsx scripts/preview-backfill-coverage.ts",
+    "parse-report": "tsx scripts/parse-report.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.2",

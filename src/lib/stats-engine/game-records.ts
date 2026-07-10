@@ -69,8 +69,10 @@ export function rollupGameRecords(
           stats.plusMinus -= 1;
         }
 
-        draftPickSums.set(spot.canonicalId, (draftPickSums.get(spot.canonicalId) ?? 0) + spot.pickNumber);
-        draftPickCounts.set(spot.canonicalId, (draftPickCounts.get(spot.canonicalId) ?? 0) + 1);
+        if (spot.pickNumber !== null) {
+          draftPickSums.set(spot.canonicalId, (draftPickSums.get(spot.canonicalId) ?? 0) + spot.pickNumber);
+          draftPickCounts.set(spot.canonicalId, (draftPickCounts.get(spot.canonicalId) ?? 0) + 1);
+        }
       }
     }
 
