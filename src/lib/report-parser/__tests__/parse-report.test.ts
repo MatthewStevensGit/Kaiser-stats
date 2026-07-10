@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveExtractionToGameRecord } from "../parse-report";
+import { extractFirstPickAnnotation, resolveExtractionToGameRecord } from "../parse-report";
 import type { RawExtraction } from "../types";
 import type { PlayerIdentity } from "../../stats-engine/types";
 
@@ -99,5 +99,83 @@ describe("resolveExtractionToGameRecord", () => {
     expect(result.gameRecord.mvpCanonicalId).toBeNull();
     expect(result.flaggedNames).toHaveLength(1);
     expect(result.flaggedNames[0]?.raw).toBe("Gera");
+  });
+
+  it("computes real pick numbers for a game with a confirmed first-pick annotation", () => {
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      homeRosterRaw: ["Bex Tanaka", "Cy Okafor"],
+      awayRosterRaw: ["Ari Fox"],
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+    };
+
+    // Away's first-listed player ("Ari Fox") actually picked first.
+    const result = resolveExtractionToGameRecord(extraction, players, meta, "Ari Fox");
+    expect(result.firstPickWarning).toBeNull();
+    expect(result.gameRecord.awayRoster).toEqual([{ canonicalId: "p1", pickNumber: 1 }]);
+    expect(result.gameRecord.homeRoster).toEqual([
+      { canonicalId: "p2", pickNumber: 2 },
+      { canonicalId: "p3", pickNumber: 4 },
+    ]);
+  });
+
+  it("leaves pick numbers null and warns when the first-pick annotation matches neither roster", () => {
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      homeRosterRaw: ["Bex Tanaka"],
+      awayRosterRaw: ["Cy Okafor"],
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, players, meta, "Ari Fox");
+    expect(result.firstPickWarning).toContain("Ari Fox");
+    expect(result.gameRecord.homeRoster[0]?.pickNumber).toBeNull();
+    expect(result.gameRecord.awayRoster[0]?.pickNumber).toBeNull();
+  });
+
+  it("no annotation at all leaves every pick number null, unchanged from before", () => {
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      homeRosterRaw: ["Ari Fox"],
+      awayRosterRaw: ["Bex Tanaka"],
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, players, meta);
+    expect(result.firstPickWarning).toBeNull();
+    expect(result.gameRecord.homeRoster[0]?.pickNumber).toBeNull();
+    expect(result.gameRecord.awayRoster[0]?.pickNumber).toBeNull();
+  });
+});
+
+describe("extractFirstPickAnnotation", () => {
+  it("pulls the annotation out and strips it from what gets sent to the model", () => {
+    const raw = "First pick: Ari Fox\n\nVadim: 24 people, first half...";
+    const { firstPickRaw, threadText } = extractFirstPickAnnotation(raw);
+    expect(firstPickRaw).toBe("Ari Fox");
+    expect(threadText).not.toContain("First pick");
+    expect(threadText).toContain("Vadim: 24 people");
+  });
+
+  it("returns null when there's no annotation, text unchanged", () => {
+    const raw = "Vadim: 24 people, first half...";
+    const { firstPickRaw, threadText } = extractFirstPickAnnotation(raw);
+    expect(firstPickRaw).toBeNull();
+    expect(threadText).toBe(raw);
   });
 });

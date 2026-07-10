@@ -10,7 +10,7 @@ config({ path: ".env.local" });
 import { parse as parseCsv } from "csv-parse/sync";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { parseReportText, resolveExtractionToGameRecord } from "../src/lib/report-parser/parse-report";
+import { extractFirstPickAnnotation, parseReportText, resolveExtractionToGameRecord } from "../src/lib/report-parser/parse-report";
 import type { League, PlayerIdentity } from "../src/lib/stats-engine/types";
 
 const PRIVATE_DIR = path.join(process.cwd(), "private");
@@ -41,20 +41,33 @@ async function main() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY must be set in .env.local");
 
-  const threadText = readFileSync(filePath, "utf-8");
+  const rawFileText = readFileSync(filePath, "utf-8");
+  const { firstPickRaw, threadText } = extractFirstPickAnnotation(rawFileText);
   const players = loadPlayerIdentities();
-  console.log(`Loaded ${players.length} known players. Parsing ${filePath}...\n`);
+  console.log(`Loaded ${players.length} known players. Parsing ${filePath}...`);
+  if (firstPickRaw) console.log(`Found "First pick: ${firstPickRaw}" annotation.`);
+  console.log();
 
   const extraction = await parseReportText(apiKey, threadText);
-  const resolved = resolveExtractionToGameRecord(extraction, players, {
-    gameId: path.basename(filePath, ".txt"),
-    source: `email:${path.basename(filePath, ".txt")}`,
-    fallbackDate: new Date().toISOString().slice(0, 10),
-    fallbackLeague: "unknown",
-  });
+  const resolved = resolveExtractionToGameRecord(
+    extraction,
+    players,
+    {
+      gameId: path.basename(filePath, ".txt"),
+      source: `email:${path.basename(filePath, ".txt")}`,
+      fallbackDate: new Date().toISOString().slice(0, 10),
+      fallbackLeague: "unknown",
+    },
+    firstPickRaw,
+  );
 
   console.log("=== Extracted GameRecord ===");
   console.log(JSON.stringify(resolved.gameRecord, null, 2));
+
+  if (resolved.firstPickWarning) {
+    console.log(`\n=== First-pick annotation warning ===`);
+    console.log(resolved.firstPickWarning);
+  }
 
   console.log(`\n=== Goal-sum check ===`);
   console.log(

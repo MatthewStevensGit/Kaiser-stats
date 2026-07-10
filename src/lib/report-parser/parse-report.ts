@@ -4,6 +4,23 @@ import { callGemini } from "./gemini-client";
 import { buildExtractionPrompt } from "./prompt";
 import type { RawExtraction } from "./types";
 
+const FIRST_PICK_LINE = /^\s*first pick\s*:\s*(.+?)\s*$/im;
+
+/**
+ * Pulls an optional "First pick: <name>" annotation out of a report text
+ * file before it's sent to Gemini — this is a human-supplied fact typed
+ * into the local file, never something the model reads or infers, so it's
+ * parsed here with a plain regex and stripped out of what the model sees.
+ */
+export function extractFirstPickAnnotation(rawFileText: string): { firstPickRaw: string | null; threadText: string } {
+  const match = rawFileText.match(FIRST_PICK_LINE);
+  if (!match) return { firstPickRaw: null, threadText: rawFileText };
+  return {
+    firstPickRaw: match[1]?.trim() ?? null,
+    threadText: rawFileText.replace(FIRST_PICK_LINE, "").trim(),
+  };
+}
+
 export async function parseReportText(apiKey: string, threadText: string): Promise<RawExtraction> {
   const prompt = buildExtractionPrompt(threadText);
   const responseText = await callGemini(apiKey, prompt);
@@ -25,6 +42,13 @@ export interface ResolvedReport {
   flaggedNames: NameResolution[];
   /** True if goal scorer counts per team don't sum to the stated score — per kaiser_BUILD_SPEC.md, don't trust this parse's goals without review if so. */
   goalSumMismatch: boolean;
+  /**
+   * Set only if a "First pick" annotation was supplied but didn't match the
+   * first-listed player of either roster — a real inconsistency worth a
+   * human's attention, never silently ignored. Pick numbers stay null in
+   * this case, same as when no annotation is given at all.
+   */
+  firstPickWarning: string | null;
 }
 
 /**
@@ -33,11 +57,20 @@ export interface ResolvedReport {
  * using the exact same deterministic, tested logic the spreadsheet-backfill
  * path uses (resolvePlayerName / createProvisionalIdentity), never the LLM's
  * own judgment about who a name "really" is.
+ *
+ * `firstPickRaw` is an optional, human-supplied fact (never LLM-guessed —
+ * see docs/report-parsing.md): the name of whoever was picked first in this
+ * specific game's draft. When given and it matches the first-listed player
+ * of one roster, pick numbers are computed by interleaving both rosters in
+ * their listed order (which, per league convention, is pick order) — real
+ * data for that one confirmed game, not a pattern applied to every game.
+ * Every other game simply keeps pickNumber: null, exactly as before.
  */
 export function resolveExtractionToGameRecord(
   extraction: RawExtraction,
   knownPlayers: PlayerIdentity[],
   meta: { gameId: string; source: string; fallbackDate: string; fallbackLeague: "saturday" | "sunday" | "unknown" },
+  firstPickRaw?: string | null,
 ): ResolvedReport {
   const flaggedNames: NameResolution[] = [];
   const provisionedByRaw = new Map<string, PlayerIdentity>();
@@ -79,6 +112,23 @@ export function resolveExtractionToGameRecord(
 
   const homeRoster = resolveRoster(extraction.homeRosterRaw ?? []);
   const awayRoster = resolveRoster(extraction.awayRosterRaw ?? []);
+
+  let firstPickWarning: string | null = null;
+  if (firstPickRaw) {
+    const firstPickCanonicalId = resolve(firstPickRaw);
+    const homeFirst = homeRoster[0]?.canonicalId;
+    const awayFirst = awayRoster[0]?.canonicalId;
+
+    if (firstPickCanonicalId && firstPickCanonicalId === homeFirst) {
+      homeRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
+      awayRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+    } else if (firstPickCanonicalId && firstPickCanonicalId === awayFirst) {
+      awayRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
+      homeRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+    } else {
+      firstPickWarning = `"First pick: ${firstPickRaw}" didn't match the first-listed player of either roster — pick numbers left null for this game rather than guessed.`;
+    }
+  }
 
   const goals: GoalEvent[] = [];
   for (const g of extraction.goals ?? []) {
@@ -128,5 +178,6 @@ export function resolveExtractionToGameRecord(
     provisionedPlayers: Array.from(provisionedByRaw.values()),
     flaggedNames,
     goalSumMismatch,
+    firstPickWarning,
   };
 }
