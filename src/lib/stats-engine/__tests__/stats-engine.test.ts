@@ -72,7 +72,7 @@ describe("identity: name resolution never auto-merges", () => {
 });
 
 describe("aggregateStandings", () => {
-  it("sums totals for resolved players and surfaces unresolved names instead of dropping them silently", () => {
+  it("sums totals for resolved players and keeps a flagged (ambiguous) name out of everyone's totals", () => {
     const wb = loadSampleWorkbook();
     const rows = parsePrimaryStandingsSheet(wb, "sample", "sunday");
     const { players, unresolvedNames } = aggregateStandings(rows, samplePlayers, "merged");
@@ -81,12 +81,29 @@ describe("aggregateStandings", () => {
     expect(ari?.games).toBe(20);
     expect(ari?.goals).toBe(14);
 
-    // Robyn (misspelling) and Mystery Guest should not have been silently
-    // folded into anyone's totals.
+    // Robyn is a misspelling flagged against a DIFFERENT existing player
+    // (Robin Achebe) — real misattribution risk, so it's excluded and
+    // surfaced for a human, never silently folded into anyone's totals.
     expect(players.find((p) => p.canonicalId === "s006")).toBeUndefined();
-    const flaggedOrUnresolved = unresolvedNames.map((n) => n.raw);
-    expect(flaggedOrUnresolved).toContain("Robyn Achebe");
-    expect(flaggedOrUnresolved).toContain("Mystery Guest");
+    const flagged = unresolvedNames.map((n) => n.raw);
+    expect(flagged).toContain("Robyn Achebe");
+    expect(flagged).not.toContain("Mystery Guest");
+  });
+
+  it("auto-provisions a genuinely novel name (no fuzzy match to anything) instead of dropping it", () => {
+    const wb = loadSampleWorkbook();
+    const rows = parsePrimaryStandingsSheet(wb, "sample", "sunday");
+    const { players, provisionedPlayers } = aggregateStandings(rows, samplePlayers, "merged");
+
+    // "Mystery Guest" has no fuzzy match to any known player — no risk of
+    // misattributing someone else's stats, so it gets its own stable
+    // identity and its 2 games/1 goal count immediately.
+    const provisioned = provisionedPlayers.find((p) => p.displayName === "Mystery Guest");
+    expect(provisioned).toBeDefined();
+    expect(provisioned?.status).toBe("provisional");
+
+    const stats = players.find((p) => p.canonicalId === provisioned?.canonicalId);
+    expect(stats).toMatchObject({ games: 2, wins: 1, losses: 1, goals: 1 });
   });
 
   it("only includes rows matching the requested league view", () => {

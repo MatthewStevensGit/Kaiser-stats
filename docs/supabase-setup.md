@@ -56,17 +56,23 @@ npm run backfill           # writes players + season_standing_rows to Supabase
 
 `backfill:preview` parses every real `.xlsx` under `private/` and
 `private/incoming/` and reports row counts, plus/minus arithmetic mismatches,
-and unresolved/flagged player names — run this first to see how much of the
+and identity-resolution outcomes — run this first to see how much of the
 identity table (`private/kaiser_player_identity.csv`) actually covers the
 historical spreadsheets before writing anything.
 
-**Known gap as of this writing:** the identity table only has ~26 seeded
-players, but the real spreadsheets (2022–2026) contain far more distinct
-names — most rows currently come back "unresolved." That's the engine
-correctly refusing to guess (see `kaiser_BUILD_SPEC.md`'s identity rules), not
-a bug. Growing `kaiser_player_identity.csv` to cover the real historical
-roster is separate, necessary follow-up work before the backfill is actually
-complete — `unresolved_names_log` in Supabase is the durable queue for it.
+Names fall into two buckets (see `docs/data-contract.md`'s "Identity
+resolution" section for the full reasoning):
+- **Auto-tracked new players** — no fuzzy match to anything, no
+  misattribution risk, so `npm run backfill` gives them a stable placeholder
+  identity and counts their stats immediately. No action needed unless/until
+  you want to attach their real name.
+- **Flagged** — close to a *different* existing player (e.g. "Gera" vs.
+  "Gena"). These are genuinely ambiguous and need a human decision before
+  they're counted — logged to the `unresolved_names_log` table in Supabase.
+
+As of this writing, against the real 2022–2026 spreadsheets: 80 unique new
+players get auto-tracked, and 89 row-occurrences are flagged as ambiguous and
+still need review.
 
 `npm run backfill` is safe to re-run: each source file's rows are replaced,
 not duplicated.

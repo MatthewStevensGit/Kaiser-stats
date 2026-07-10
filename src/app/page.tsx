@@ -57,7 +57,7 @@ export default async function Home({
   const view: StatsView = isStatsView(rawView) ? rawView : "merged";
 
   const { players, rows, games } = loadSampleData();
-  const { players: totals, unresolvedNames } = aggregateStandings(rows, players, view);
+  const { players: totals, unresolvedNames, provisionedPlayers } = aggregateStandings(rows, players, view);
   const mismatches = findPlusMinusMismatches(rows.filter((r) => view === "merged" || r.league === view));
 
   const gameStats = rollupGameRecords(
@@ -302,8 +302,11 @@ export default async function Home({
       <section className="card">
         <h2>Data-quality flags</h2>
         <p className="note">
-          The engine never silently guesses — mismatches and unresolved names are surfaced
-          for a human to confirm instead of being auto-corrected or dropped.
+          The engine never silently guesses. A name close to a <em>different</em> existing
+          player is genuinely ambiguous — misattributing it would be a real error, so it's
+          held out and flagged for a human. A name with no match to anything at all carries
+          no such risk, so it's auto-tracked under its own identity immediately (see the{" "}
+          <a href="/rules">rulebook</a>).
         </p>
 
         <h3>Plus/minus mismatches</h3>
@@ -323,19 +326,15 @@ export default async function Home({
           </ul>
         )}
 
-        <h3>Unresolved / flagged names</h3>
+        <h3>Flagged names (need a human decision)</h3>
         {unresolvedNames.length === 0 ? (
           <p className="note">None in this view.</p>
         ) : (
           <ul className="flag-list">
             {unresolvedNames.map((n) => (
               <li key={n.raw}>
-                <span
-                  className={
-                    n.status === "flagged" ? "status-tag status-warning" : "status-tag status-critical"
-                  }
-                >
-                  <span aria-hidden="true">{n.status === "flagged" ? "?" : "✕"}</span> {n.status}
+                <span className="status-tag status-warning">
+                  <span aria-hidden="true">?</span> flagged
                 </span>
                 <strong>{n.raw}</strong>
                 {n.candidates.length > 0 && (
@@ -345,6 +344,27 @@ export default async function Home({
                     {n.candidates[0]?.distance})
                   </>
                 )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h3>Auto-tracked new players (no decision needed)</h3>
+        <p className="note">
+          Names with no match to anyone existing — their stats above already count under a
+          placeholder identity. Attach a real name any time by adding the raw name as an
+          alias in the identity table.
+        </p>
+        {provisionedPlayers.length === 0 ? (
+          <p className="note">None in this view.</p>
+        ) : (
+          <ul className="flag-list">
+            {provisionedPlayers.map((p) => (
+              <li key={p.canonicalId}>
+                <span className="status-tag status-muted">
+                  <span aria-hidden="true">+</span> new
+                </span>
+                <strong>{p.displayName}</strong>
               </li>
             ))}
           </ul>

@@ -1,6 +1,6 @@
 // Read-only preview of what `npm run backfill` would do — parses every real
 // spreadsheet under private/ and private/incoming/ and reports row counts,
-// plus/minus mismatches, and unresolved/flagged names, without writing
+// plus/minus mismatches, and identity-resolution outcomes, without writing
 // anything to Supabase or touching private data in any other way. Useful for
 // checking identity-table coverage before running a real backfill.
 //
@@ -10,7 +10,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as XLSX from "xlsx";
 import { findPlusMinusMismatches } from "../src/lib/stats-engine/aggregate";
-import { resolvePlayerName } from "../src/lib/stats-engine/identity";
+import { createProvisionalIdentity, resolvePlayerName } from "../src/lib/stats-engine/identity";
 import { parsePrimaryStandingsSheet } from "../src/lib/stats-engine/season-standings-parser";
 import type { League, PlayerIdentity } from "../src/lib/stats-engine/types";
 
@@ -44,9 +44,12 @@ for (const dir of dirs) {
 }
 
 let totalRows = 0;
-let totalUnresolved = 0;
+let totalFlagged = 0;
 let totalMismatches = 0;
-const unresolvedSamples: string[] = [];
+const flaggedSamples: string[] = [];
+// Tracked across all files, same as the real backfill script — a name with
+// no fuzzy match gets a stable placeholder identity, not dropped.
+const provisionedPlayers = new Map<string, PlayerIdentity>();
 
 for (const file of files) {
   const source = path.basename(file);
@@ -61,28 +64,35 @@ for (const file of files) {
   const mismatches = findPlusMinusMismatches(rows);
   totalMismatches += mismatches.length;
 
-  let unresolvedThisFile = 0;
+  let flaggedThisFile = 0;
   for (const row of rows) {
-    const resolution = resolvePlayerName(row.playerNameRaw, players);
-    if (resolution.status !== "exact") {
-      unresolvedThisFile += 1;
-      totalUnresolved += 1;
-      if (unresolvedSamples.length < 25) {
-        unresolvedSamples.push(`${source}: "${row.playerNameRaw}" (${resolution.status})`);
+    const resolution = resolvePlayerName(row.playerNameRaw, [...players, ...provisionedPlayers.values()]);
+    if (resolution.status === "flagged") {
+      flaggedThisFile += 1;
+      totalFlagged += 1;
+      if (flaggedSamples.length < 25) {
+        const best = resolution.candidates[0];
+        flaggedSamples.push(
+          `${source}: "${row.playerNameRaw}"` + (best ? ` (closest match: ${best.displayName}, distance ${best.distance})` : ""),
+        );
+      }
+    } else if (resolution.status === "unresolved") {
+      const key = row.playerNameRaw.trim().toLowerCase();
+      if (!provisionedPlayers.has(key)) {
+        provisionedPlayers.set(key, createProvisionalIdentity(row.playerNameRaw));
       }
     }
   }
 
   totalRows += rows.length;
-  console.log(
-    `${source}: ${rows.length} rows, ${unresolvedThisFile} unresolved names, ${mismatches.length} plus/minus mismatches`,
-  );
+  console.log(`${source}: ${rows.length} rows, ${flaggedThisFile} flagged (ambiguous) names, ${mismatches.length} plus/minus mismatches`);
 }
 
 console.log(`\n=== TOTALS ===`);
 console.log(`Files: ${files.length}`);
 console.log(`Rows: ${totalRows}`);
-console.log(`Unresolved/flagged names: ${totalUnresolved}`);
 console.log(`Plus/minus mismatches: ${totalMismatches}`);
-console.log(`\nSample unresolved names:`);
-unresolvedSamples.forEach((s) => console.log(" -", s));
+console.log(`New players that would be auto-tracked (unique, no confirmation needed): ${provisionedPlayers.size}`);
+console.log(`Rows flagged as ambiguous — need a human decision: ${totalFlagged}`);
+console.log(`\nSample flagged (ambiguous) names:`);
+flaggedSamples.forEach((s) => console.log(" -", s));
