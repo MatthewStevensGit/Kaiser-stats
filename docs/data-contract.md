@@ -94,12 +94,13 @@ considered valid, not after.
 input. `src/lib/stats-engine/__tests__/game-records.test.ts` is the executable
 proof the two paths agree on the contract.
 
-**Not built yet:** the actual LLM parser that turns a report email into a
-`GameRecord`. That's the "live report parsing" step in `kaiser_BUILD_SPEC.md`,
-gated on a Claude API key. `data/sample/games.json` is hand-written fake
-`GameRecord[]` data standing in for that parser's future output, so the rest of
-the pipeline (`rollupGameRecords`, the MVP/assists demo section) can be built
-and tested against the right shape today.
+**Now built:** `src/lib/report-parser/` turns a report email's text into a
+`GameRecord`, via the Gemini API (`gemini-2.5-flash`, chosen over the
+Claude API originally named in `kaiser_BUILD_SPEC.md` for cost reasons —
+Gemini's free tier comfortably covers this project's actual usage). See
+`docs/report-parsing.md` for how it works and how to run it. `data/sample/games.json`
+remains the hand-written fake `GameRecord[]` data the public demo runs
+against — the real parser's output is never wired into the deployed site.
 
 ## Where new raw data goes
 
@@ -162,13 +163,21 @@ real rows instead of `data/sample/`), then deliberately add the Supabase
 environment variables to the Vercel project. Until both of those happen on
 purpose, the public site stays on fake data.
 
-## Adding the future live-report parser
+## The live-report parser
 
-When the Claude API key is available and report parsing gets built, its job is
-narrowly scoped by this contract: read a report email thread (see the
-thread-reading rules in `kaiser_BUILD_SPEC.md` — full thread, not just the root
-message, corrections in replies supersede the original), resolve every name via
-`resolvePlayerName()`, and emit one `GameRecord`. Everything after that —
-rollup, leaderboards, rankings, the UI — already exists and doesn't need to
-change, because it was built against this contract rather than against
-whatever shape the spreadsheets happened to have.
+`src/lib/report-parser/` reads a report email thread (see the thread-reading
+rules in `kaiser_BUILD_SPEC.md` — full thread, not just the root message,
+corrections in replies supersede the original) and emits one `GameRecord`.
+Name resolution is never the LLM's job — `parse-report.ts` extracts raw name
+strings only, then resolves each one via the exact same `resolvePlayerName()`
+/ `createProvisionalIdentity()` code the spreadsheet-backfill path uses.
+Everything downstream — rollup, leaderboards, rankings, the UI — needed no
+changes at all, because it was built against this contract rather than
+against whatever shape the spreadsheets happened to have. See
+`docs/report-parsing.md` for how to run it.
+
+Draft position (`pickNumber`) is always `null` for report-parsed games —
+report emails narrate who played and the score, never which captain picked
+first, so there's no way to reconstruct true overall pick order from the
+text alone. `rollupGameRecords()` already treats a null pick number as "no
+data" and excludes it from `avgDraftPosition` rather than treating it as 0.

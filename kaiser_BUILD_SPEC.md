@@ -10,6 +10,8 @@ Supporting docs in this folder (reference, don't duplicate): `kaiser_stats_engin
 
 Next.js PWA (installable, phone-browser-first, no App Store) → Vercel (free hosting) → Supabase free tier (Postgres, auth, and specifically realtime — needed for Phase 2's live draft) → Resend or similar for email notifications (free tier) → Claude API for report parsing (pay-as-you-go, requires an API key from Matt before Phase 1's parsing step can run live — everything else in Phase 1 can be built/tested against the historical spreadsheet data without it).
 
+**Update:** report parsing ended up built against the Gemini API instead (`gemini-2.5-flash`) — same job, chosen for its free tier given this project's small actual usage. See `docs/report-parsing.md`.
+
 ## Phase 1: Stats Engine
 
 ### Data sources (already collected)

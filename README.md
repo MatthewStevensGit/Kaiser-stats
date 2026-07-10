@@ -19,16 +19,18 @@ this repo** — see the Privacy section below.
   computed.
 - See [`docs/data-contract.md`](docs/data-contract.md) for the stable data
   shapes (`PlayerSeasonStats`, `GameRecord`) both the spreadsheet backfill and
-  the future live-report parser are expected to converge on, and for where new
-  raw data files should go.
+  the live-report parser converge on, and for where new raw data files should go.
 - `supabase/schema.sql` + `scripts/backfill-to-supabase.ts` — local/private
   real-data storage and backfill tooling. See
   [`docs/supabase-setup.md`](docs/supabase-setup.md) to set it up. The public
   demo site does not use this yet (see data-contract.md's "Going live with
   real data").
-- Not yet built: LLM-based report-email parsing (needs a Claude API key,
-  see `kaiser_BUILD_SPEC.md`), the admin-editable per-game review screen, and
-  Phase 2 (the check-in app — blocked on the owner conversation).
+- `src/lib/report-parser/` — turns a report email's text into a `GameRecord`
+  via the Gemini API. See [`docs/report-parsing.md`](docs/report-parsing.md).
+  Manual/one-file-at-a-time for now; no automatic pipeline or Supabase write
+  path yet.
+- Not yet built: the admin-editable per-game review screen, and Phase 2 (the
+  check-in app — blocked on the owner conversation).
 
 ## Running it
 

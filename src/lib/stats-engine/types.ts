@@ -113,8 +113,15 @@ export interface GoalEvent {
 /** One roster spot: who, and which overall snake-draft pick number got them. */
 export interface RosterSpot {
   canonicalId: string;
-  /** 1-indexed overall pick number for this game's draft (not per-team). */
-  pickNumber: number;
+  /**
+   * 1-indexed overall pick number for this game's draft (not per-team), or
+   * null when it isn't known. Report emails narrate who played and the
+   * final score, never the draft order — that only gets captured by the
+   * future live check-in app's draft feature (Phase 2). Historical/report-
+   * parsed games are expected to leave this null; rollupGameRecords()
+   * simply skips null values when averaging avgDraftPosition.
+   */
+  pickNumber: number | null;
 }
 
 /** A verbatim report-narrative snippet naming a player, for a single game. */
