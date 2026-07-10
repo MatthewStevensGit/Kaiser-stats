@@ -176,8 +176,14 @@ changes at all, because it was built against this contract rather than
 against whatever shape the spreadsheets happened to have. See
 `docs/report-parsing.md` for how to run it.
 
-Draft position (`pickNumber`) is always `null` for report-parsed games —
+Draft position (`pickNumber`) defaults to `null` for report-parsed games —
 report emails narrate who played and the score, never which captain picked
 first, so there's no way to reconstruct true overall pick order from the
-text alone. `rollupGameRecords()` already treats a null pick number as "no
-data" and excludes it from `avgDraftPosition` rather than treating it as 0.
+text alone by default. `rollupGameRecords()` already treats a null pick
+number as "no data" and excludes it from `avgDraftPosition` rather than
+treating it as 0. If a human happens to know who picked first for one
+specific game, `docs/report-parsing.md`'s `First pick:` annotation computes
+real pick numbers for that one confirmed game — never a rule applied to
+every game, since that would fabricate the exact stat this field exists to
+be honest about (see `kaiser_BUILD_SPEC.md` on why draft order must never be
+guessed).

@@ -44,6 +44,27 @@ Output: the extracted `GameRecord` as JSON, the goal-sum check result, and
 lists of auto-tracked new players / flagged names needing a decision — same
 shape and same philosophy as `npm run backfill:preview`.
 
+## Draft position (optional, per game)
+
+Report emails never state which captain picked first, so `pickNumber` is
+`null` for every player by default — see `docs/data-contract.md`. If you
+happen to know who was picked first for a *specific* game (never a general
+rule — see the reasoning in `docs/data-contract.md`'s draft-position section),
+add one line anywhere in that game's `.txt` file before running the parser:
+
+```
+First pick: Ari Fox
+```
+
+This is read directly by our own code before the text ever reaches Gemini —
+never inferred by the model. The parser confirms that name matches the
+first-listed player of one of the two rosters, then computes real pick
+numbers for both rosters by interleaving them in listed order (which, per
+league convention, is pick order). If the name doesn't match either roster's
+first player, you'll get a `firstPickWarning` instead — pick numbers stay
+null rather than guessed. Leave the line out entirely for any game where you
+don't know/remember who picked first.
+
 ## Not yet automated
 
 This is a manual, one-file-at-a-time script — there's no automatic pipeline
