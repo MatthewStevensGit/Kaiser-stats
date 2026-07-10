@@ -17,6 +17,31 @@ Everything downstream of that convergence point — leaderboards, power rankings
 the demo page — only ever reads `PlayerSeasonStats`. It never needs to know or
 care which of the two paths a given player's numbers came from.
 
+## Identity resolution: flagged vs. auto-provisioned
+
+Every raw name gets resolved via `resolvePlayerName()` (`identity.ts`) into one
+of three states, and the two non-exact ones are handled differently on
+purpose:
+
+- **`exact`** — matches a known player's display name or alias exactly. Used as-is.
+- **`flagged`** — no exact match, but close (edit distance) to a *different*
+  existing player (e.g. "Gera" vs. "Gena," "Sasha SI" vs. "Sasha Ru"). Real
+  misattribution risk if guessed wrong, so this is **never** auto-resolved —
+  the row is excluded from aggregation and logged to `unresolved_names_log`
+  for a human to confirm merge-or-not.
+- **`unresolved`** — no fuzzy match to *anything* known. There's nothing for
+  it to be confused with, so there's no misattribution risk — `createProvisionalIdentity()`
+  (`identity.ts`) gives it a stable placeholder identity (`canonicalId: "auto-<slug>"`,
+  `status: "provisional"`) deterministically from the raw text, and its stats
+  are aggregated immediately, same as any confirmed player. The same raw name
+  seen again (in this file or a later one) resolves to the same provisional
+  identity — see `provisionedPlayers` in `aggregate.ts` and
+  `backfill-to-supabase.ts`.
+
+A provisional player can be upgraded to a confirmed one at any time by adding
+the raw name as an alias for a real entry in `kaiser_player_identity.csv` and
+re-running the backfill — the exact match then wins.
+
 ## `PlayerSeasonStats` — one player's aggregated stats, final form
 
 The output contract. Whatever ingests new data, this is what it must produce.
@@ -115,7 +140,7 @@ Tables map directly to types.ts shapes:
 | `players` | `PlayerIdentity` |
 | `season_standing_rows` | `SeasonStandingRow` (post-parse, pre-aggregation) |
 | `game_records`, `roster_spots`, `goal_events`, `notable_mentions` | `GameRecord` (currently empty — populated once live report parsing exists) |
-| `unresolved_names_log` | `NameResolution` entries with `status !== "exact"` — the durable "needs a human" queue, never auto-resolved |
+| `unresolved_names_log` | `NameResolution` entries with `status === "flagged"` — genuinely ambiguous names, the durable "needs a human" queue, never auto-resolved |
 
 Every table has Row Level Security enabled with **no public policies** — the
 `anon`/public API key can read nothing. Only the `service_role` key (used

@@ -1,4 +1,4 @@
-import { resolvePlayerName } from "./identity";
+import { createProvisionalIdentity, resolvePlayerName } from "./identity";
 import type {
   NameResolution,
   PlayerIdentity,
@@ -41,15 +41,26 @@ function rowMatchesView(row: SeasonStandingRow, view: StatsView): boolean {
 
 export interface AggregateResult {
   players: PlayerSeasonStats[];
+  /** Names close to an existing, different identity — genuinely ambiguous, still need a human. */
   unresolvedNames: NameResolution[];
+  /** Names with no fuzzy match to anything — auto-tracked under a new provisional identity, no risk of misattribution. */
+  provisionedPlayers: PlayerIdentity[];
 }
 
 /**
  * Resolves each row's raw player name against the known identity table and
- * sums totals per canonical player. Names that don't resolve exactly are
- * never silently merged (see kaiser_BUILD_SPEC.md) — they're returned in
- * `unresolvedNames` for a human to confirm, and excluded from the aggregate
- * so an unconfirmed guess never quietly inflates someone's stats.
+ * sums totals per canonical player.
+ *
+ * Two different kinds of "doesn't match an existing player," handled
+ * differently (see kaiser_BUILD_SPEC.md's identity rules):
+ * - "flagged" (close to a DIFFERENT existing name, e.g. "Gera" vs "Gena") —
+ *   real misattribution risk if guessed wrong, so it's excluded from the
+ *   aggregate and returned in `unresolvedNames` for a human to confirm.
+ * - "unresolved" (no fuzzy match to anything at all, e.g. a name never seen
+ *   before) — no misattribution risk, since there's nothing similar it could
+ *   be confused with. Auto-provisioned into a stable identity (see
+ *   createProvisionalIdentity) and included in the aggregate immediately;
+ *   returned in `provisionedPlayers` so a human can later attach a real name.
  */
 export function aggregateStandings(
   rows: SeasonStandingRow[],
@@ -58,22 +69,33 @@ export function aggregateStandings(
 ): AggregateResult {
   const totals = new Map<string, PlayerSeasonStats>();
   const unresolvedNames: NameResolution[] = [];
-  const seenUnresolved = new Set<string>();
+  const seenFlagged = new Set<string>();
+  const provisionedByRaw = new Map<string, PlayerIdentity>();
 
   for (const row of rows) {
     if (!rowMatchesView(row, view)) continue;
 
     const resolution = resolvePlayerName(row.playerNameRaw, knownPlayers);
-    if (resolution.status !== "exact" || !resolution.canonicalId) {
-      const key = `${resolution.status}:${row.playerNameRaw.toLowerCase()}`;
-      if (!seenUnresolved.has(key)) {
-        seenUnresolved.add(key);
+
+    let player: PlayerIdentity | undefined;
+    if (resolution.status === "exact" && resolution.canonicalId) {
+      player = knownPlayers.find((p) => p.canonicalId === resolution.canonicalId);
+    } else if (resolution.status === "flagged") {
+      const key = row.playerNameRaw.toLowerCase();
+      if (!seenFlagged.has(key)) {
+        seenFlagged.add(key);
         unresolvedNames.push(resolution);
       }
       continue;
+    } else {
+      const key = row.playerNameRaw.trim().toLowerCase();
+      player = provisionedByRaw.get(key);
+      if (!player) {
+        player = createProvisionalIdentity(row.playerNameRaw);
+        provisionedByRaw.set(key, player);
+      }
     }
 
-    const player = knownPlayers.find((p) => p.canonicalId === resolution.canonicalId);
     if (!player) continue;
 
     const existing = totals.get(player.canonicalId) ?? {
@@ -106,7 +128,11 @@ export function aggregateStandings(
     totals.set(player.canonicalId, existing);
   }
 
-  return { players: Array.from(totals.values()), unresolvedNames };
+  return {
+    players: Array.from(totals.values()),
+    unresolvedNames,
+    provisionedPlayers: Array.from(provisionedByRaw.values()),
+  };
 }
 
 /**

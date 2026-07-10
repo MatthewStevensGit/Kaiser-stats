@@ -73,3 +73,34 @@ export function resolvePlayerName(
   }
   return { raw, status: "unresolved", canonicalId: null, candidates: [] };
 }
+
+/**
+ * A genuinely novel name (resolvePlayerName returned "unresolved" — zero
+ * fuzzy candidates against the known list) carries no misattribution risk:
+ * there's nothing similar it could be silently confused with. Unlike a
+ * "flagged" name, it doesn't need a human decision before its stats can be
+ * counted — it needs a stable identity to count them under, which this
+ * creates. The canonicalId is deterministic (slug of the raw name, prefixed
+ * "auto-") so every future row using the exact same raw text resolves to the
+ * same provisional player consistently.
+ *
+ * This does NOT resolve a "flagged" name — a name close to an existing,
+ * different one still requires a human to confirm merge-or-not, since
+ * guessing wrong there means misattributing a real person's stats to
+ * someone else.
+ */
+export function createProvisionalIdentity(rawName: string): PlayerIdentity {
+  const trimmed = rawName.trim();
+  const slug = trimmed
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return {
+    canonicalId: `auto-${slug}`,
+    displayName: trimmed,
+    aliases: [],
+    knownEmails: [],
+    leagues: [],
+    status: "provisional",
+  };
+}

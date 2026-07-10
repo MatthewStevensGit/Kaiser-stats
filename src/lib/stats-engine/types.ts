@@ -8,7 +8,15 @@ export interface PlayerIdentity {
   aliases: string[];
   knownEmails: string[];
   leagues: League[];
-  status: "regular" | "guest" | "deferred" | "example";
+  /**
+   * "provisional" = auto-created from a spreadsheet/report name that had no
+   * fuzzy match to anything else known (see createProvisionalIdentity in
+   * identity.ts) — a stable placeholder identity, not yet confirmed with a
+   * real full name/email. Stats accumulate under it immediately; a human
+   * can later fold it into a confirmed identity by adding the raw name as
+   * an alias in kaiser_player_identity.csv.
+   */
+  status: "regular" | "guest" | "deferred" | "example" | "provisional";
 }
 
 /**

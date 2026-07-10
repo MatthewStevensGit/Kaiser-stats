@@ -16,7 +16,7 @@ import { parse as parseCsv } from "csv-parse/sync";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as XLSX from "xlsx";
-import { resolvePlayerName } from "../src/lib/stats-engine/identity";
+import { createProvisionalIdentity, resolvePlayerName } from "../src/lib/stats-engine/identity";
 import { parsePrimaryStandingsSheet } from "../src/lib/stats-engine/season-standings-parser";
 import { findPlusMinusMismatches } from "../src/lib/stats-engine/aggregate";
 import { createServiceRoleClient } from "../src/lib/supabase/client";
@@ -81,7 +81,7 @@ async function main() {
 
   const supabase = createServiceRoleClient();
 
-  console.log(`Upserting ${players.length} players...`);
+  console.log(`Upserting ${players.length} known players...`);
   const { error: playersError } = await supabase.from("players").upsert(
     players.map((p) => ({
       canonical_id: p.canonicalId,
@@ -94,8 +94,16 @@ async function main() {
   );
   if (playersError) throw new Error(`Failed to upsert players: ${playersError.message}`);
 
+  // Names with no fuzzy match to anything (status "unresolved") carry no
+  // misattribution risk, so they get a stable auto-provisioned identity
+  // instead of being dropped — see createProvisionalIdentity in identity.ts.
+  // Tracked across the whole run so "Boris Def" gets the same canonicalId
+  // every time it's seen, in every file.
+  const provisionedPlayers = new Map<string, PlayerIdentity>();
+
   let totalRows = 0;
-  let totalUnresolved = 0;
+  let totalFlagged = 0;
+  let totalProvisioned = 0;
 
   for (const file of files) {
     const source = path.basename(file);
@@ -121,15 +129,17 @@ async function main() {
 
     const dbRows = [];
     for (const row of rows) {
-      const resolution = resolvePlayerName(row.playerNameRaw, players);
-      const canonicalId = resolution.status === "exact" ? resolution.canonicalId : null;
+      const resolution = resolvePlayerName(row.playerNameRaw, [...players, ...provisionedPlayers.values()]);
+      let canonicalId: string | null = resolution.status === "exact" ? resolution.canonicalId : null;
 
-      if (resolution.status !== "exact") {
-        totalUnresolved += 1;
+      if (resolution.status === "flagged") {
+        // Close to a DIFFERENT existing name — real misattribution risk if
+        // guessed wrong. Held out, logged for a human to confirm.
+        totalFlagged += 1;
         const best = resolution.candidates[0];
         console.warn(
-          `  ${source}: ${resolution.status} name "${row.playerNameRaw}"` +
-            (best ? ` (closest match: ${best.displayName}, distance ${best.distance})` : " (no candidates)"),
+          `  ${source}: flagged name "${row.playerNameRaw}"` +
+            (best ? ` (closest match: ${best.displayName}, distance ${best.distance})` : ""),
         );
 
         const { data: existing } = await supabase
@@ -149,6 +159,19 @@ async function main() {
             source,
           });
         }
+      } else if (resolution.status === "unresolved") {
+        // No match to anything at all — no risk of misattributing someone
+        // else's stats, so auto-provision a stable identity instead of
+        // dropping the row.
+        const key = row.playerNameRaw.trim().toLowerCase();
+        let provisional = provisionedPlayers.get(key);
+        if (!provisional) {
+          provisional = createProvisionalIdentity(row.playerNameRaw);
+          provisionedPlayers.set(key, provisional);
+          totalProvisioned += 1;
+          console.log(`  ${source}: auto-tracking new player "${row.playerNameRaw}" (${provisional.canonicalId})`);
+        }
+        canonicalId = provisional.canonicalId;
       }
 
       dbRows.push({
@@ -167,6 +190,25 @@ async function main() {
       });
     }
 
+    // Provisional players referenced by this file's rows must exist before
+    // the FK-constrained insert below. Upserting the whole accumulated map
+    // each time is redundant but cheap and always correct.
+    if (provisionedPlayers.size > 0) {
+      const { error: provisionedError } = await supabase.from("players").upsert(
+        Array.from(provisionedPlayers.values()).map((p) => ({
+          canonical_id: p.canonicalId,
+          display_name: p.displayName,
+          aliases: p.aliases,
+          known_emails: p.knownEmails,
+          leagues: p.leagues,
+          status: p.status,
+        })),
+      );
+      if (provisionedError) {
+        throw new Error(`Failed to upsert provisional players: ${provisionedError.message}`);
+      }
+    }
+
     const { error: insertError } = await supabase.from("season_standing_rows").insert(dbRows);
     if (insertError) throw new Error(`Failed to insert rows for ${source}: ${insertError.message}`);
 
@@ -175,7 +217,9 @@ async function main() {
   }
 
   console.log(
-    `\nDone. ${files.length} files processed, ${totalRows} rows backfilled, ${totalUnresolved} names need human confirmation (see the unresolved_names_log table).`,
+    `\nDone. ${files.length} files processed, ${totalRows} rows backfilled.\n` +
+      `${totalProvisioned} new players auto-tracked under a placeholder identity (stats already counting — attach a real name any time by adding the raw name as an alias in kaiser_player_identity.csv).\n` +
+      `${totalFlagged} names flagged and need a human decision (see the unresolved_names_log table) — these are genuinely ambiguous, close to a different existing player.`,
   );
 }
 
