@@ -21,6 +21,11 @@ this repo** — see the Privacy section below.
   shapes (`PlayerSeasonStats`, `GameRecord`) both the spreadsheet backfill and
   the future live-report parser are expected to converge on, and for where new
   raw data files should go.
+- `supabase/schema.sql` + `scripts/backfill-to-supabase.ts` — local/private
+  real-data storage and backfill tooling. See
+  [`docs/supabase-setup.md`](docs/supabase-setup.md) to set it up. The public
+  demo site does not use this yet (see data-contract.md's "Going live with
+  real data").
 - Not yet built: LLM-based report-email parsing (needs a Claude API key,
   see `kaiser_BUILD_SPEC.md`), the admin-editable per-game review screen, and
   Phase 2 (the check-in app — blocked on the owner conversation).

@@ -97,6 +97,46 @@ and tested against the right shape today.
   with the same prefix too (this happened once already; the sample workbook is
   named `sample_season.xlsx` specifically to dodge it).
 
+## Persistent storage: Supabase
+
+`supabase/schema.sql` defines a durable store for the contract's *inputs*
+(`SeasonStandingRow`, and eventually `GameRecord`) — not a re-implementation
+of `aggregateStandings()` / `rollupGameRecords()` in SQL. A future query layer
+fetches rows from Supabase and runs them through the existing, tested
+TypeScript aggregation functions, the same way the demo page runs
+`data/sample/` through them today. See [`docs/supabase-setup.md`](supabase-setup.md)
+for how to create the project and run the backfill (`scripts/backfill-to-supabase.ts`,
+`npm run backfill`).
+
+Tables map directly to types.ts shapes:
+
+| Table | Mirrors |
+|---|---|
+| `players` | `PlayerIdentity` |
+| `season_standing_rows` | `SeasonStandingRow` (post-parse, pre-aggregation) |
+| `game_records`, `roster_spots`, `goal_events`, `notable_mentions` | `GameRecord` (currently empty — populated once live report parsing exists) |
+| `unresolved_names_log` | `NameResolution` entries with `status !== "exact"` — the durable "needs a human" queue, never auto-resolved |
+
+Every table has Row Level Security enabled with **no public policies** — the
+`anon`/public API key can read nothing. Only the `service_role` key (used
+server-side by the backfill script, never shipped to a browser) can read or
+write. This is a deliberate default, not a placeholder to fill in later.
+
+## Going live with real data
+
+As of this writing, the deployed site (`kaiser-stats.vercel.app`) reads only
+`data/sample/` — the fake dataset — regardless of whether real data exists in
+Supabase. This is a deliberate choice, not a technical limitation: no page
+under `src/app/` imports `src/lib/supabase/`, and no Supabase environment
+variables are configured in Vercel, so there is currently no code path in the
+deployed app that could serve real data even by accident.
+
+Flipping this is a future, explicit decision: build a page that queries
+Supabase (reusing `aggregateStandings()`/`rollupGameRecords()` against
+real rows instead of `data/sample/`), then deliberately add the Supabase
+environment variables to the Vercel project. Until both of those happen on
+purpose, the public site stays on fake data.
+
 ## Adding the future live-report parser
 
 When the Claude API key is available and report parsing gets built, its job is
