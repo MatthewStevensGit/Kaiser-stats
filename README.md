@@ -6,7 +6,11 @@ Portfolio project. Planning docs are checked in at the repo root
 (`kaiser_BUILD_SPEC.md` is the entry point). **No real player data lives in
 this repo** — see the Privacy section below.
 
-## Status: Phase 1 (stats engine) in progress
+**Starting a new session / picking up Phase 2? Read
+[`PHASE_2_HANDOFF.md`](PHASE_2_HANDOFF.md) first** — full current state,
+infrastructure map, credentials/access notes, and the Phase 2 checklist.
+
+## Status: Phase 1 (stats engine) complete
 
 - `src/lib/stats-engine/` — core engine: player identity resolution (never
   auto-merges a fuzzy name match), a header-based parser for the historical
