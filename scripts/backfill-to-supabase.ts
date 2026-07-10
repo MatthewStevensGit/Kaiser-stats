@@ -10,7 +10,8 @@
 //
 // Usage: npm run backfill
 
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
 import { parse as parseCsv } from "csv-parse/sync";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
