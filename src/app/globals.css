@@ -416,6 +416,35 @@ th.num {
   border-color: var(--accent);
 }
 
+/* Matchday list card wrapper — hosts the hover-revealed admin cancel button
+   as a sibling of the card link, not nested inside it (a <button> nested
+   inside an <a> is invalid HTML and would double-fire click/navigate). */
+.matchday-card-wrapper {
+  position: relative;
+}
+
+.cancel-game-button {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--status-critical-bg);
+  color: var(--status-critical-fg);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.matchday-card-wrapper:hover .cancel-game-button,
+.matchday-card-wrapper:focus-within .cancel-game-button {
+  opacity: 1;
+}
+
 .match-card-top {
   display: flex;
   align-items: baseline;

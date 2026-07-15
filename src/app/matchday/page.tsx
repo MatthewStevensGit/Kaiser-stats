@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { listScheduledGames } from "@/lib/matchday/data";
+import { CancelGameButton } from "../_components/CancelGameButton";
 import { ScheduledGameCard } from "../_components/ScheduledGameCard";
 
 // Real Supabase-backed data now (see src/lib/matchday/data.ts) — must not be
@@ -17,7 +18,7 @@ export default async function MatchdayPage() {
         <div className="matchday-header-links">
           {user?.isAdmin && (
             <a href="/matchday/new" className="rulebook-link">
-              + Add one-off game
+              + Add Game
             </a>
           )}
           <a href="/matches" className="rulebook-link">
@@ -31,9 +32,12 @@ export default async function MatchdayPage() {
       ) : (
         <div className="match-card-list">
           {sorted.map((game) => (
-            <a key={game.gameId} href={`/matchday/${game.gameId}`} className="match-card-link">
-              <ScheduledGameCard game={game} />
-            </a>
+            <div key={game.gameId} className="matchday-card-wrapper">
+              <a href={`/matchday/${game.gameId}`} className="match-card-link">
+                <ScheduledGameCard game={game} />
+              </a>
+              {user?.isAdmin && <CancelGameButton gameId={game.gameId} date={game.date} />}
+            </div>
           ))}
         </div>
       )}
