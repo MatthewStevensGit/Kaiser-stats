@@ -50,18 +50,19 @@ export default async function MatchesPage({
       ) : (
         <div className="match-card-list">
           {sorted.map((game) => (
-            <MatchCard
-              key={game.gameId}
-              date={game.date}
-              homeScore={game.homeScore}
-              awayScore={game.awayScore}
-              description={game.description}
-              mvpName={
-                game.mvpCanonicalId
-                  ? players.find((p) => p.canonicalId === game.mvpCanonicalId)?.displayName
-                  : undefined
-              }
-            />
+            <a key={game.gameId} href={`/matches/${game.gameId}`} className="match-card-link">
+              <MatchCard
+                date={game.date}
+                homeScore={game.homeScore}
+                awayScore={game.awayScore}
+                description={game.description}
+                mvpName={
+                  game.mvpCanonicalId
+                    ? players.find((p) => p.canonicalId === game.mvpCanonicalId)?.displayName
+                    : undefined
+                }
+              />
+            </a>
           ))}
         </div>
       )}
