@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
-import { formatMatchDateLabel, formatScoreLine } from "@/lib/format";
+import { formatMatchDateLabel, formatScoreLine, getMultiGoalNickname } from "@/lib/format";
 import { loadSampleData } from "@/lib/sample-data";
+import { summarizeGoalsByScorer } from "@/lib/stats-engine/goal-summary";
+import { GoalChip } from "../../_components/GoalChip";
 import { MvpBadge } from "../../_components/MvpBadge";
 
 export default async function MatchDetailPage({
@@ -17,6 +19,7 @@ export default async function MatchDetailPage({
   const nameFor = (canonicalId: string) =>
     players.find((p) => p.canonicalId === canonicalId)?.displayName ?? canonicalId;
   const mvpName = game.mvpCanonicalId ? nameFor(game.mvpCanonicalId) : undefined;
+  const scorers = summarizeGoalsByScorer(game.goals);
 
   return (
     <main>
@@ -42,16 +45,22 @@ export default async function MatchDetailPage({
         )}
       </section>
 
-      {game.goals.length > 0 && (
+      {scorers.length > 0 && (
         <section className="card match-detail-section">
           <h2>Goals</h2>
           <ul className="match-detail-goal-list">
-            {game.goals.map((goal, i) => (
-              <li key={i}>
-                <span aria-hidden="true">⚽</span> {nameFor(goal.scorerCanonicalId)}
-                {goal.assistCanonicalId && <span className="note"> (assist: {nameFor(goal.assistCanonicalId)})</span>}
-              </li>
-            ))}
+            {scorers.map((scorer) => {
+              const nickname = getMultiGoalNickname(scorer.goals);
+              return (
+                <li key={scorer.scorerCanonicalId} className={`match-detail-goal-${scorer.team}`}>
+                  <a href={`/players/${scorer.scorerCanonicalId}`} className="match-detail-scorer-name">
+                    {nameFor(scorer.scorerCanonicalId)}
+                  </a>
+                  <GoalChip count={scorer.goals} />
+                  {nickname && <span className="match-detail-goal-nickname">{nickname}</span>}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

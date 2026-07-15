@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatMatchDateLabel, formatPlusMinus, formatScoreLine, formatWDL, truncate } from "../format";
+import {
+  formatMatchDateLabel,
+  formatPlusMinus,
+  formatScoreLine,
+  formatWDL,
+  getMultiGoalNickname,
+  truncate,
+} from "../format";
 
 describe("formatMatchDateLabel", () => {
   it("formats a date-only ISO string in UTC regardless of local time zone", () => {
@@ -41,5 +48,24 @@ describe("truncate", () => {
 
   it("truncates text over the limit and appends an ellipsis", () => {
     expect(truncate("this is a long sentence", 10)).toBe("this is a...");
+  });
+});
+
+describe("getMultiGoalNickname", () => {
+  it("returns null for 0 or 1 goals — nothing notable yet", () => {
+    expect(getMultiGoalNickname(0)).toBeNull();
+    expect(getMultiGoalNickname(1)).toBeNull();
+  });
+
+  it("names 2 through 6 goals", () => {
+    expect(getMultiGoalNickname(2)).toBe("Brace");
+    expect(getMultiGoalNickname(3)).toBe("Hat-trick");
+    expect(getMultiGoalNickname(4)).toBe("Poker");
+    expect(getMultiGoalNickname(5)).toBe("Glut");
+    expect(getMultiGoalNickname(6)).toBe("Double Hat-trick");
+  });
+
+  it("returns null beyond 6 rather than guessing a name", () => {
+    expect(getMultiGoalNickname(7)).toBeNull();
   });
 });

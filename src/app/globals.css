@@ -18,6 +18,12 @@
   --value-negative: #ff8a5c;
   --value-neutral: var(--text-secondary);
 
+  /* Home team reuses the main accent (teal); away gets its own distinct hue
+     so goal lists can color-code which side scored without touching the
+     positive/negative/warning tokens' existing meanings. */
+  --home-team-color: var(--accent);
+  --away-team-color: #c792ea;
+
   --pill-bg: var(--surface-2);
   --pill-bg-active: var(--accent);
   --pill-fg-active: var(--accent-fg);
@@ -469,6 +475,44 @@ th.num {
   font-size: 0.9rem;
 }
 
+.match-detail-goal-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  background: var(--surface-2);
+}
+
+.match-detail-goal-home {
+  border-left-color: var(--home-team-color);
+}
+
+.match-detail-goal-away {
+  border-left-color: var(--away-team-color);
+}
+
+.match-detail-scorer-name {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.match-detail-scorer-name:hover {
+  text-decoration: underline;
+}
+
+.match-detail-goal-nickname {
+  margin-left: auto;
+  color: var(--mvp-bg);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* Player detail */
 .player-header {
   margin-bottom: 1.25rem;
@@ -799,11 +843,12 @@ th.num {
 .bottom-nav-item {
   color: var(--nav-fg);
   text-decoration: none;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  padding: 0.4rem 1rem;
+  white-space: nowrap;
+  padding: 0.4rem 0.6rem;
 }
 
 .bottom-nav-item-active {

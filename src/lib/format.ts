@@ -28,3 +28,16 @@ export function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength).trimEnd()}...`;
 }
+
+const MULTI_GOAL_NICKNAME_BY_COUNT: Record<number, string> = {
+  2: "Brace",
+  3: "Hat-trick",
+  4: "Poker",
+  5: "Glut",
+  6: "Double Hat-trick",
+};
+
+/** A fun soccer term for a multi-goal game, or null if there isn't a named one for this count. */
+export function getMultiGoalNickname(count: number): string | null {
+  return MULTI_GOAL_NICKNAME_BY_COUNT[count] ?? null;
+}

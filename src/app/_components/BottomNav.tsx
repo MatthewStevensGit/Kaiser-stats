@@ -13,13 +13,16 @@ function isActive(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
-export function BottomNav() {
+export function BottomNav({ displayName }: { displayName?: string }) {
   const pathname = usePathname();
+  const accountItem = displayName
+    ? { id: "account", label: displayName.split(" ")[0] ?? displayName, href: "/" }
+    : { id: "account", label: "Log In", href: "/login" };
 
   return (
     <nav className="bottom-nav" aria-label="Primary">
-      {NAV_ITEMS.map((item) => {
-        const active = isActive(pathname, item.href);
+      {[...NAV_ITEMS, accountItem].map((item) => {
+        const active = isActive(pathname, item.href) && item.id !== "account";
         return (
           <a
             key={item.id}
