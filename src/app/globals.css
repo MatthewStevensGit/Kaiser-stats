@@ -41,6 +41,7 @@
   --status-warning-fg: #3a2500;
   --status-critical-bg: #ff6b5c;
   --status-critical-fg: #2c0a05;
+  --status-scheduled: var(--accent);
 }
 
 * {
@@ -528,6 +529,106 @@ th.num {
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
   flex-shrink: 0;
+}
+
+/* Matchday — scheduled-game status line (shared by list card + check-in header) */
+.matchday-status-line {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--status-scheduled);
+  flex-shrink: 0;
+}
+
+/* Edit Game button — rendered, inert until admin editing ships */
+.edit-game-button {
+  margin-top: 0.75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  cursor: default;
+}
+
+/* Capacity ring */
+.capacity-ring {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 1.75rem auto 0.5rem;
+}
+
+.capacity-ring-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.capacity-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.capacity-ring-count {
+  font-size: 1.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.capacity-ring-spots-left {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 0.3rem;
+}
+
+.capacity-ring-minimum-note {
+  text-align: center;
+  color: var(--status-warning-bg);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Registration status bar */
+.registration-status-bar {
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.registration-status-bar-open {
+  background: var(--status-good-bg);
+  color: var(--status-good-fg);
+}
+
+.registration-status-bar-closed {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
 }
 
 /* Bottom nav */

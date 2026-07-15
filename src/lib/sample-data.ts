@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import * as XLSX from "xlsx";
+import type { ScheduledGame } from "@/lib/matchday/types";
 import { parsePrimaryStandingsSheet } from "@/lib/stats-engine/season-standings-parser";
 import type { GameRecord, PlayerIdentity, SeasonStandingRow } from "@/lib/stats-engine/types";
 
@@ -9,6 +10,7 @@ export function loadSampleData(): {
   players: PlayerIdentity[];
   rows: SeasonStandingRow[];
   games: GameRecord[];
+  scheduledGames: ScheduledGame[];
 } {
   const dataDir = path.join(process.cwd(), "data", "sample");
   const players: PlayerIdentity[] = JSON.parse(
@@ -17,5 +19,8 @@ export function loadSampleData(): {
   const workbook = XLSX.read(readFileSync(path.join(dataDir, "sample_season.xlsx")));
   const rows = parsePrimaryStandingsSheet(workbook, "sample-season", "sunday");
   const games: GameRecord[] = JSON.parse(readFileSync(path.join(dataDir, "games.json"), "utf-8"));
-  return { players, rows, games };
+  const scheduledGames: ScheduledGame[] = JSON.parse(
+    readFileSync(path.join(dataDir, "scheduled-games.json"), "utf-8"),
+  );
+  return { players, rows, games, scheduledGames };
 }

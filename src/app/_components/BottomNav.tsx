@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 const NAV_ITEMS = [
   { id: "table", label: "Table", href: "/" },
   { id: "matches", label: "Matches", href: "/matches" },
+  { id: "matchday", label: "Matchday", href: "/matchday" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
