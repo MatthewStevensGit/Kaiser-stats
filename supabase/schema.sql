@@ -22,7 +22,18 @@ create table if not exists players (
   aliases text[] not null default '{}',
   known_emails text[] not null default '{}',
   leagues text[] not null default '{}',
-  status text not null check (status in ('regular', 'guest', 'deferred', 'example'))
+  -- 'provisional' included alongside the identity-resolution statuses (see
+  -- createProvisionalIdentity()/createProvisionalIdentityFromEmail() in
+  -- src/lib/stats-engine/identity.ts) — both the name-ingestion path and the
+  -- login path auto-provision under this status rather than blocking.
+  status text not null check (status in ('regular', 'guest', 'deferred', 'example', 'provisional')),
+  -- Links this player to their Supabase Auth identity, set on first login
+  -- (see src/app/auth/callback/route.ts). Most rows (backfilled from
+  -- spreadsheets) will never log in and stay null.
+  auth_user_id uuid unique references auth.users (id),
+  -- Deliberately a single flag, not the fuller Player/Captain/Admin role
+  -- model from kaiser_step1_concept.md — that's still deferred.
+  is_admin boolean not null default false
 );
 
 alter table players enable row level security;
@@ -121,3 +132,36 @@ create table if not exists unresolved_names_log (
 );
 
 alter table unresolved_names_log enable row level security;
+
+-- Migration (2026-07-14): auth support for email/magic-link login.
+-- Run this once in the Supabase SQL Editor against the existing project —
+-- the players table already exists there, so the CREATE TABLE above won't
+-- apply these changes retroactively. No new RLS policy is added anywhere:
+-- the login flow only ever touches Supabase's own auth.users table from the
+-- browser (via the anon key) and only ever touches players server-side via
+-- the service_role key (src/lib/supabase/client.ts) — the "RLS enabled, zero
+-- public policies" invariant on every table here stays exactly as-is.
+
+-- 1. Fix a latent bug: PlayerIdentity.status (src/lib/stats-engine/types.ts)
+--    has included "provisional" since the identity-resolution work, but this
+--    CHECK constraint never did. Auto-provisioned login identities need to
+--    insert with status='provisional', which would violate this constraint
+--    as written today.
+--    Verify the actual constraint name first — it should be the
+--    Postgres-default "players_status_check" for a table created via the
+--    unnamed inline CHECK in this file, but confirm before dropping:
+--      select conname from pg_constraint
+--      where conrelid = 'players'::regclass and contype = 'c';
+alter table players drop constraint players_status_check;
+alter table players add constraint players_status_check
+  check (status in ('regular', 'guest', 'deferred', 'example', 'provisional'));
+
+-- 2. Link a players row to its Supabase Auth identity. Nullable + unique:
+--    most existing rows (backfilled from spreadsheets) will never log in and
+--    have no auth account; at most one player row per auth user.
+alter table players add column if not exists auth_user_id uuid unique references auth.users (id);
+
+-- 3. Simplest possible admin flag. Deliberately not the fuller
+--    Player/Captain/Admin role model from kaiser_step1_concept.md — that's
+--    explicitly deferred until/unless a live draft feature is built.
+alter table players add column if not exists is_admin boolean not null default false;

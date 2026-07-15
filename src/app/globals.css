@@ -185,6 +185,54 @@ main {
   padding: 1.1rem 1.1rem 1.3rem;
 }
 
+/* Login form */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 320px;
+}
+
+.login-form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.login-form-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.login-form-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.login-form-submit {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.login-form-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-form-error {
+  color: var(--status-critical-bg);
+}
+
 section {
   margin-bottom: 1.75rem;
 }
