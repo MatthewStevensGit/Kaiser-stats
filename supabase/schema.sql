@@ -62,6 +62,9 @@ create table if not exists game_records (
   home_score integer not null,
   away_score integer not null,
   mvp_canonical_id text references players (canonical_id),
+  -- Admin-pasted free-text summary of the game (originally lifted from the
+  -- league organizer's report message). No admin-editing UI exists yet.
+  description text,
   source text not null
 );
 

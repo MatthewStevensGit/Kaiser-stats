@@ -1,5 +1,16 @@
 import type { GameRecord, PlayerIdentity, PlayerSeasonStats } from "./types";
 
+/** A game's outcome from one specific side's perspective. */
+export function resultForSide(
+  homeScore: number,
+  awayScore: number,
+  side: "home" | "away",
+): "win" | "draw" | "loss" {
+  if (homeScore === awayScore) return "draw";
+  const winningSide = homeScore > awayScore ? "home" : "away";
+  return side === winningSide ? "win" : "loss";
+}
+
 /**
  * Rolls up per-game records into the same PlayerSeasonStats shape that
  * aggregateStandings() produces from historical spreadsheets (see
@@ -48,9 +59,6 @@ export function rollupGameRecords(
   }
 
   for (const game of games) {
-    const result: "home" | "away" | "tie" =
-      game.homeScore === game.awayScore ? "tie" : game.homeScore > game.awayScore ? "home" : "away";
-
     for (const [side, roster] of [
       ["home", game.homeRoster],
       ["away", game.awayRoster],
@@ -59,9 +67,10 @@ export function rollupGameRecords(
         const stats = statsFor(spot.canonicalId);
         stats.games += 1;
         stats.sources.push(game.source);
-        if (result === "tie") {
+        const result = resultForSide(game.homeScore, game.awayScore, side);
+        if (result === "draw") {
           stats.ties += 1;
-        } else if (result === side) {
+        } else if (result === "win") {
           stats.wins += 1;
           stats.plusMinus += 1;
         } else {

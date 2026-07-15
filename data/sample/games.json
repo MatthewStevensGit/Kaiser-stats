@@ -72,6 +72,7 @@
     ],
     "mvpCanonicalId": "s005",
     "notableMentions": [],
+    "description": "First 25 minutes they dominated. Cannot say they had many scoring chances, but the ball was in the other half most of the half. Second half was more even, but the away side kept finishing their looks while the home side couldn't buy a second goal.",
     "source": "sample-game-3"
   },
   {
@@ -129,6 +130,7 @@
     "notableMentions": [
       { "canonicalId": "s004", "quote": "Dana tracked back relentlessly to break up two counters." }
     ],
+    "description": "Tight game from the opening whistle. Home went up early but the away side clawed back before half. Both keepers made a couple of real saves late — this one could've gone either way in the last five minutes.",
     "source": "sample-game-5"
   }
 ]

@@ -1,49 +1,46 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  --page-plane: #f9f9f7;
-  --surface-1: #fcfcfb;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
-  --border: rgba(11, 11, 11, 0.1);
-  --gridline: #e1e0d9;
+  /* "Floodlight" palette — ink-blue night pitch, turquoise floodlight accent */
+  --page-plane: #0c121e;
+  --surface-1: #16202f;
+  --surface-2: #1c2a3d;
+  --text-primary: #eef3f5;
+  --text-secondary: #b9c6cf;
+  --text-muted: #7c8a97;
+  --border: rgba(255, 255, 255, 0.08);
+  --gridline: #223144;
 
-  --accent: #2a78d6;
+  --accent: #2dd9c4;
+  --accent-fg: #062e29;
 
-  --status-good: #0ca30c;
-  --status-good-bg: #0ca30c;
-  --status-good-fg: #ffffff;
-  --status-warning-bg: #fab219;
-  --status-warning-fg: #5a4200;
-  --status-critical-bg: #d03b3b;
-  --status-critical-fg: #ffffff;
-  --status-muted-bg: var(--surface-1);
-  --status-muted-fg: var(--text-secondary);
-}
+  --value-positive: #4fd18b;
+  --value-negative: #ff8a5c;
+  --value-neutral: var(--text-secondary);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page-plane: #0d0d0d;
-    --surface-1: #1a1a19;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
-    --border: rgba(255, 255, 255, 0.1);
-    --gridline: #2c2c2a;
+  --pill-bg: var(--surface-2);
+  --pill-bg-active: var(--accent);
+  --pill-fg-active: var(--accent-fg);
 
-    --accent: #3987e5;
+  --nav-bg: #0a0f1a;
+  --nav-fg: var(--text-muted);
+  --nav-fg-active: var(--text-primary);
 
-    --status-good: #0ca30c;
-    --status-good-bg: #0ca30c;
-    --status-good-fg: #ffffff;
-    --status-warning-bg: #c98500;
-    --status-warning-fg: #fff8e6;
-    --status-critical-bg: #e66767;
-    --status-critical-fg: #1a1a19;
-    --status-muted-bg: var(--surface-1);
-    --status-muted-fg: var(--text-secondary);
-  }
+  --badge-win-bg: var(--value-positive);
+  --badge-draw-bg: #56687a;
+  --badge-loss-bg: var(--value-negative);
+  --badge-fg: #0c121e;
+
+  --mvp-bg: #f2b84b;
+  --mvp-fg: #3a2500;
+
+  --status-good: #4fd18b;
+  --status-good-bg: #4fd18b;
+  --status-good-fg: #06301b;
+  --status-warning-bg: #f2b84b;
+  --status-warning-fg: #3a2500;
+  --status-critical-bg: #ff6b5c;
+  --status-critical-fg: #2c0a05;
 }
 
 * {
@@ -59,8 +56,8 @@ body {
 }
 
 main {
-  padding: 1.25rem 1.25rem 3rem;
-  max-width: 900px;
+  padding: 1.25rem 1.25rem 5.5rem;
+  max-width: 640px;
   margin-inline: auto;
 }
 
@@ -71,11 +68,12 @@ main {
   gap: 0.5rem;
   background: var(--status-warning-bg);
   color: var(--status-warning-fg);
-  border-radius: 10px;
-  padding: 0.7rem 1rem;
-  font-size: 0.85rem;
+  border-radius: 0;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  margin-bottom: 1.5rem;
+  max-width: 640px;
+  margin-inline: auto;
 }
 
 .demo-banner a {
@@ -83,21 +81,33 @@ main {
   text-decoration: underline;
 }
 
-.page-header {
-  margin-bottom: 1.25rem;
-}
-
-.page-header-row {
+/* Screen headers — bold, all-caps, matches the mockups */
+.screen-header-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.screen-header {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.page-header {
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
 }
 
 .page-header h1 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.6rem;
 }
 
 .rulebook-link,
@@ -133,65 +143,47 @@ main {
   padding: 0.05rem 0.3rem;
 }
 
-/* Tabs */
-.tabs {
+/* Pill tabs — segmented control (Plus-Minus / Golden Boot, etc.) */
+.pill-tabs {
   display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--gridline);
-  margin-bottom: 1.5rem;
-  overflow-x: auto;
+  gap: 0.4rem;
+  background: var(--pill-bg);
+  border-radius: 999px;
+  padding: 0.3rem;
+  margin-bottom: 1.25rem;
+  width: fit-content;
 }
 
-.tab {
+.pill-tab {
   display: inline-block;
-  padding: 0.5rem 0.9rem;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-bottom: 2px solid transparent;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
-.tab:hover {
+.pill-tab:hover {
   color: var(--text-primary);
 }
 
-.tab-active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+.pill-tab-active {
+  background: var(--pill-bg-active);
+  color: var(--pill-fg-active);
 }
 
-/* Stat tiles */
-.stat-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 2rem;
-}
-
-.stat-tile {
+/* Card — the standard container for a stats block */
+.card {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  border-radius: 12px;
+  padding: 1.1rem 1.1rem 1.3rem;
 }
 
-.stat-tile-value {
-  font-size: 1.6rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-tile-label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-/* Sections */
 section {
   margin-bottom: 1.75rem;
 }
@@ -205,54 +197,6 @@ section h3 {
   font-size: 0.9rem;
   margin-bottom: 0.4rem;
   margin-top: 1.1rem;
-}
-
-/* Card — the standard container for a stats block */
-.card {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.1rem 1.1rem 1.3rem;
-}
-
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-top: 0.75rem;
-}
-
-@media (max-width: 560px) {
-  .two-col {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
-  }
-}
-
-.rank-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.rank-list li {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--gridline);
-  font-size: 0.92rem;
-}
-
-.rank-list li:last-child {
-  border-bottom: none;
-}
-
-.rank-list .num {
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-  font-weight: 600;
 }
 
 /* Icon list — used on the rulebook page */
@@ -288,7 +232,7 @@ section h3 {
   margin-top: 0.1rem;
 }
 
-/* Tables */
+/* Tables (Table screen, rulebook) */
 .table-scroll {
   overflow-x: auto;
 }
@@ -302,23 +246,22 @@ table {
 th,
 td {
   text-align: left;
-  padding: 0.45rem 0.6rem;
+  padding: 0.6rem 0.6rem;
   border-bottom: 1px solid var(--gridline);
   white-space: nowrap;
 }
 
-/* Tables of prose (not short labels/numbers) need their cells to wrap normally */
 .table-prose th,
 .table-prose td {
   white-space: normal;
 }
 
 th {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 td.num,
@@ -328,9 +271,31 @@ th.num {
   white-space: nowrap;
 }
 
-tr.rank-first td {
+.leaderboard-name {
+  color: var(--text-primary);
+  text-decoration: none;
   font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.leaderboard-name:hover {
   color: var(--accent);
+  text-decoration: underline;
+}
+
+.value-positive {
+  color: var(--value-positive);
+  font-weight: 700;
+}
+
+.value-negative {
+  color: var(--value-negative);
+  font-weight: 700;
+}
+
+.value-neutral {
+  color: var(--value-neutral);
+  font-weight: 700;
 }
 
 /* Notes & empty state */
@@ -363,95 +328,194 @@ tr.rank-first td {
   line-height: 1.6;
 }
 
-/* Data-quality flag list */
-.flag-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* Past Matches — card list */
+.match-card-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.9rem;
 }
 
-/* Notable-mentions list: player name, then their quotes indented under it */
-.mention-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.match-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
 }
 
-.mention-list > li > strong {
-  display: block;
-  margin-bottom: 0.25rem;
-}
-
-.mention-list ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.mention-list ul li {
-  font-size: 0.9rem;
-  font-style: italic;
-  color: var(--text-secondary);
-}
-
-.flag-list li {
-  font-size: 0.9rem;
+.match-card-top {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.status-tag {
+.match-card-date {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 0.95rem;
+}
+
+.match-card-score {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+}
+
+.match-card-desc {
+  margin: 0.55rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.match-card .mvp-badge {
+  margin-top: 0.5rem;
+}
+
+/* Player detail */
+.player-header {
+  margin-bottom: 1.25rem;
+}
+
+.player-summary-line {
+  margin: 0.3rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.player-match-row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.player-match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.75rem 1.1rem;
+}
+
+/* Badge + date + score always lay out the same regardless of whether the
+   trailing group (MVP badge / goal chips) is present — date gets a fixed
+   min-width instead of flex-growing into whatever space is left, which is
+   what used to shift the score's position row to row. */
+.player-match-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.player-match-row-trailing {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.player-match-row-date {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  min-width: 5.5rem;
+}
+
+.player-match-row-score {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Result badge — colored W/D/L circle */
+.result-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--badge-fg);
+  flex-shrink: 0;
+}
+
+.result-badge-win {
+  background: var(--badge-win-bg);
+}
+
+.result-badge-draw {
+  background: var(--badge-draw-bg);
+  color: var(--text-primary);
+}
+
+.result-badge-loss {
+  background: var(--badge-loss-bg);
+}
+
+/* Goal chip — small goal icon with an optional count */
+.goal-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   font-weight: 700;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* MVP badge — trophy ribbon shown when a game has a determined MVP */
+.mvp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--mvp-bg);
+  color: var(--mvp-fg);
+  font-size: 0.72rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
-  padding: 0.15rem 0.5rem;
+  letter-spacing: 0.03em;
+  padding: 0.2rem 0.55rem;
   border-radius: 999px;
   flex-shrink: 0;
 }
 
-.status-warning {
-  background: var(--status-warning-bg);
-  color: var(--status-warning-fg);
+/* Bottom nav */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--nav-bg);
+  border-top: 1px solid var(--border);
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
 }
 
-.status-good {
-  background: var(--status-good-bg);
-  color: var(--status-good-fg);
+.bottom-nav-item {
+  color: var(--nav-fg);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.4rem 1rem;
 }
 
-.status-muted {
-  background: var(--status-muted-bg);
-  color: var(--status-muted-fg);
-  border: 1px solid var(--border);
-}
-
-/* A status tag carrying a full phrase (e.g. draft-disparity labels) reads
-   better sentence-case than shouting in small caps. */
-.status-tag-text {
-  text-transform: none;
-  letter-spacing: normal;
-  font-size: 0.78rem;
-  white-space: normal;
-}
-
-.status-critical {
-  background: var(--status-critical-bg);
-  color: var(--status-critical-fg);
+.bottom-nav-item-active {
+  color: var(--nav-fg-active);
 }
 
 /* Loading skeleton */
@@ -473,29 +537,25 @@ tr.rank-first td {
 }
 
 .skeleton-banner {
-  height: 2.5rem;
-  margin-bottom: 1.5rem;
+  height: 2.25rem;
 }
 
 .skeleton-title {
   height: 1.75rem;
   width: 40%;
-  margin-bottom: 1.25rem;
+  margin: 1.25rem 0;
 }
 
 .skeleton-tabs {
-  height: 2.25rem;
-  width: 60%;
-  margin-bottom: 1.5rem;
+  height: 2.5rem;
+  width: 50%;
+  border-radius: 999px;
+  margin-bottom: 1.25rem;
 }
 
-.skeleton-tile {
-  height: 4.5rem;
-}
-
-.skeleton-card {
-  height: 10rem;
-  margin-bottom: 1.75rem;
+.skeleton-row {
+  height: 2.75rem;
+  margin-bottom: 0.6rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
