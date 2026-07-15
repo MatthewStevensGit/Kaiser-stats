@@ -1,4 +1,4 @@
-import { REGISTRATION_CUTOFF_BY_LEAGUE } from "./constants";
+import { REGISTRATION_CUTOFF_BY_LEAGUE, REGISTRATION_OPEN_BY_LEAGUE } from "./constants";
 import type { ScheduledLeague } from "./types";
 
 const EASTERN_TIME_ZONE = "America/New_York";
@@ -86,13 +86,48 @@ export function getRegistrationCutoffUtc(gameDateIso: string, league: ScheduledL
   return zonedWallTimeToUtc(year, month, day, cutoff.hour, cutoff.minute, EASTERN_TIME_ZONE);
 }
 
-/** Whether registration is still open at `nowUtc` — closed at (not after) the exact cutoff instant. */
-export function isRegistrationOpen(nowUtc: Date, gameDateIso: string, league: ScheduledLeague): boolean {
-  return nowUtc.getTime() < getRegistrationCutoffUtc(gameDateIso, league).getTime();
+/**
+ * The exact UTC instant registration opens for a scheduled game. Note: the
+ * Saturday-league open time is midnight ET, only ~2 hours from the 2am-ET
+ * DST transition instant — much closer than the close-time cutoffs' 13+
+ * hour margin. Still exact: the relevant Friday is always the week *before*
+ * a game, so it's never within days of the actual transition Sunday. See
+ * the "near-boundary" test case in __tests__/registration-window.test.ts.
+ */
+export function getRegistrationOpenUtc(gameDateIso: string, league: ScheduledLeague): Date {
+  const open = REGISTRATION_OPEN_BY_LEAGUE[league];
+  const openDateIso = addDaysToIsoDate(gameDateIso, open.dayOffset);
+  const { year, month, day } = parseIsoDateParts(openDateIso);
+  return zonedWallTimeToUtc(year, month, day, open.hour, open.minute, EASTERN_TIME_ZONE);
 }
 
-/** Formats a cutoff instant back into Eastern wall time for display, e.g. "Fri, Jul 17, 5:00 PM ET". */
-export function formatCutoffLabel(cutoffUtc: Date): string {
+export function getRegistrationWindowUtc(
+  gameDateIso: string,
+  league: ScheduledLeague,
+): { opensAt: Date; closesAt: Date } {
+  return {
+    opensAt: getRegistrationOpenUtc(gameDateIso, league),
+    closesAt: getRegistrationCutoffUtc(gameDateIso, league),
+  };
+}
+
+export type RegistrationStatus = "not-open" | "open" | "closed";
+
+/** Half-open interval: not-open strictly before opensAt, open in [opensAt, closesAt), closed at/after closesAt. */
+export function getRegistrationStatus(
+  nowUtc: Date,
+  gameDateIso: string,
+  league: ScheduledLeague,
+): RegistrationStatus {
+  const { opensAt, closesAt } = getRegistrationWindowUtc(gameDateIso, league);
+  const nowMs = nowUtc.getTime();
+  if (nowMs < opensAt.getTime()) return "not-open";
+  if (nowMs < closesAt.getTime()) return "open";
+  return "closed";
+}
+
+/** Formats a UTC instant back into Eastern wall time for display, e.g. "Fri, Jul 17, 5:00 PM ET". */
+export function formatCutoffLabel(instantUtc: Date): string {
   const formatted = new Intl.DateTimeFormat("en-US", {
     timeZone: EASTERN_TIME_ZONE,
     weekday: "short",
@@ -100,6 +135,24 @@ export function formatCutoffLabel(cutoffUtc: Date): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(cutoffUtc);
+  }).format(instantUtc);
   return `${formatted} ET`;
+}
+
+/** Today's calendar date in America/New_York, as "YYYY-MM-DD" — not new Date().toISOString(), which is UTC. */
+export function getTodayIsoInEastern(nowUtc: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: EASTERN_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(nowUtc);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value;
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  if (!year || !month || !day) {
+    throw new Error("Could not determine today's Eastern calendar date");
+  }
+  return `${year}-${month}-${day}`;
 }

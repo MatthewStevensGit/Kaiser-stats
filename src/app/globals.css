@@ -93,6 +93,13 @@ main {
   margin-bottom: 1.25rem;
 }
 
+.matchday-header-links {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .screen-header {
   margin: 0;
   font-size: 1.6rem;
@@ -755,6 +762,24 @@ th.num {
 .registration-status-bar-closed {
   background: var(--status-warning-bg);
   color: var(--status-warning-fg);
+}
+
+.registration-status-bar-not-open {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+/* Cancelled-game banner on the check-in portal page */
+.game-cancelled-banner {
+  background: var(--status-critical-bg);
+  color: var(--status-critical-fg);
+  border-radius: 10px;
+  padding: 1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+  margin-top: 1.5rem;
 }
 
 /* Bottom nav */

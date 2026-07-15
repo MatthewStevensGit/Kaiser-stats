@@ -1,13 +1,21 @@
 import { formatCutoffLabel } from "@/lib/matchday/registration-window";
+import type { RegistrationStatus } from "@/lib/matchday/registration-window";
 
-export function RegistrationStatusBar({ isOpen, cutoffUtc }: { isOpen: boolean; cutoffUtc: Date }) {
-  return (
-    <div
-      className={isOpen ? "registration-status-bar registration-status-bar-open" : "registration-status-bar registration-status-bar-closed"}
-    >
-      {isOpen
-        ? `Registration is open — closes ${formatCutoffLabel(cutoffUtc)}.`
-        : "Registration isn't open for this game."}
-    </div>
-  );
+export function RegistrationStatusBar({
+  status,
+  opensAt,
+  closesAt,
+}: {
+  status: RegistrationStatus;
+  opensAt: Date;
+  closesAt: Date;
+}) {
+  const message =
+    status === "open"
+      ? `Registration is open — closes ${formatCutoffLabel(closesAt)}.`
+      : status === "not-open"
+        ? `Registration opens ${formatCutoffLabel(opensAt)}.`
+        : "Registration isn't open for this game.";
+
+  return <div className={`registration-status-bar registration-status-bar-${status}`}>{message}</div>;
 }

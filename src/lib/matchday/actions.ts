@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth/session";
 import { createProvisionalIdentity } from "@/lib/stats-engine/identity";
 import { createServiceRoleClient } from "@/lib/supabase/client";
-import type { MatchdayActionResult } from "./types";
+import type { MatchdayActionResult, ScheduledLeague } from "./types";
 
 const UNIQUE_VIOLATION = "23505";
 
@@ -128,5 +128,79 @@ export async function removeCheckIn(gameId: string, canonicalId: string): Promis
   if (!data || data.length === 0) return { ok: false, error: "Not currently checked in." };
 
   revalidateGamePaths(gameId);
+  return { ok: true };
+}
+
+/** Plain-<form>-compatible wrapper, same reasoning as removeCheckInFormAction. */
+export async function cancelScheduledGameFormAction(gameId: string): Promise<void> {
+  await cancelScheduledGame(gameId);
+}
+
+export async function cancelScheduledGame(gameId: string): Promise<MatchdayActionResult> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const client = createServiceRoleClient();
+
+  const { data, error } = await client
+    .from("scheduled_games")
+    .update({ cancelled_at: new Date().toISOString(), cancelled_by: admin.canonicalId })
+    .eq("game_id", gameId)
+    .is("cancelled_at", null)
+    .select("game_id");
+
+  if (error) return { ok: false, error: "Could not cancel that game." };
+  if (!data || data.length === 0) {
+    return { ok: false, error: "Game not found or already cancelled." };
+  }
+
+  revalidateGamePaths(gameId);
+  return { ok: true };
+}
+
+export async function createOneOffGame(input: {
+  date: string;
+  league: ScheduledLeague;
+  kickoffLabel: string;
+  venue: string;
+}): Promise<MatchdayActionResult> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const date = input.date.trim();
+  const kickoffLabel = input.kickoffLabel.trim();
+  const venue = input.venue.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "Enter a valid date." };
+  if (!kickoffLabel) return { ok: false, error: "Kickoff time can't be empty." };
+  if (!venue) return { ok: false, error: "Venue can't be empty." };
+  if (input.league !== "saturday" && input.league !== "sunday") {
+    return { ok: false, error: "Choose a league." };
+  }
+
+  // Distinct id scheme from the cron's `matchday-<date>` (recurring games are
+  // always unique-per-date already) so a one-off game can't collide with a
+  // same-date-different-league recurring row.
+  const gameId = `matchday-${date}-${input.league}`;
+
+  const client = createServiceRoleClient();
+  const { error } = await client.from("scheduled_games").insert({
+    game_id: gameId,
+    date,
+    league: input.league,
+    kickoff_label: kickoffLabel,
+    venue,
+    is_recurring: false,
+    created_by: admin.canonicalId,
+  });
+
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) {
+      return { ok: false, error: "A game already exists on that date/league." };
+    }
+    return { ok: false, error: "Could not create that game." };
+  }
+
+  revalidatePath("/matchday");
+  revalidatePath(`/matchday/${gameId}`);
   return { ok: true };
 }

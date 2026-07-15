@@ -6,7 +6,7 @@ export function ScheduledGameCard({ game }: { game: ScheduledGame }) {
   return (
     <div className="match-card">
       <span className="match-card-date">{formatMatchDateLabel(game.date)}</span>
-      <ScheduledGameStatusLine league={game.league} />
+      <ScheduledGameStatusLine kickoffLabel={game.kickoffLabel} venue={game.venue} />
     </div>
   );
 }

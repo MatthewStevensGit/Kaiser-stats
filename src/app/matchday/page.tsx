@@ -1,3 +1,4 @@
+import { getCurrentUser } from "@/lib/auth/session";
 import { listScheduledGames } from "@/lib/matchday/data";
 import { ScheduledGameCard } from "../_components/ScheduledGameCard";
 
@@ -6,16 +7,23 @@ import { ScheduledGameCard } from "../_components/ScheduledGameCard";
 export const dynamic = "force-dynamic";
 
 export default async function MatchdayPage() {
-  const scheduledGames = await listScheduledGames();
+  const [scheduledGames, user] = await Promise.all([listScheduledGames(), getCurrentUser()]);
   const sorted = [...scheduledGames].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <main>
       <header className="screen-header-row">
         <h1 className="screen-header">Matchday</h1>
-        <a href="/matches" className="rulebook-link">
-          Past Matches
-        </a>
+        <div className="matchday-header-links">
+          {user?.isAdmin && (
+            <a href="/matchday/new" className="rulebook-link">
+              + Add one-off game
+            </a>
+          )}
+          <a href="/matches" className="rulebook-link">
+            Past Matches
+          </a>
+        </div>
       </header>
 
       {sorted.length === 0 ? (

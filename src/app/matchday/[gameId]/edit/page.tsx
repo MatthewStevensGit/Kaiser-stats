@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatMatchDateLabel } from "@/lib/format";
 import { getGameCheckinDetails, getRosterForPicker, getScheduledGameById } from "@/lib/matchday/data";
-import { removeCheckInFormAction } from "@/lib/matchday/actions";
+import { cancelScheduledGameFormAction, removeCheckInFormAction } from "@/lib/matchday/actions";
 import { AddPlayerPicker } from "../../../_components/AddPlayerPicker";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +53,24 @@ export default async function EditGamePage({
       <section className="card">
         <h2>Add a player</h2>
         <AddPlayerPicker gameId={gameId} roster={roster} />
+      </section>
+
+      <section className="card">
+        <h2>Cancel this game</h2>
+        {game.cancelled ? (
+          <p className="note">Already cancelled.</p>
+        ) : (
+          <>
+            <p className="note">
+              For holidays or other one-off changes. This can&apos;t be undone from here.
+            </p>
+            <form action={cancelScheduledGameFormAction.bind(null, gameId)}>
+              <button type="submit" className="checkin-edit-remove">
+                Cancel this game
+              </button>
+            </form>
+          </>
+        )}
       </section>
     </main>
   );

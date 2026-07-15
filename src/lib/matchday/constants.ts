@@ -20,11 +20,20 @@ export const KICKOFF_LABEL_BY_LEAGUE: Record<ScheduledLeague, string> = {
   sunday: "7:30 AM ET",
 };
 
-/** Day-before registration cutoffs. dayOffset is relative to the game's own ISO date. */
+/** Day-before registration close times. dayOffset is relative to the game's own ISO date. */
 export const REGISTRATION_CUTOFF_BY_LEAGUE: Record<
   ScheduledLeague,
   { dayOffset: number; hour: number; minute: number }
 > = {
   saturday: { dayOffset: -1, hour: 17, minute: 0 }, // Friday 5:00 PM ET
   sunday: { dayOffset: -1, hour: 15, minute: 0 }, // Saturday 3:00 PM ET
+};
+
+/** Day-before registration open times. Same dayOffset convention as the close-time rule above. */
+export const REGISTRATION_OPEN_BY_LEAGUE: Record<
+  ScheduledLeague,
+  { dayOffset: number; hour: number; minute: number }
+> = {
+  saturday: { dayOffset: -1, hour: 0, minute: 0 }, // Friday 12:00 AM ET
+  sunday: { dayOffset: -1, hour: 10, minute: 0 }, // Saturday 10:00 AM ET
 };

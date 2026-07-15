@@ -12,6 +12,11 @@ export interface ScheduledGame {
   date: string; // ISO 8601 date-only, e.g. "2026-07-18"
   league: ScheduledLeague;
   checkedInCanonicalIds: string[];
+  /** Resolved display value — the game's own override, or KICKOFF_LABEL_BY_LEAGUE[league]. */
+  kickoffLabel: string;
+  /** Resolved display value — the game's own override, or VENUE_BY_LEAGUE[league]. */
+  venue: string;
+  cancelled: boolean;
 }
 
 /** Result of a Matchday admin Server Action — never throws on an auth/validation failure. */

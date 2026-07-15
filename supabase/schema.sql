@@ -218,3 +218,29 @@ insert into scheduled_games (game_id, date, league) values
   ('matchday-2026-07-26', '2026-07-26', 'sunday'),
   ('matchday-2026-08-01', '2026-08-01', 'saturday')
 on conflict (game_id) do nothing;
+
+-- Migration (2026-07-14): registration open-time, cron-generated recurring
+-- games, admin cancellation, and one-off (non-recurring) games. No new RLS
+-- policy — scheduled_games access still goes exclusively through
+-- createServiceRoleClient(), same invariant as every table above.
+
+-- Null kickoff_label/venue mean "fall back to KICKOFF_LABEL_BY_LEAGUE /
+-- VENUE_BY_LEAGUE for this game's league" (see src/lib/matchday/data.ts) —
+-- only a one-off holiday game sets these explicitly.
+alter table scheduled_games add column if not exists kickoff_label text;
+alter table scheduled_games add column if not exists venue text;
+
+-- True for the weekly cron-generated games (src/app/api/matchday/generate-week),
+-- false for an admin-created one-off game (src/lib/matchday/actions.ts's
+-- createOneOffGame). Documentation today more than an enforced constraint —
+-- the cron only ever inserts, never updates, so it can't collide with a
+-- one-off row regardless.
+alter table scheduled_games add column if not exists is_recurring boolean not null default true;
+
+-- Cancellation is a one-way soft-delete (no un-cancel path in this slice),
+-- same audit-trail style as game_checkins's removed_at/removed_by.
+alter table scheduled_games add column if not exists cancelled_at timestamptz;
+alter table scheduled_games add column if not exists cancelled_by text references players (canonical_id);
+
+-- Set for an admin-created one-off game; null for cron-generated rows.
+alter table scheduled_games add column if not exists created_by text references players (canonical_id);

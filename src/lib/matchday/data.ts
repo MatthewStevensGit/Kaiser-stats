@@ -1,10 +1,17 @@
+import { KICKOFF_LABEL_BY_LEAGUE, VENUE_BY_LEAGUE } from "./constants";
+import { addDaysToIsoDate, getTodayIsoInEastern } from "./registration-window";
 import { createServiceRoleClient } from "../supabase/client";
 import type { ScheduledGame, ScheduledLeague } from "./types";
+
+const LIST_HORIZON_DAYS = 7;
 
 interface ScheduledGameRow {
   game_id: string;
   date: string;
   league: ScheduledLeague;
+  kickoff_label: string | null;
+  venue: string | null;
+  cancelled_at: string | null;
 }
 
 interface CheckinRow {
@@ -12,10 +19,13 @@ interface CheckinRow {
   canonical_id: string;
 }
 
+const SCHEDULED_GAME_COLUMNS = "game_id, date, league, kickoff_label, venue, cancelled_at";
+
 /**
- * Groups scheduled-game rows with their active (non-removed) check-ins.
- * Pure — no Supabase call — so it's unit-testable on its own; see
- * __tests__/data.test.ts.
+ * Groups scheduled-game rows with their active (non-removed) check-ins, and
+ * resolves each game's display kickoff/venue (its own override, or the
+ * league-wide constant) and cancellation flag. Pure — no Supabase call — so
+ * it's unit-testable on its own; see __tests__/data.test.ts.
  */
 export function buildScheduledGames(
   gameRows: ScheduledGameRow[],
@@ -33,14 +43,26 @@ export function buildScheduledGames(
     date: g.date,
     league: g.league,
     checkedInCanonicalIds: checkedInByGame.get(g.game_id) ?? [],
+    kickoffLabel: g.kickoff_label ?? KICKOFF_LABEL_BY_LEAGUE[g.league],
+    venue: g.venue ?? VENUE_BY_LEAGUE[g.league],
+    cancelled: g.cancelled_at !== null,
   }));
 }
 
+/** Never-cancelled games in the next LIST_HORIZON_DAYS days — the /matchday list. */
 export async function listScheduledGames(): Promise<ScheduledGame[]> {
   const client = createServiceRoleClient();
 
+  const todayIso = getTodayIsoInEastern(new Date());
+  const horizonIso = addDaysToIsoDate(todayIso, LIST_HORIZON_DAYS);
+
   const [{ data: games }, { data: checkins }] = await Promise.all([
-    client.from("scheduled_games").select("game_id, date, league"),
+    client
+      .from("scheduled_games")
+      .select(SCHEDULED_GAME_COLUMNS)
+      .is("cancelled_at", null)
+      .gte("date", todayIso)
+      .lte("date", horizonIso),
     client.from("game_checkins").select("game_id, canonical_id").is("removed_at", null),
   ]);
 
@@ -50,11 +72,16 @@ export async function listScheduledGames(): Promise<ScheduledGame[]> {
   );
 }
 
+/**
+ * Looks up a game by id regardless of cancellation status — a cancelled
+ * game must still resolve here (not null) so its check-in portal page can
+ * render a "this game has been cancelled" state instead of 404ing.
+ */
 export async function getScheduledGameById(gameId: string): Promise<ScheduledGame | null> {
   const client = createServiceRoleClient();
 
   const [{ data: game }, { data: checkins }] = await Promise.all([
-    client.from("scheduled_games").select("game_id, date, league").eq("game_id", gameId).maybeSingle(),
+    client.from("scheduled_games").select(SCHEDULED_GAME_COLUMNS).eq("game_id", gameId).maybeSingle(),
     client
       .from("game_checkins")
       .select("game_id, canonical_id")
