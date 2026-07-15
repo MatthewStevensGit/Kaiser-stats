@@ -5,7 +5,13 @@ import type { ScheduledGame } from "@/lib/matchday/types";
 import { parsePrimaryStandingsSheet } from "@/lib/stats-engine/season-standings-parser";
 import type { GameRecord, PlayerIdentity, SeasonStandingRow } from "@/lib/stats-engine/types";
 
-/** Loads the fake/anonymized demo dataset the public site runs against — never real data. */
+/**
+ * Loads the fake/anonymized demo dataset the public site runs against —
+ * never real data. `scheduledGames` is kept here as a fixture shape only —
+ * as of the admin check-in slice, no live page reads it anymore (Matchday
+ * reads real Supabase tables via src/lib/matchday/data.ts instead). Don't
+ * let it silently become a second, drifting source of truth.
+ */
 export function loadSampleData(): {
   players: PlayerIdentity[];
   rows: SeasonStandingRow[];

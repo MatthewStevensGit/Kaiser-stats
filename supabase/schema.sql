@@ -165,3 +165,56 @@ alter table players add column if not exists auth_user_id uuid unique references
 --    Player/Captain/Admin role model from kaiser_step1_concept.md — that's
 --    explicitly deferred until/unless a live draft feature is built.
 alter table players add column if not exists is_admin boolean not null default false;
+
+-- Migration (2026-07-14): real Matchday scheduling + check-ins.
+-- Replaces data/sample/scheduled-games.json as Matchday's source of truth
+-- (see src/lib/matchday/data.ts). Scoped to Matchday only — Table/Past
+-- Matches/Player Detail stay on data/sample/ for now. No public RLS policies
+-- added: every read/write of these two tables goes through
+-- createServiceRoleClient(), same invariant as every other table here.
+
+create table if not exists scheduled_games (
+  game_id text primary key,
+  date date not null,
+  league text not null check (league in ('saturday', 'sunday'))
+);
+
+alter table scheduled_games enable row level security;
+
+-- One row per check-in *event* (soft-deleted via removed_at/removed_by,
+-- never hard-deleted) rather than a mutable array — gets an audit trail
+-- (who added/removed whom, and when) almost for free, matching
+-- kaiser_step1_concept.md's "admin action log" idea. Only admins
+-- insert/update this table today (checked_in_by/removed_by are always an
+-- admin's canonical_id) — a future public self-check-in slice would need
+-- its own path, not assumed here.
+create table if not exists game_checkins (
+  id bigint generated always as identity primary key,
+  game_id text not null references scheduled_games (game_id) on delete cascade,
+  canonical_id text not null references players (canonical_id),
+  checked_in_at timestamptz not null default now(),
+  checked_in_by text not null references players (canonical_id),
+  removed_at timestamptz,
+  removed_by text references players (canonical_id)
+);
+
+alter table game_checkins enable row level security;
+create index if not exists game_checkins_game_idx on game_checkins (game_id);
+create index if not exists game_checkins_player_idx on game_checkins (canonical_id);
+
+-- At most one *active* check-in per (game, player) at a time. Re-adding
+-- after a removal inserts a new row (the old one keeps its removed_at
+-- stamp) rather than erroring.
+create unique index if not exists game_checkins_active_unique
+  on game_checkins (game_id, canonical_id) where removed_at is null;
+
+-- Seed the 5 games already described in data/sample/scheduled-games.json.
+-- No check-ins are seeded — that file's demo-cXXX ids are anonymized/fake
+-- and don't exist in the real players table.
+insert into scheduled_games (game_id, date, league) values
+  ('matchday-2026-07-18', '2026-07-18', 'saturday'),
+  ('matchday-2026-07-19', '2026-07-19', 'sunday'),
+  ('matchday-2026-07-25', '2026-07-25', 'saturday'),
+  ('matchday-2026-07-26', '2026-07-26', 'sunday'),
+  ('matchday-2026-08-01', '2026-08-01', 'saturday')
+on conflict (game_id) do nothing;

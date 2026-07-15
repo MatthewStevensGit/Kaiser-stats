@@ -599,19 +599,97 @@ th.num {
   flex-shrink: 0;
 }
 
-/* Edit Game button — rendered, inert until admin editing ships */
+/* Edit Game link — only rendered for admins; real enforcement is the
+   /edit page's own requireAdmin() gate, not this conditional render. */
 .edit-game-button {
+  display: inline-block;
   margin-top: 0.75rem;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   border-radius: 999px;
   padding: 0.5rem 1.2rem;
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  cursor: default;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Admin check-in editing */
+.checkin-edit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checkin-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--gridline);
+}
+
+.checkin-edit-row:last-child {
+  border-bottom: none;
+}
+
+.checkin-edit-remove {
+  background: none;
+  border: 1px solid var(--status-critical-bg);
+  color: var(--status-critical-bg);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.add-player-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.add-player-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.add-player-picker-list button {
+  width: 100%;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.add-player-picker-new {
+  background: none;
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* Capacity ring */

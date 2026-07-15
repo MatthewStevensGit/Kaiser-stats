@@ -2,9 +2,10 @@ export type ScheduledLeague = "saturday" | "sunday";
 
 /**
  * A future, scheduled game — distinct from GameRecord (stats-engine/types.ts),
- * which models a game already played. No real check-in/auth backend exists
- * yet, so checkedInCanonicalIds is demo-only data for now: only its length is
- * consumed by the UI, so these ids don't need to resolve against players.json.
+ * which models a game already played. Backed by the real scheduled_games /
+ * game_checkins tables as of the admin check-in slice (src/lib/matchday/data.ts)
+ * — checkedInCanonicalIds is the list of currently-active (non-removed)
+ * check-ins for this game.
  */
 export interface ScheduledGame {
   gameId: string;
@@ -12,3 +13,6 @@ export interface ScheduledGame {
   league: ScheduledLeague;
   checkedInCanonicalIds: string[];
 }
+
+/** Result of a Matchday admin Server Action — never throws on an auth/validation failure. */
+export type MatchdayActionResult = { ok: true } | { ok: false; error: string };

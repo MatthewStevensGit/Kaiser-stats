@@ -1,11 +1,13 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Server-side-only Supabase client, using the service_role key. Nothing in
- * src/app/ (the public site) imports this — it exists for local/private
- * tooling (the backfill script) only. The public demo pages keep reading
- * data/sample/ regardless of whether these env vars are set; see
- * docs/data-contract.md's "Going live with real data" section.
+ * Server-side-only Supabase client, using the service_role key. Never
+ * imported by a Client Component — used by local/private tooling (the
+ * backfill script), the auth callback route, and Matchday's server-only data
+ * layer (src/lib/matchday/data.ts, src/lib/matchday/actions.ts). Table/Past
+ * Matches/Player Detail still read data/sample/ regardless of whether these
+ * env vars are set; see docs/data-contract.md's "Going live with real data"
+ * section for which parts of the site have and haven't made that call.
  */
 export function createServiceRoleClient(): SupabaseClient {
   const url = process.env.SUPABASE_URL;

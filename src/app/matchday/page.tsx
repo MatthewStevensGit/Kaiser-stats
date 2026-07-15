@@ -1,8 +1,12 @@
-import { loadSampleData } from "@/lib/sample-data";
+import { listScheduledGames } from "@/lib/matchday/data";
 import { ScheduledGameCard } from "../_components/ScheduledGameCard";
 
-export default function MatchdayPage() {
-  const { scheduledGames } = loadSampleData();
+// Real Supabase-backed data now (see src/lib/matchday/data.ts) — must not be
+// cached/prerendered at build time.
+export const dynamic = "force-dynamic";
+
+export default async function MatchdayPage() {
+  const scheduledGames = await listScheduledGames();
   const sorted = [...scheduledGames].sort((a, b) => a.date.localeCompare(b.date));
 
   return (

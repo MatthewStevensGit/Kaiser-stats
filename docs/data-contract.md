@@ -150,18 +150,21 @@ write. This is a deliberate default, not a placeholder to fill in later.
 
 ## Going live with real data
 
-As of this writing, the deployed site (`kaiser-stats.vercel.app`) reads only
-`data/sample/` — the fake dataset — regardless of whether real data exists in
-Supabase. This is a deliberate choice, not a technical limitation: no page
-under `src/app/` imports `src/lib/supabase/`, and no Supabase environment
-variables are configured in Vercel, so there is currently no code path in the
-deployed app that could serve real data even by accident.
+**Table, Past Matches, and Player Detail** still read only `data/sample/` —
+the fake dataset — regardless of whether real data exists in Supabase. This
+remains a deliberate choice: flipping it means building a page that queries
+Supabase (reusing `aggregateStandings()`/`rollupGameRecords()` against real
+rows instead of `data/sample/`), which hasn't happened on purpose yet.
 
-Flipping this is a future, explicit decision: build a page that queries
-Supabase (reusing `aggregateStandings()`/`rollupGameRecords()` against
-real rows instead of `data/sample/`), then deliberately add the Supabase
-environment variables to the Vercel project. Until both of those happen on
-purpose, the public site stays on fake data.
+**Matchday is the exception.** As of the admin check-in slice, `/matchday`
+and `/matchday/[gameId]` read real Supabase tables (`scheduled_games`,
+`game_checkins` — see `src/lib/matchday/data.ts`), and the admin-only
+`/matchday/[gameId]/edit` page writes to them (`src/lib/matchday/actions.ts`,
+gated by `is_admin`, see `src/lib/auth/session.ts`'s `requireAdmin()`). This
+was a deliberate, scoped decision — not a blanket "go live with everything."
+Supabase environment variables are configured in Vercel specifically to
+support this and the auth login flow, not as a signal that other pages have
+also gone live.
 
 ## The live-report parser
 

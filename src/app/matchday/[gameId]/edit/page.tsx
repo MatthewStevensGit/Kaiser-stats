@@ -1,0 +1,59 @@
+import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/session";
+import { formatMatchDateLabel } from "@/lib/format";
+import { getGameCheckinDetails, getRosterForPicker, getScheduledGameById } from "@/lib/matchday/data";
+import { removeCheckInFormAction } from "@/lib/matchday/actions";
+import { AddPlayerPicker } from "../../../_components/AddPlayerPicker";
+
+export const dynamic = "force-dynamic";
+
+export default async function EditGamePage({
+  params,
+}: {
+  params: Promise<{ gameId: string }>;
+}) {
+  const { gameId } = await params;
+  await requireAdmin(`/matchday/${gameId}`);
+
+  const game = await getScheduledGameById(gameId);
+  if (!game) notFound();
+
+  const checkins = await getGameCheckinDetails(gameId);
+  const roster = await getRosterForPicker(checkins.map((c) => c.canonicalId));
+
+  return (
+    <main>
+      <a href={`/matchday/${gameId}`} className="back-link">
+        ← Back to check-in
+      </a>
+      <header className="screen-header-row">
+        <h1 className="screen-header">Edit {formatMatchDateLabel(game.date)}</h1>
+      </header>
+
+      <section className="card">
+        <h2>Checked in ({checkins.length})</h2>
+        {checkins.length === 0 ? (
+          <p className="note">No one checked in yet.</p>
+        ) : (
+          <ul className="checkin-edit-list">
+            {checkins.map((c) => (
+              <li key={c.canonicalId} className="checkin-edit-row">
+                <span>{c.displayName}</span>
+                <form action={removeCheckInFormAction.bind(null, gameId, c.canonicalId)}>
+                  <button type="submit" className="checkin-edit-remove">
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Add a player</h2>
+        <AddPlayerPicker gameId={gameId} roster={roster} />
+      </section>
+    </main>
+  );
+}
