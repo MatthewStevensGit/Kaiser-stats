@@ -22,7 +22,18 @@ create table if not exists players (
   aliases text[] not null default '{}',
   known_emails text[] not null default '{}',
   leagues text[] not null default '{}',
-  status text not null check (status in ('regular', 'guest', 'deferred', 'example'))
+  -- 'provisional' included alongside the identity-resolution statuses (see
+  -- createProvisionalIdentity()/createProvisionalIdentityFromEmail() in
+  -- src/lib/stats-engine/identity.ts) — both the name-ingestion path and the
+  -- login path auto-provision under this status rather than blocking.
+  status text not null check (status in ('regular', 'guest', 'deferred', 'example', 'provisional')),
+  -- Links this player to their Supabase Auth identity, set on first login
+  -- (see src/app/auth/callback/route.ts). Most rows (backfilled from
+  -- spreadsheets) will never log in and stay null.
+  auth_user_id uuid unique references auth.users (id),
+  -- Deliberately a single flag, not the fuller Player/Captain/Admin role
+  -- model from kaiser_step1_concept.md — that's still deferred.
+  is_admin boolean not null default false
 );
 
 alter table players enable row level security;
@@ -62,6 +73,9 @@ create table if not exists game_records (
   home_score integer not null,
   away_score integer not null,
   mvp_canonical_id text references players (canonical_id),
+  -- Admin-pasted free-text summary of the game (originally lifted from the
+  -- league organizer's report message). No admin-editing UI exists yet.
+  description text,
   source text not null
 );
 
@@ -118,3 +132,115 @@ create table if not exists unresolved_names_log (
 );
 
 alter table unresolved_names_log enable row level security;
+
+-- Migration (2026-07-14): auth support for email/magic-link login.
+-- Run this once in the Supabase SQL Editor against the existing project —
+-- the players table already exists there, so the CREATE TABLE above won't
+-- apply these changes retroactively. No new RLS policy is added anywhere:
+-- the login flow only ever touches Supabase's own auth.users table from the
+-- browser (via the anon key) and only ever touches players server-side via
+-- the service_role key (src/lib/supabase/client.ts) — the "RLS enabled, zero
+-- public policies" invariant on every table here stays exactly as-is.
+
+-- 1. Fix a latent bug: PlayerIdentity.status (src/lib/stats-engine/types.ts)
+--    has included "provisional" since the identity-resolution work, but this
+--    CHECK constraint never did. Auto-provisioned login identities need to
+--    insert with status='provisional', which would violate this constraint
+--    as written today.
+--    Verify the actual constraint name first — it should be the
+--    Postgres-default "players_status_check" for a table created via the
+--    unnamed inline CHECK in this file, but confirm before dropping:
+--      select conname from pg_constraint
+--      where conrelid = 'players'::regclass and contype = 'c';
+alter table players drop constraint players_status_check;
+alter table players add constraint players_status_check
+  check (status in ('regular', 'guest', 'deferred', 'example', 'provisional'));
+
+-- 2. Link a players row to its Supabase Auth identity. Nullable + unique:
+--    most existing rows (backfilled from spreadsheets) will never log in and
+--    have no auth account; at most one player row per auth user.
+alter table players add column if not exists auth_user_id uuid unique references auth.users (id);
+
+-- 3. Simplest possible admin flag. Deliberately not the fuller
+--    Player/Captain/Admin role model from kaiser_step1_concept.md — that's
+--    explicitly deferred until/unless a live draft feature is built.
+alter table players add column if not exists is_admin boolean not null default false;
+
+-- Migration (2026-07-14): real Matchday scheduling + check-ins.
+-- Replaces data/sample/scheduled-games.json as Matchday's source of truth
+-- (see src/lib/matchday/data.ts). Scoped to Matchday only — Table/Past
+-- Matches/Player Detail stay on data/sample/ for now. No public RLS policies
+-- added: every read/write of these two tables goes through
+-- createServiceRoleClient(), same invariant as every other table here.
+
+create table if not exists scheduled_games (
+  game_id text primary key,
+  date date not null,
+  league text not null check (league in ('saturday', 'sunday'))
+);
+
+alter table scheduled_games enable row level security;
+
+-- One row per check-in *event* (soft-deleted via removed_at/removed_by,
+-- never hard-deleted) rather than a mutable array — gets an audit trail
+-- (who added/removed whom, and when) almost for free, matching
+-- kaiser_step1_concept.md's "admin action log" idea. Only admins
+-- insert/update this table today (checked_in_by/removed_by are always an
+-- admin's canonical_id) — a future public self-check-in slice would need
+-- its own path, not assumed here.
+create table if not exists game_checkins (
+  id bigint generated always as identity primary key,
+  game_id text not null references scheduled_games (game_id) on delete cascade,
+  canonical_id text not null references players (canonical_id),
+  checked_in_at timestamptz not null default now(),
+  checked_in_by text not null references players (canonical_id),
+  removed_at timestamptz,
+  removed_by text references players (canonical_id)
+);
+
+alter table game_checkins enable row level security;
+create index if not exists game_checkins_game_idx on game_checkins (game_id);
+create index if not exists game_checkins_player_idx on game_checkins (canonical_id);
+
+-- At most one *active* check-in per (game, player) at a time. Re-adding
+-- after a removal inserts a new row (the old one keeps its removed_at
+-- stamp) rather than erroring.
+create unique index if not exists game_checkins_active_unique
+  on game_checkins (game_id, canonical_id) where removed_at is null;
+
+-- Seed the 5 games already described in data/sample/scheduled-games.json.
+-- No check-ins are seeded — that file's demo-cXXX ids are anonymized/fake
+-- and don't exist in the real players table.
+insert into scheduled_games (game_id, date, league) values
+  ('matchday-2026-07-18', '2026-07-18', 'saturday'),
+  ('matchday-2026-07-19', '2026-07-19', 'sunday'),
+  ('matchday-2026-07-25', '2026-07-25', 'saturday'),
+  ('matchday-2026-07-26', '2026-07-26', 'sunday'),
+  ('matchday-2026-08-01', '2026-08-01', 'saturday')
+on conflict (game_id) do nothing;
+
+-- Migration (2026-07-14): registration open-time, cron-generated recurring
+-- games, admin cancellation, and one-off (non-recurring) games. No new RLS
+-- policy — scheduled_games access still goes exclusively through
+-- createServiceRoleClient(), same invariant as every table above.
+
+-- Null kickoff_label/venue mean "fall back to KICKOFF_LABEL_BY_LEAGUE /
+-- VENUE_BY_LEAGUE for this game's league" (see src/lib/matchday/data.ts) —
+-- only a one-off holiday game sets these explicitly.
+alter table scheduled_games add column if not exists kickoff_label text;
+alter table scheduled_games add column if not exists venue text;
+
+-- True for the weekly cron-generated games (src/app/api/matchday/generate-week),
+-- false for an admin-created one-off game (src/lib/matchday/actions.ts's
+-- createOneOffGame). Documentation today more than an enforced constraint —
+-- the cron only ever inserts, never updates, so it can't collide with a
+-- one-off row regardless.
+alter table scheduled_games add column if not exists is_recurring boolean not null default true;
+
+-- Cancellation is a one-way soft-delete (no un-cancel path in this slice),
+-- same audit-trail style as game_checkins's removed_at/removed_by.
+alter table scheduled_games add column if not exists cancelled_at timestamptz;
+alter table scheduled_games add column if not exists cancelled_by text references players (canonical_id);
+
+-- Set for an admin-created one-off game; null for cron-generated rows.
+alter table scheduled_games add column if not exists created_by text references players (canonical_id);

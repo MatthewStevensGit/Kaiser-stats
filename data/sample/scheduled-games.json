@@ -1,0 +1,49 @@
+[
+  {
+    "gameId": "matchday-2026-07-18",
+    "date": "2026-07-18",
+    "league": "saturday",
+    "checkedInCanonicalIds": [
+      "demo-c001", "demo-c002", "demo-c003", "demo-c004", "demo-c005",
+      "demo-c006", "demo-c007", "demo-c008", "demo-c009", "demo-c010",
+      "demo-c011", "demo-c012", "demo-c013", "demo-c014", "demo-c015",
+      "demo-c016", "demo-c017", "demo-c018", "demo-c019", "demo-c020"
+    ]
+  },
+  {
+    "gameId": "matchday-2026-07-19",
+    "date": "2026-07-19",
+    "league": "sunday",
+    "checkedInCanonicalIds": [
+      "demo-c001", "demo-c002", "demo-c003", "demo-c004", "demo-c005",
+      "demo-c006", "demo-c007", "demo-c008", "demo-c009", "demo-c010",
+      "demo-c011", "demo-c012", "demo-c013", "demo-c014", "demo-c015"
+    ]
+  },
+  {
+    "gameId": "matchday-2026-07-25",
+    "date": "2026-07-25",
+    "league": "saturday",
+    "checkedInCanonicalIds": [
+      "demo-c001", "demo-c002", "demo-c003", "demo-c004", "demo-c005",
+      "demo-c006", "demo-c007", "demo-c008", "demo-c009"
+    ]
+  },
+  {
+    "gameId": "matchday-2026-07-26",
+    "date": "2026-07-26",
+    "league": "sunday",
+    "checkedInCanonicalIds": [
+      "demo-c001", "demo-c002", "demo-c003", "demo-c004", "demo-c005",
+      "demo-c006", "demo-c007", "demo-c008", "demo-c009", "demo-c010",
+      "demo-c011", "demo-c012", "demo-c013", "demo-c014", "demo-c015",
+      "demo-c016", "demo-c017", "demo-c018", "demo-c019", "demo-c020"
+    ]
+  },
+  {
+    "gameId": "matchday-2026-08-01",
+    "date": "2026-08-01",
+    "league": "saturday",
+    "checkedInCanonicalIds": ["demo-c001", "demo-c002", "demo-c003", "demo-c004"]
+  }
+]

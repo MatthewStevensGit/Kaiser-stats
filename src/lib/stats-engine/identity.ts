@@ -104,3 +104,30 @@ export function createProvisionalIdentity(rawName: string): PlayerIdentity {
     status: "provisional",
   };
 }
+
+/**
+ * A verified login email with no match to any known player's knownEmails —
+ * same "never block, auto-provision, flag for a human later" philosophy as
+ * createProvisionalIdentity(), just keyed by email instead of a report name
+ * (see src/app/auth/callback/route.ts). displayName defaults to the email
+ * itself so it's recognizable in the existing "auto-tracked new players"
+ * admin surface until a human renames it.
+ */
+export function createProvisionalIdentityFromEmail(email: string): PlayerIdentity {
+  const normalized = email.trim().toLowerCase();
+  const slug = normalized.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return {
+    canonicalId: `auto-${slug}`,
+    displayName: normalized,
+    aliases: [],
+    knownEmails: [normalized],
+    leagues: [],
+    status: "provisional",
+  };
+}
+
+/** Case-insensitive match against every known player's knownEmails. */
+export function findPlayerByEmail(players: PlayerIdentity[], email: string): PlayerIdentity | null {
+  const normalized = email.trim().toLowerCase();
+  return players.find((p) => p.knownEmails.some((e) => e.toLowerCase() === normalized)) ?? null;
+}

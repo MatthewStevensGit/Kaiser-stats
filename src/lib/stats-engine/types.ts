@@ -154,6 +154,13 @@ export interface GameRecord {
    * qualitative context, never a ranking input.
    */
   notableMentions: NotableMention[];
+  /**
+   * Admin-pasted free-text summary of the game (originally lifted from the
+   * league organizer's report message). Optional — no admin-editing UI
+   * exists yet, so this is only ever populated by hand in sample/seed data
+   * for now.
+   */
+  description?: string;
   /** Provenance, e.g. "email:19f3315cf733a148" or "spreadsheet:soccer_2023.xlsx#Sheet1". */
   source: string;
 }
