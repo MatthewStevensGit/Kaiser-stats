@@ -12,7 +12,7 @@ export default async function NewGamePage() {
         ← Back to matchday
       </a>
       <header className="screen-header-row">
-        <h1 className="screen-header">Add One-Off Game</h1>
+        <h1 className="screen-header">Add Game</h1>
       </header>
       <p className="note">
         For a holiday weekday game or any other one-time change to the regular schedule.
