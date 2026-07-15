@@ -49,7 +49,14 @@ export function buildScheduledGames(
   }));
 }
 
-/** Never-cancelled games in the next LIST_HORIZON_DAYS days — the /matchday list. */
+/**
+ * Never-cancelled games for the /matchday list: recurring (cron-generated)
+ * games within the next LIST_HORIZON_DAYS days, PLUS every one-off game
+ * regardless of date — a one-off game is a deliberate, rare admin action
+ * (e.g. a holiday game weeks out) and needs to stay visible/manageable
+ * however far out its date is, unlike the routine weekly games that would
+ * otherwise clutter the list far in advance.
+ */
 export async function listScheduledGames(): Promise<ScheduledGame[]> {
   const client = createServiceRoleClient();
 
@@ -61,8 +68,7 @@ export async function listScheduledGames(): Promise<ScheduledGame[]> {
       .from("scheduled_games")
       .select(SCHEDULED_GAME_COLUMNS)
       .is("cancelled_at", null)
-      .gte("date", todayIso)
-      .lte("date", horizonIso),
+      .or(`and(date.gte.${todayIso},date.lte.${horizonIso}),is_recurring.eq.false`),
     client.from("game_checkins").select("game_id, canonical_id").is("removed_at", null),
   ]);
 
