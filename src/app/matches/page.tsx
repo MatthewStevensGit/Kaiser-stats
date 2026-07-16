@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth/session";
-import { loadSampleData } from "@/lib/sample-data";
+import { listGameRecords, listPlayers } from "@/lib/stats-engine/data";
 import { MatchCard } from "../_components/MatchCard";
 import { PillTabs } from "../_components/PillTabs";
 
@@ -24,7 +24,7 @@ export default async function MatchesPage({
   const { year: rawYear } = await searchParams;
   const year = isYear(rawYear) ? rawYear : DEFAULT_YEAR;
 
-  const { players, games } = loadSampleData();
+  const [players, games] = await Promise.all([listPlayers(), listGameRecords()]);
   const user = await getCurrentUser();
   const sorted = games
     .filter((g) => g.date.startsWith(year))

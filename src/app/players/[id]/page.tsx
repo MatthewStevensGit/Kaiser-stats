@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { aggregateStandings } from "@/lib/stats-engine/aggregate";
+import { listGameRecords, listPlayers, listSeasonStandingRows } from "@/lib/stats-engine/data";
 import { formatWDL } from "@/lib/format";
 import { getPlayerGameLog } from "@/lib/stats-engine/player-game-log";
-import { loadSampleData } from "@/lib/sample-data";
 import { PlayerMatchRow } from "../../_components/PlayerMatchRow";
 
 export default async function PlayerDetailPage({
@@ -11,7 +11,7 @@ export default async function PlayerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { players, rows, games } = loadSampleData();
+  const [players, rows, games] = await Promise.all([listPlayers(), listSeasonStandingRows(), listGameRecords()]);
 
   const player = players.find((p) => p.canonicalId === id);
   if (!player) notFound();

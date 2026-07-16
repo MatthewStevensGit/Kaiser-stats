@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { formatMatchDateLabel, formatScoreLine, getMultiGoalNickname } from "@/lib/format";
-import { loadSampleData } from "@/lib/sample-data";
+import { listGameRecords, listPlayers } from "@/lib/stats-engine/data";
 import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
 import { AssistChip } from "../../_components/AssistChip";
 import { GoalChip } from "../../_components/GoalChip";
@@ -12,7 +12,7 @@ export default async function MatchDetailPage({
   params: Promise<{ gameId: string }>;
 }) {
   const { gameId } = await params;
-  const { players, games } = loadSampleData();
+  const [players, games] = await Promise.all([listPlayers(), listGameRecords()]);
 
   const game = games.find((g) => g.gameId === gameId);
   if (!game) notFound();

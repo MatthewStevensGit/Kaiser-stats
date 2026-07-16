@@ -1,6 +1,6 @@
 import { aggregateStandings, rankByRate } from "@/lib/stats-engine/aggregate";
+import { listPlayers, listSeasonStandingRows } from "@/lib/stats-engine/data";
 import { formatPlusMinus, formatWDL } from "@/lib/format";
-import { loadSampleData } from "@/lib/sample-data";
 import { PillTabs } from "./_components/PillTabs";
 
 const GOLDEN_BOOT_MIN_GAMES = 3;
@@ -26,7 +26,7 @@ export default async function Home({
   const tab: TableTab = isTableTab(rawTab) ? rawTab : "plus-minus";
 
   // Merged only, for now — Saturday/Sunday split may return in a later slice.
-  const { players, rows } = loadSampleData();
+  const [players, rows] = await Promise.all([listPlayers(), listSeasonStandingRows()]);
   const { players: totals } = aggregateStandings(rows, players, "merged");
 
   const plusMinusRanked = [...totals].sort(
