@@ -39,7 +39,9 @@ export default async function PlayerDetailPage({
       ) : (
         <div className="player-match-row-list">
           {log.map((entry) => (
-            <PlayerMatchRow key={entry.gameId} entry={entry} />
+            <a key={entry.gameId} href={`/matches/${entry.gameId}`} className="match-card-link">
+              <PlayerMatchRow entry={entry} />
+            </a>
           ))}
         </div>
       )}
