@@ -1,3 +1,4 @@
+import { getCurrentUser } from "@/lib/auth/session";
 import { loadSampleData } from "@/lib/sample-data";
 import { MatchCard } from "../_components/MatchCard";
 import { PillTabs } from "../_components/PillTabs";
@@ -24,6 +25,7 @@ export default async function MatchesPage({
   const year = isYear(rawYear) ? rawYear : DEFAULT_YEAR;
 
   const { players, games } = loadSampleData();
+  const user = await getCurrentUser();
   const sorted = games
     .filter((g) => g.date.startsWith(year))
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -32,6 +34,11 @@ export default async function MatchesPage({
     <main>
       <header className="screen-header-row">
         <h1 className="screen-header">Past Matches</h1>
+        {user?.isAdmin && (
+          <a href="/matches/import" className="rulebook-link">
+            + Import match report
+          </a>
+        )}
       </header>
 
       <PillTabs
