@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { formatMatchDateLabel, formatScoreLine, getMultiGoalNickname } from "@/lib/format";
 import { loadSampleData } from "@/lib/sample-data";
-import { summarizeGoalsByScorer } from "@/lib/stats-engine/goal-summary";
+import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
+import { AssistChip } from "../../_components/AssistChip";
 import { GoalChip } from "../../_components/GoalChip";
 import { MvpBadge } from "../../_components/MvpBadge";
 
@@ -19,7 +20,7 @@ export default async function MatchDetailPage({
   const nameFor = (canonicalId: string) =>
     players.find((p) => p.canonicalId === canonicalId)?.displayName ?? canonicalId;
   const mvpName = game.mvpCanonicalId ? nameFor(game.mvpCanonicalId) : undefined;
-  const scorers = summarizeGoalsByScorer(game.goals);
+  const stats = summarizePlayerGameStats(game.goals);
 
   return (
     <main>
@@ -45,18 +46,22 @@ export default async function MatchDetailPage({
         )}
       </section>
 
-      {scorers.length > 0 && (
+      {stats.length > 0 && (
         <section className="card match-detail-section">
-          <h2>Goals</h2>
+          <h2>Stats</h2>
           <ul className="match-detail-goal-list">
-            {scorers.map((scorer) => {
-              const nickname = getMultiGoalNickname(scorer.goals);
+            {stats.map((stat) => {
+              const nickname = getMultiGoalNickname(stat.goals);
               return (
-                <li key={scorer.scorerCanonicalId} className={`match-detail-goal-${scorer.team}`}>
-                  <a href={`/players/${scorer.scorerCanonicalId}`} className="match-detail-scorer-name">
-                    {nameFor(scorer.scorerCanonicalId)}
+                <li key={stat.canonicalId} className={`match-detail-goal-${stat.team}`}>
+                  <a
+                    href={`/players/${stat.canonicalId}`}
+                    className={`match-detail-scorer-name match-detail-scorer-name-${stat.team}`}
+                  >
+                    {nameFor(stat.canonicalId)}
                   </a>
-                  <GoalChip count={scorer.goals} />
+                  <GoalChip count={stat.goals} />
+                  <AssistChip count={stat.assists} />
                   {nickname && <span className="match-detail-goal-nickname">{nickname}</span>}
                 </li>
               );

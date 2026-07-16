@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { previewReportImport, saveReportImport, type ReportPreview } from "@/lib/report-parser/actions";
 import { formatScoreLine, getMultiGoalNickname } from "@/lib/format";
-import { summarizeGoalsByScorer } from "@/lib/stats-engine/goal-summary";
+import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
 import type { League } from "@/lib/stats-engine/types";
+import { AssistChip } from "./AssistChip";
 import { GoalChip } from "./GoalChip";
 
 export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanonicalId: string }) {
@@ -33,10 +34,17 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     return preview?.displayNames[canonicalId] ?? canonicalId;
   }
 
-  /** Bolds whoever is logged in, wherever a name renders — instead of baking a "(you)" marker into stored data. */
-  function renderName(canonicalId: string) {
+  /**
+   * Bolds whoever is logged in, wherever a name renders — instead of baking
+   * a "(you)" marker into stored data. Optionally also colors the name by
+   * team (Stats list only) so it's visually clear who played on which side.
+   */
+  function renderName(canonicalId: string, team?: "home" | "away") {
     const name = nameFor(canonicalId);
-    return canonicalId === currentUserCanonicalId ? <strong>{name}</strong> : name;
+    const isYou = canonicalId === currentUserCanonicalId;
+    if (!team) return isYou ? <strong>{name}</strong> : name;
+    const className = `match-detail-scorer-name-${team}`;
+    return isYou ? <strong className={className}>{name}</strong> : <span className={className}>{name}</span>;
   }
 
   function renderNameList(canonicalIds: string[]) {
@@ -90,10 +98,11 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
   }
 
   const isPending = isParsing || isSaving;
-  const scorers = preview ? summarizeGoalsByScorer(preview.gameRecord.goals) : [];
+  const stats = preview ? summarizePlayerGameStats(preview.gameRecord.goals) : [];
 
   return (
     <>
+      {!preview && (
       <form onSubmit={handleParse} className="report-import-form">
         <label htmlFor="report-month" className="login-form-label">
           Date (MM / DD / YY)
@@ -181,9 +190,10 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
         {error && <p className="note login-form-error">{error}</p>}
 
         <button type="submit" className="login-form-submit" disabled={isPending}>
-          {isParsing ? "Parsing..." : "Parse"}
+          {isParsing ? "Confirming..." : "Confirm"}
         </button>
       </form>
+      )}
 
       {preview && (
         <section className="card report-import-preview">
@@ -206,16 +216,17 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
           <h3>{preview.gameRecord.awayTeamLabel} roster</h3>
           <p>{renderNameList(preview.gameRecord.awayRoster.map((s) => s.canonicalId))}</p>
 
-          {scorers.length > 0 && (
+          {stats.length > 0 && (
             <>
-              <h3>Goals</h3>
+              <h3>Stats</h3>
               <ul className="match-detail-goal-list">
-                {scorers.map((scorer) => {
-                  const nickname = getMultiGoalNickname(scorer.goals);
+                {stats.map((stat) => {
+                  const nickname = getMultiGoalNickname(stat.goals);
                   return (
-                    <li key={scorer.scorerCanonicalId} className={`match-detail-goal-${scorer.team}`}>
-                      <span className="match-detail-scorer-name">{renderName(scorer.scorerCanonicalId)}</span>
-                      <GoalChip count={scorer.goals} />
+                    <li key={stat.canonicalId} className={`match-detail-goal-${stat.team}`}>
+                      <span className="match-detail-scorer-name">{renderName(stat.canonicalId, stat.team)}</span>
+                      <GoalChip count={stat.goals} />
+                      <AssistChip count={stat.assists} />
                       {nickname && <span className="match-detail-goal-nickname">{nickname}</span>}
                     </li>
                   );
@@ -266,9 +277,19 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
             </div>
           )}
 
-          <button type="button" onClick={handleSave} className="login-form-submit" disabled={isPending}>
-            {isSaving ? "Saving..." : "Save to database"}
-          </button>
+          <div className="report-import-preview-actions">
+            <button
+              type="button"
+              onClick={() => setPreview(null)}
+              className="login-form-resend"
+              disabled={isPending}
+            >
+              ← Edit
+            </button>
+            <button type="button" onClick={handleSave} className="login-form-submit" disabled={isPending}>
+              {isSaving ? "Saving..." : "Save to database"}
+            </button>
+          </div>
         </section>
       )}
     </>

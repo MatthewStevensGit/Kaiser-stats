@@ -293,6 +293,13 @@ main {
   margin-top: 0.5rem;
 }
 
+.report-import-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
 .report-import-flag-list {
   margin-top: 1rem;
   font-size: 0.85rem;
@@ -576,10 +583,17 @@ th.num {
 }
 
 .match-detail-scorer-name {
-  color: var(--text-primary);
   text-decoration: none;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+.match-detail-scorer-name-home {
+  color: var(--home-team-color);
+}
+
+.match-detail-scorer-name-away {
+  color: var(--away-team-color);
 }
 
 .match-detail-scorer-name:hover {
