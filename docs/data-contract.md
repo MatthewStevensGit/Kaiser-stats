@@ -183,14 +183,18 @@ changes at all, because it was built against this contract rather than
 against whatever shape the spreadsheets happened to have. See
 `docs/report-parsing.md` for how to run it.
 
-Draft position (`pickNumber`) defaults to `null` for report-parsed games —
-report emails narrate who played and the score, never which captain picked
-first, so there's no way to reconstruct true overall pick order from the
-text alone by default. `rollupGameRecords()` already treats a null pick
-number as "no data" and excludes it from `avgDraftPosition` rather than
-treating it as 0. If a human happens to know who picked first for one
-specific game, `docs/report-parsing.md`'s `First pick:` annotation computes
-real pick numbers for that one confirmed game — never a rule applied to
-every game, since that would fabricate the exact stat this field exists to
-be honest about (see `kaiser_BUILD_SPEC.md` on why draft order must never be
-guessed).
+Draft position (`pickNumber`) is computed by default for report-parsed games
+(updated 2026-07-16, confirmed with the league organizer): the first-listed
+player on each team's roster is that team's captain, and the rest of that
+side's roster list is already in the order they were drafted, so the raw
+roster order itself carries real per-team pick order. `resolveExtractionToGameRecord()`
+assumes the team listed first picked first and alternates strict snake order
+by default, refined further by a report's own narrated pick order (see
+`prompt.ts` rule 10 / `pickOrderRaw`) or an explicit `First pick:` annotation
+when either contradicts the default for a specific game (see
+`docs/report-parsing.md`). Pick numbers are only left `null` when something
+about a game's data is inconsistent enough not to trust (`firstPickWarning`).
+`rollupGameRecords()` still treats a null pick number as "no data" and
+excludes it from `avgDraftPosition` rather than treating it as 0 — this
+still applies to spreadsheet-backfilled historical games, which predate any
+of this and have no roster-order information to lean on at all.

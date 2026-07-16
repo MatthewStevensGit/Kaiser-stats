@@ -37,4 +37,14 @@ export interface RawExtraction {
   /** Vadim's own report narrative only — never a reply's stated opinion. Null if not stated. */
   mvpRaw: string | null;
   notableMentions: RawNotableMention[];
+  /**
+   * Ordered list of picks, in the exact sequence a report explicitly
+   * narrates them (excluding the two captains — see prompt.ts rule 10), when
+   * the report actually states one. Each entry is a single raw name, or an
+   * array of raw names when several were explicitly picked in the same turn.
+   * Null when the report doesn't narrate an explicit pick order — the
+   * default alternating assumption in resolveExtractionToGameRecord()
+   * applies instead (see parse-report.ts).
+   */
+  pickOrderRaw: (string | string[])[] | null;
 }

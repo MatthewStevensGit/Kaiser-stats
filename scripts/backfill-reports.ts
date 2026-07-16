@@ -96,6 +96,9 @@ async function main() {
     if (resolved.firstPickWarning) {
       console.warn(`  ${resolved.firstPickWarning}`);
     }
+    if (resolved.pickOrderWarning) {
+      console.warn(`  ${resolved.pickOrderWarning}`);
+    }
 
     const result = await saveResolvedGame(client, {
       gameRecord: resolved.gameRecord,

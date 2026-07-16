@@ -34,10 +34,11 @@ describe("resolveExtractionToGameRecord", () => {
       ],
       mvpRaw: "Ari Fox",
       notableMentions: [],
+      pickOrderRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
-    expect(result.gameRecord.homeRoster).toEqual([{ canonicalId: "p1", pickNumber: null }, { canonicalId: "p2", pickNumber: null }]);
+    expect(result.gameRecord.homeRoster).toEqual([{ canonicalId: "p1", pickNumber: 1 }, { canonicalId: "p2", pickNumber: 3 }]);
     expect(result.gameRecord.mvpCanonicalId).toBe("p1");
     expect(result.goalSumMismatch).toBe(false);
     expect(result.provisionedPlayers).toHaveLength(0);
@@ -59,6 +60,7 @@ describe("resolveExtractionToGameRecord", () => {
       goals: [],
       mvpRaw: null,
       notableMentions: [],
+      pickOrderRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -79,6 +81,7 @@ describe("resolveExtractionToGameRecord", () => {
       goals: [{ scorerRaw: "Ari Fox", assistRaw: null, team: "home" }],
       mvpRaw: null,
       notableMentions: [],
+      pickOrderRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -98,6 +101,7 @@ describe("resolveExtractionToGameRecord", () => {
       goals: [{ scorerRaw: "Mystery Guest", assistRaw: null, team: "home" }],
       mvpRaw: null,
       notableMentions: [],
+      pickOrderRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -123,6 +127,7 @@ describe("resolveExtractionToGameRecord", () => {
       goals: [],
       mvpRaw: "Gera", // one edit away from "Gena" — a different, existing player
       notableMentions: [],
+      pickOrderRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, flaggedPlayers, meta);
@@ -131,7 +136,33 @@ describe("resolveExtractionToGameRecord", () => {
     expect(result.flaggedNames[0]?.raw).toBe("Gera");
   });
 
-  it("computes real pick numbers for a game with a confirmed first-pick annotation", () => {
+  it("defaults to alternating pick numbers for every game, even with no annotation at all", () => {
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      homeRosterRaw: ["Ari Fox"],
+      awayRosterRaw: ["Bex Tanaka"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: null,
+    };
+
+    // Team listed first (home) is assumed to have picked first — a
+    // confirmed league convention, not a guess (see parse-report.ts's
+    // resolveExtractionToGameRecord doc comment).
+    const result = resolveExtractionToGameRecord(extraction, players, meta);
+    expect(result.firstPickWarning).toBeNull();
+    expect(result.pickOrderWarning).toBeNull();
+    expect(result.gameRecord.homeRoster[0]?.pickNumber).toBe(1);
+    expect(result.gameRecord.awayRoster[0]?.pickNumber).toBe(2);
+  });
+
+  it("computes real pick numbers for a game with a confirmed first-pick annotation, overriding the default", () => {
     const extraction: RawExtraction = {
       date: "2026-07-05",
       league: "sunday",
@@ -144,9 +175,10 @@ describe("resolveExtractionToGameRecord", () => {
       goals: [],
       mvpRaw: null,
       notableMentions: [],
+      pickOrderRaw: null,
     };
 
-    // Away's first-listed player ("Ari Fox") actually picked first.
+    // Away's first-listed player ("Ari Fox") actually picked first — contradicts the default.
     const result = resolveExtractionToGameRecord(extraction, players, meta, "Ari Fox");
     expect(result.firstPickWarning).toBeNull();
     expect(result.gameRecord.awayRoster).toEqual([{ canonicalId: "p1", pickNumber: 1 }]);
@@ -169,6 +201,7 @@ describe("resolveExtractionToGameRecord", () => {
       goals: [],
       mvpRaw: null,
       notableMentions: [],
+      pickOrderRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta, "Ari Fox");
@@ -177,12 +210,18 @@ describe("resolveExtractionToGameRecord", () => {
     expect(result.gameRecord.awayRoster[0]?.pickNumber).toBeNull();
   });
 
-  it("no annotation at all leaves every pick number null, unchanged from before", () => {
+  it("overrides the default with a narrated pick order when the report states one explicitly (real worked example)", () => {
+    // Real convention confirmed by the league organizer: first-listed player
+    // on each side is that team's captain (not part of the snake sequence);
+    // the report narrated "Nick Brazil selected first, then Alan, then Josh,
+    // then Emre and Matthew (together), then Oleg" — a non-strictly-
+    // alternating order (Emre/Matthew go back-to-back) that the default
+    // alone couldn't produce.
     const extraction: RawExtraction = {
       date: "2026-07-05",
       league: "sunday",
-      homeRosterRaw: ["Ari Fox"],
-      awayRosterRaw: ["Bex Tanaka"],
+      homeRosterRaw: ["Vadim", "Nick Brazil", "Josh", "Oleg"],
+      awayRosterRaw: ["Alik", "Alan", "Emre", "Matthew"],
       homeTeamLabelRaw: null,
       awayTeamLabelRaw: null,
       homeScore: 0,
@@ -190,12 +229,44 @@ describe("resolveExtractionToGameRecord", () => {
       goals: [],
       mvpRaw: null,
       notableMentions: [],
+      pickOrderRaw: ["Nick Brazil", "Alan", "Josh", ["Emre", "Matthew"], "Oleg"],
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
-    expect(result.firstPickWarning).toBeNull();
-    expect(result.gameRecord.homeRoster[0]?.pickNumber).toBeNull();
-    expect(result.gameRecord.awayRoster[0]?.pickNumber).toBeNull();
+    expect(result.pickOrderWarning).toBeNull();
+    expect(result.gameRecord.homeRoster).toEqual([
+      { canonicalId: "auto-vadim", pickNumber: 1 },
+      { canonicalId: "auto-nick-brazil", pickNumber: 3 },
+      { canonicalId: "auto-josh", pickNumber: 5 },
+      { canonicalId: "auto-oleg", pickNumber: 8 },
+    ]);
+    expect(result.gameRecord.awayRoster).toEqual([
+      { canonicalId: "auto-alik", pickNumber: 2 },
+      { canonicalId: "auto-alan", pickNumber: 4 },
+      { canonicalId: "auto-emre", pickNumber: 6 },
+      { canonicalId: "auto-matthew", pickNumber: 7 },
+    ]);
+  });
+
+  it("warns but keeps going when the narrated pick order names someone off either roster", () => {
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka"],
+      awayRosterRaw: ["Cy Okafor"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: ["Someone Else", "Bex Tanaka"],
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, players, meta);
+    expect(result.pickOrderWarning).toContain("Someone Else");
+    expect(result.gameRecord.homeRoster.find((s) => s.canonicalId === "p2")?.pickNumber).toBe(4);
   });
 });
 

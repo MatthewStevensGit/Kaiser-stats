@@ -209,6 +209,7 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
             </p>
           )}
           {preview.firstPickWarning && <p className="report-import-warning">{preview.firstPickWarning}</p>}
+          {preview.pickOrderWarning && <p className="report-import-warning">{preview.pickOrderWarning}</p>}
 
           <h3>{preview.gameRecord.homeTeamLabel} roster</h3>
           <p>{renderNameList(preview.gameRecord.homeRoster.map((s) => s.canonicalId))}</p>

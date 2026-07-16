@@ -115,10 +115,16 @@ export interface RosterSpot {
   canonicalId: string;
   /**
    * 1-indexed overall pick number for this game's draft (not per-team), or
-   * null when it isn't known. Report emails narrate who played and the
-   * final score, never the draft order — that only gets captured by the
-   * future live check-in app's draft feature (Phase 2). Historical/report-
-   * parsed games are expected to leave this null; rollupGameRecords()
+   * null when it isn't known. Report-parsed games compute this by default
+   * (see resolveExtractionToGameRecord in parse-report.ts): the team listed
+   * first is assumed to have picked first, alternating strict snake order —
+   * a confirmed league convention (each roster's first-listed player is
+   * that team's captain, the rest of the list is already in draft order),
+   * refined further when a report narrates the real order or a human
+   * supplies a "First pick" annotation. Only left null when something about
+   * that game's data is inconsistent enough not to trust (see
+   * firstPickWarning/pickOrderWarning). Historical spreadsheet-backfilled
+   * games (which predate any of this) still leave it null; rollupGameRecords()
    * simply skips null values when averaging avgDraftPosition.
    */
   pickNumber: number | null;

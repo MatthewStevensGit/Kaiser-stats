@@ -14,6 +14,7 @@ export interface ReportPreview {
   flaggedNames: NameResolution[];
   goalSumMismatch: boolean;
   firstPickWarning: string | null;
+  pickOrderWarning: string | null;
 }
 
 type PreviewResult = { ok: true; preview: ReportPreview } | { ok: false; error: string };
@@ -99,6 +100,7 @@ export async function previewReportImport(input: {
       flaggedNames: resolved.flaggedNames,
       goalSumMismatch: resolved.goalSumMismatch,
       firstPickWarning: resolved.firstPickWarning,
+      pickOrderWarning: resolved.pickOrderWarning,
     },
   };
 }

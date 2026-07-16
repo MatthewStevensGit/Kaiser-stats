@@ -45,10 +45,17 @@ export interface ResolvedReport {
   /**
    * Set only if a "First pick" annotation was supplied but didn't match the
    * first-listed player of either roster — a real inconsistency worth a
-   * human's attention, never silently ignored. Pick numbers stay null in
-   * this case, same as when no annotation is given at all.
+   * human's attention, never silently ignored. Pick numbers stay null for
+   * this game in that case (the default alternating assumption is skipped
+   * too, since something about the annotation is already wrong).
    */
   firstPickWarning: string | null;
+  /**
+   * Set only if extraction.pickOrderRaw named someone who couldn't be
+   * resolved to either roster — the rest of the narrated order is still
+   * applied, but this game's pick numbers may be incomplete.
+   */
+  pickOrderWarning: string | null;
 }
 
 /**
@@ -58,13 +65,23 @@ export interface ResolvedReport {
  * path uses (resolvePlayerName / createProvisionalIdentity), never the LLM's
  * own judgment about who a name "really" is.
  *
- * `firstPickRaw` is an optional, human-supplied fact (never LLM-guessed —
- * see docs/report-parsing.md): the name of whoever was picked first in this
- * specific game's draft. When given and it matches the first-listed player
- * of one roster, pick numbers are computed by interleaving both rosters in
- * their listed order (which, per league convention, is pick order) — real
- * data for that one confirmed game, not a pattern applied to every game.
- * Every other game simply keeps pickNumber: null, exactly as before.
+ * Pick numbers, in priority order:
+ * 1. Default (every game): the team listed first (home) is assumed to have
+ *    picked first, alternating strict snake order (2*i+1 / 2*i+2) by each
+ *    roster's own listed order — this is a confirmed league convention
+ *    (first-listed player on each side is that team's captain, the rest of
+ *    that side's list is already in the order they were drafted), not a
+ *    guess. Overrides a `docs/data-contract.md` note from before this
+ *    convention was confirmed with the league organizer.
+ * 2. `firstPickRaw` (optional, human-supplied — see docs/report-parsing.md):
+ *    the name of whoever actually picked first, when a specific game
+ *    contradicts the default. Must match one roster's first-listed player,
+ *    else `firstPickWarning` is set and pick numbers are left null rather
+ *    than guessed.
+ * 3. `extraction.pickOrderRaw` (optional, model-extracted — see prompt.ts
+ *    rule 10): when a report narrates the real pick-by-pick order in prose,
+ *    that ground truth overrides the default for every pick after the two
+ *    captains (who keep pick 1/2 from the default/firstPickRaw step above).
  */
 export function resolveExtractionToGameRecord(
   extraction: RawExtraction,
@@ -114,19 +131,44 @@ export function resolveExtractionToGameRecord(
   const awayRoster = resolveRoster(extraction.awayRosterRaw ?? []);
 
   let firstPickWarning: string | null = null;
+  let homePicksFirst = true; // default: the team listed first (home) picked first — see resolveExtractionToGameRecord's doc comment
   if (firstPickRaw) {
     const firstPickCanonicalId = resolve(firstPickRaw);
     const homeFirst = homeRoster[0]?.canonicalId;
     const awayFirst = awayRoster[0]?.canonicalId;
 
     if (firstPickCanonicalId && firstPickCanonicalId === homeFirst) {
-      homeRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
-      awayRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+      homePicksFirst = true;
     } else if (firstPickCanonicalId && firstPickCanonicalId === awayFirst) {
-      awayRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
-      homeRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+      homePicksFirst = false;
     } else {
       firstPickWarning = `"First pick: ${firstPickRaw}" didn't match the first-listed player of either roster — pick numbers left null for this game rather than guessed.`;
+    }
+  }
+
+  let pickOrderWarning: string | null = null;
+  if (!firstPickWarning) {
+    const firstRoster = homePicksFirst ? homeRoster : awayRoster;
+    const secondRoster = homePicksFirst ? awayRoster : homeRoster;
+    firstRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
+    secondRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+
+    if (extraction.pickOrderRaw && extraction.pickOrderRaw.length > 0) {
+      const allSpots = [...homeRoster, ...awayRoster];
+      let nextPick = 3; // 1 and 2 already went to the two captains above
+      for (const turn of extraction.pickOrderRaw) {
+        const namesRaw = Array.isArray(turn) ? turn : [turn];
+        for (const raw of namesRaw) {
+          const canonicalId = resolve(raw);
+          const spot = canonicalId ? allSpots.find((s) => s.canonicalId === canonicalId) : undefined;
+          if (spot) {
+            spot.pickNumber = nextPick;
+          } else if (!pickOrderWarning) {
+            pickOrderWarning = `"${raw}" from the narrated pick order wasn't found on either roster — some pick numbers may be incomplete for this game.`;
+          }
+          nextPick += 1;
+        }
+      }
     }
   }
 
@@ -185,5 +227,6 @@ export function resolveExtractionToGameRecord(
     flaggedNames,
     goalSumMismatch,
     firstPickWarning,
+    pickOrderWarning,
   };
 }
