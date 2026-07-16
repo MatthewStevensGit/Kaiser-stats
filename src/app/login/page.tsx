@@ -9,10 +9,12 @@ type Step = "email" | "code";
 type Status = "idle" | "sending" | "error";
 
 /**
- * Email + 6-digit code, not a clickable magic link — a clickable link's
+ * Email + typed code, not a clickable magic link — a clickable link's
  * one-time code can get silently burned by antivirus/email link-prescanning
  * before the real user ever clicks it (a real failure this app hit), and a
- * typed code has no link for anything else to consume first.
+ * typed code has no link for anything else to consume first. Code length
+ * isn't assumed anywhere — verifyOtp() just checks whatever was typed
+ * against whatever Supabase generated.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -98,7 +100,7 @@ export default function LoginPage() {
         ) : (
           <form onSubmit={handleVerifyCode} className="login-form">
             <p className="note">
-              Enter the 6-digit code we emailed to {email}.
+              Enter the code we emailed to {email} (check spam if it doesn&apos;t show up).
             </p>
             <label htmlFor="code" className="login-form-label">
               Code
@@ -111,7 +113,7 @@ export default function LoginPage() {
               required
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="123456"
+              placeholder="Code from your email"
               className="login-form-input"
               disabled={status === "sending"}
             />
