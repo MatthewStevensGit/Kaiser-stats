@@ -19,29 +19,41 @@ interface PlayerRow {
  * "small contract, not the full row" philosophy as PlayerSeasonStats (see
  * docs/data-contract.md) — future slices import this, not the raw players
  * row shape.
+ *
+ * Called from the root layout on every single page, so any error here
+ * (missing env vars, Supabase briefly unreachable, etc.) must degrade to
+ * "not logged in" rather than throwing — otherwise a transient auth/config
+ * problem would take down the entire site, not just personalization. Real
+ * admin actions still independently re-check inside each Server Action
+ * (see src/lib/matchday/actions.ts), so treating an error as "no user" here
+ * never grants access by accident, it only ever hides logged-in-only UI.
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) return null;
+    if (!user) return null;
 
-  const serviceRoleClient = createServiceRoleClient();
-  const { data } = await serviceRoleClient
-    .from("players")
-    .select("canonical_id, display_name, is_admin")
-    .eq("auth_user_id", user.id)
-    .maybeSingle<PlayerRow>();
+    const serviceRoleClient = createServiceRoleClient();
+    const { data } = await serviceRoleClient
+      .from("players")
+      .select("canonical_id, display_name, is_admin")
+      .eq("auth_user_id", user.id)
+      .maybeSingle<PlayerRow>();
 
-  if (!data) return null;
+    if (!data) return null;
 
-  return {
-    canonicalId: data.canonical_id,
-    displayName: data.display_name,
-    isAdmin: data.is_admin,
-  };
+    return {
+      canonicalId: data.canonical_id,
+      displayName: data.display_name,
+      isAdmin: data.is_admin,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
