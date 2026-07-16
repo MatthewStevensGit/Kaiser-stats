@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { previewReportImport, saveReportImport, type ReportPreview } from "@/lib/report-parser/actions";
 import { formatScoreLine, getMultiGoalNickname } from "@/lib/format";
 import { summarizeGoalsByScorer } from "@/lib/stats-engine/goal-summary";
@@ -20,6 +20,14 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
   const [error, setError] = useState<string | null>(null);
   const [isParsing, startParsing] = useTransition();
   const [isSaving, startSaving] = useTransition();
+  const dayInputRef = useRef<HTMLInputElement>(null);
+  const yearInputRef = useRef<HTMLInputElement>(null);
+
+  /** Auto-advances to the next date field once this one has 2 digits — same feel as a native date picker. */
+  function handleDatePartChange(value: string, setValue: (v: string) => void, next: React.RefObject<HTMLInputElement | null> | null) {
+    setValue(value);
+    if (value.length >= 2) next?.current?.focus();
+  }
 
   function nameFor(canonicalId: string): string {
     return preview?.displayNames[canonicalId] ?? canonicalId;
@@ -99,29 +107,31 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
             placeholder="MM"
             required
             value={month}
-            onChange={(e) => setMonth(e.target.value)}
+            onChange={(e) => handleDatePartChange(e.target.value, setMonth, dayInputRef)}
             className="login-form-input"
             disabled={isPending}
           />
           <input
+            ref={dayInputRef}
             type="text"
             inputMode="numeric"
             maxLength={2}
             placeholder="DD"
             required
             value={day}
-            onChange={(e) => setDay(e.target.value)}
+            onChange={(e) => handleDatePartChange(e.target.value, setDay, yearInputRef)}
             className="login-form-input"
             disabled={isPending}
           />
           <input
+            ref={yearInputRef}
             type="text"
             inputMode="numeric"
             maxLength={2}
             placeholder="YY"
             required
             value={year2}
-            onChange={(e) => setYear2(e.target.value)}
+            onChange={(e) => handleDatePartChange(e.target.value, setYear2, null)}
             className="login-form-input"
             disabled={isPending}
           />
