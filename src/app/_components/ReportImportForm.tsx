@@ -10,7 +10,9 @@ import { GoalChip } from "./GoalChip";
 
 export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanonicalId: string }) {
   const router = useRouter();
-  const [date, setDate] = useState("");
+  const [month, setMonth] = useState("");
+  const [day, setDay] = useState("");
+  const [year2, setYear2] = useState("");
   const [league, setLeague] = useState<League>("saturday");
   const [firstPickRaw, setFirstPickRaw] = useState("");
   const [text, setText] = useState("");
@@ -43,6 +45,13 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     e.preventDefault();
     setError(null);
     setPreview(null);
+
+    if (!/^\d{1,2}$/.test(month) || !/^\d{1,2}$/.test(day) || !/^\d{2}$/.test(year2)) {
+      setError("Enter a valid date (2-digit year).");
+      return;
+    }
+    const date = `20${year2}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+
     startParsing(async () => {
       const result = await previewReportImport({
         text,
@@ -78,18 +87,45 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
   return (
     <>
       <form onSubmit={handleParse} className="report-import-form">
-        <label htmlFor="report-date" className="login-form-label">
-          Date
+        <label htmlFor="report-month" className="login-form-label">
+          Date (MM / DD / YY)
         </label>
-        <input
-          id="report-date"
-          type="date"
-          required
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="login-form-input"
-          disabled={isPending}
-        />
+        <div className="report-import-date-row">
+          <input
+            id="report-month"
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            placeholder="MM"
+            required
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="login-form-input"
+            disabled={isPending}
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            placeholder="DD"
+            required
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            className="login-form-input"
+            disabled={isPending}
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            placeholder="YY"
+            required
+            value={year2}
+            onChange={(e) => setYear2(e.target.value)}
+            className="login-form-input"
+            disabled={isPending}
+          />
+        </div>
 
         <label htmlFor="report-league" className="login-form-label">
           League

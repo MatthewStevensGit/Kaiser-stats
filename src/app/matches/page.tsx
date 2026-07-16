@@ -43,7 +43,7 @@ export default async function MatchesPage({
 
       <PillTabs
         activeId={year}
-        tabs={YEARS.map((y) => ({ id: y, label: y.slice(-2), href: `/matches?year=${y}` }))}
+        tabs={YEARS.map((y) => ({ id: y, label: y, href: `/matches?year=${y}` }))}
       />
 
       {sorted.length === 0 ? (
