@@ -5,7 +5,7 @@ import { BottomNav } from "./_components/BottomNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kaiser Stats",
+  title: "Kaiser",
   description: "Stats engine for a recurring pickup soccer league",
 };
 

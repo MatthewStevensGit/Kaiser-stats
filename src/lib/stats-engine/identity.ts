@@ -109,7 +109,7 @@ export function createProvisionalIdentity(rawName: string): PlayerIdentity {
  * A verified login email with no match to any known player's knownEmails —
  * same "never block, auto-provision, flag for a human later" philosophy as
  * createProvisionalIdentity(), just keyed by email instead of a report name
- * (see src/app/auth/callback/route.ts). displayName defaults to the email
+ * (see src/lib/auth/actions.ts's linkPlayerAfterLogin()). displayName defaults to the email
  * itself so it's recognizable in the existing "auto-tracked new players"
  * admin surface until a human renames it.
  */
