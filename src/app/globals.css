@@ -246,6 +246,40 @@ main {
   color: var(--status-critical-bg);
 }
 
+/* Report import (admin) */
+.report-import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 640px;
+}
+
+.report-import-textarea {
+  min-height: 220px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.report-import-preview {
+  margin-top: 1.5rem;
+}
+
+.report-import-warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.report-import-flag-list {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
 section {
   margin-bottom: 1.75rem;
 }

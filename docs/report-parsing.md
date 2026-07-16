@@ -65,10 +65,24 @@ first player, you'll get a `firstPickWarning` instead — pick numbers stay
 null rather than guessed. Leave the line out entirely for any game where you
 don't know/remember who picked first.
 
+## Admin web UI (the real write path)
+
+`/matches/import` (admin-only, linked from `/matches`'s header) wraps this same
+parsing/resolution code in a two-step browser flow instead of a CLI file: paste the
+report text, click **Parse** to see a review-before-you-trust-it preview (rosters,
+goals, MVP, notable mentions, `goalSumMismatch`/`firstPickWarning` banners, and the
+flagged-name / auto-tracked-new-player lists), then click **Save to database** to
+actually write it. See `src/lib/report-parser/actions.ts`
+(`previewReportImport`/`saveReportImport`) and `src/lib/report-parser/persist.ts` (the
+pure `GameRecord` → Supabase row mapper, unit-tested in `persist.test.ts`). Saving a
+`game_id` that already exists (same date + league) returns a friendly error rather than
+overwriting — there's no edit/delete path yet, same as the CLI script below.
+
 ## Not yet automated
 
-This is a manual, one-file-at-a-time script — there's no automatic pipeline
-that watches for new report emails and runs this on its own, and no write
-path into Supabase yet (it only prints the result). Both are reasonable next
-steps once the extraction quality itself has been checked against a few real
-reports.
+This CLI script remains useful for a quick local preview (no browser, no admin login
+needed) without touching Supabase at all — handy for sanity-checking extraction quality
+against a batch of old report files before deciding which ones to actually paste into
+`/matches/import`. There's still no automatic pipeline that watches for new report
+emails and runs this on its own — that's a reasonable next step once the extraction
+quality itself has been checked against more real reports.

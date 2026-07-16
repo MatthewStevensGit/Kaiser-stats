@@ -97,10 +97,12 @@ proof the two paths agree on the contract.
 **Now built:** `src/lib/report-parser/` turns a report email's text into a
 `GameRecord`, via the Gemini API (`gemini-2.5-flash`, chosen over the
 Claude API originally named in `kaiser_BUILD_SPEC.md` for cost reasons —
-Gemini's free tier comfortably covers this project's actual usage). See
-`docs/report-parsing.md` for how it works and how to run it. `data/sample/games.json`
-remains the hand-written fake `GameRecord[]` data the public demo runs
-against — the real parser's output is never wired into the deployed site.
+Gemini's free tier comfortably covers this project's actual usage), and an
+admin-only web UI (`/matches/import`, see `docs/report-parsing.md`) now writes its
+resolved output into the real `game_records`/`roster_spots`/`goal_events`/
+`notable_mentions` tables. `data/sample/games.json` remains the hand-written fake
+`GameRecord[]` data the public demo runs against — real imported reports land in
+Supabase but aren't shown on the site yet (see "Going live with real data" below).
 
 ## Where new raw data goes
 
@@ -140,7 +142,7 @@ Tables map directly to types.ts shapes:
 |---|---|
 | `players` | `PlayerIdentity` |
 | `season_standing_rows` | `SeasonStandingRow` (post-parse, pre-aggregation) |
-| `game_records`, `roster_spots`, `goal_events`, `notable_mentions` | `GameRecord` (currently empty — populated once live report parsing exists) |
+| `game_records`, `roster_spots`, `goal_events`, `notable_mentions` | `GameRecord` (populated via the admin `/matches/import` UI — see `docs/report-parsing.md`) |
 | `unresolved_names_log` | `NameResolution` entries with `status === "flagged"` — genuinely ambiguous names, the durable "needs a human" queue, never auto-resolved |
 
 Every table has Row Level Security enabled with **no public policies** — the

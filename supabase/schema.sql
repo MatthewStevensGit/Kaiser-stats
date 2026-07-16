@@ -244,3 +244,9 @@ alter table scheduled_games add column if not exists cancelled_by text reference
 
 -- Set for an admin-created one-off game; null for cron-generated rows.
 alter table scheduled_games add column if not exists created_by text references players (canonical_id);
+
+-- Migration (2026-07-15): make roster_spots.pick_number nullable — report-parsed
+-- games legitimately have no known draft order (see RosterSpot.pickNumber's doc
+-- comment in src/lib/stats-engine/types.ts); the original NOT NULL constraint
+-- predates any real write path and was never exercised until now.
+alter table roster_spots alter column pick_number drop not null;
