@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "backfill": "tsx scripts/backfill-to-supabase.ts",
     "backfill:preview": "tsx scripts/preview-backfill-coverage.ts",
-    "parse-report": "tsx scripts/parse-report.ts"
+    "parse-report": "tsx scripts/parse-report.ts",
+    "backfill-reports": "tsx scripts/backfill-reports.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

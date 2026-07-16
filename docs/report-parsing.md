@@ -78,11 +78,25 @@ pure `GameRecord` → Supabase row mapper, unit-tested in `persist.test.ts`). Sa
 `game_id` that already exists (same date + league) returns a friendly error rather than
 overwriting — there's no edit/delete path yet, same as the CLI script below.
 
+## Bulk historical backfill
+
+```
+npm run backfill-reports -- [directory]
+```
+
+Defaults to `private/sample-reports/` if no directory is given. Parses every `.txt` file
+there through the same parser/resolution/write path as `/matches/import` (via
+`src/lib/report-parser/save.ts`'s `saveResolvedGame()`, shared by both), instead of
+pasting each report into the browser by hand — for getting a backlog of old Vadim emails
+in all at once. Each file's `game_id`/`source` comes from its filename (same convention
+as `npm run parse-report`), and known players (including ones auto-tracked earlier in the
+same run) accumulate across files so a name seen in file 3 that's already been
+auto-tracked from file 1 doesn't get logged as newly-tracked all over again. Safe to
+re-run: a file whose game already exists is skipped, not duplicated.
+
 ## Not yet automated
 
-This CLI script remains useful for a quick local preview (no browser, no admin login
-needed) without touching Supabase at all — handy for sanity-checking extraction quality
-against a batch of old report files before deciding which ones to actually paste into
-`/matches/import`. There's still no automatic pipeline that watches for new report
-emails and runs this on its own — that's a reasonable next step once the extraction
-quality itself has been checked against more real reports.
+`npm run parse-report` (the single-file version above) remains useful for a quick local
+preview without touching Supabase at all — handy for sanity-checking extraction quality
+against one report before trusting a whole batch to `backfill-reports`. There's still no
+automatic pipeline that watches for new report emails and runs this on its own.

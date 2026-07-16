@@ -4,9 +4,7 @@ import { getCurrentUser } from "../auth/session";
 import { createServiceRoleClient } from "../supabase/client";
 import type { GameRecord, League, NameResolution, PlayerIdentity } from "../stats-engine/types";
 import { parseReportText, resolveExtractionToGameRecord } from "./parse-report";
-import { buildPersistenceRows } from "./persist";
-
-const UNIQUE_VIOLATION = "23505";
+import { saveResolvedGame, type SaveResult } from "./save";
 
 export interface ReportPreview {
   gameRecord: GameRecord;
@@ -19,7 +17,6 @@ export interface ReportPreview {
 }
 
 type PreviewResult = { ok: true; preview: ReportPreview } | { ok: false; error: string };
-type SaveResult = { ok: true } | { ok: false; error: string };
 
 /**
  * Every action here independently re-checks admin-ness — Server Actions are
@@ -113,79 +110,10 @@ export async function saveReportImport(
   const admin = await requireAdminResult();
   if ("ok" in admin) return admin;
 
-  const client = createServiceRoleClient();
-  const gameRecord: GameRecord = { ...preview.gameRecord, description: rawText };
-  const { gameRecordRow, rosterSpotRows, goalEventRows, notableMentionRows } = buildPersistenceRows(gameRecord);
-
-  const { error: gameRecordError } = await client.from("game_records").insert(gameRecordRow);
-  if (gameRecordError) {
-    if (gameRecordError.code === UNIQUE_VIOLATION) {
-      return { ok: false, error: "A match report already exists for that date/league." };
-    }
-    return { ok: false, error: "Could not save that match report." };
-  }
-
-  async function rollbackAndFail(message: string): Promise<{ ok: false; error: string }> {
-    // roster_spots/goal_events/notable_mentions all cascade-delete from
-    // game_records, so this cleans up any partial writes below in one call —
-    // leaves the game_id free to retry rather than stuck as a broken row.
-    await client.from("game_records").delete().eq("game_id", gameRecord.gameId);
-    return { ok: false, error: message };
-  }
-
-  if (preview.provisionedPlayers.length > 0) {
-    const { error } = await client.from("players").upsert(
-      preview.provisionedPlayers.map((p) => ({
-        canonical_id: p.canonicalId,
-        display_name: p.displayName,
-        aliases: p.aliases,
-        known_emails: p.knownEmails,
-        leagues: p.leagues,
-        status: p.status,
-      })),
-    );
-    if (error) return rollbackAndFail("Could not save the new players from this report.");
-  }
-
-  if (rosterSpotRows.length > 0) {
-    const { error } = await client.from("roster_spots").insert(rosterSpotRows);
-    if (error) return rollbackAndFail("Could not save the rosters from this report.");
-  }
-
-  if (goalEventRows.length > 0) {
-    const { error } = await client.from("goal_events").insert(goalEventRows);
-    if (error) return rollbackAndFail("Could not save the goals from this report.");
-  }
-
-  if (notableMentionRows.length > 0) {
-    const { error } = await client.from("notable_mentions").insert(notableMentionRows);
-    if (error) return rollbackAndFail("Could not save the notable mentions from this report.");
-  }
-
-  // Best-effort only: a flagged name is a durable "needs a human" log entry,
-  // not core game data — losing one to a transient error shouldn't roll back
-  // an otherwise-successful save.
-  for (const flag of preview.flaggedNames) {
-    const { data: existing } = await client
-      .from("unresolved_names_log")
-      .select("id")
-      .eq("raw_name", flag.raw)
-      .eq("source", gameRecord.source)
-      .is("resolved_at", null)
-      .limit(1);
-
-    if (!existing || existing.length === 0) {
-      const best = flag.candidates[0];
-      const { error } = await client.from("unresolved_names_log").insert({
-        raw_name: flag.raw,
-        status: flag.status,
-        candidate_canonical_id: best?.canonicalId ?? null,
-        candidate_distance: best?.distance ?? null,
-        source: gameRecord.source,
-      });
-      if (error) console.error("Failed to log flagged name", flag.raw, error);
-    }
-  }
-
-  return { ok: true };
+  return saveResolvedGame(createServiceRoleClient(), {
+    gameRecord: preview.gameRecord,
+    provisionedPlayers: preview.provisionedPlayers,
+    flaggedNames: preview.flaggedNames,
+    rawText,
+  });
 }
