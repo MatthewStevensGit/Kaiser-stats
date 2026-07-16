@@ -246,6 +246,15 @@ main {
   color: var(--status-critical-bg);
 }
 
+.login-form-resend {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Report import (admin) */
 .report-import-form {
   display: flex;

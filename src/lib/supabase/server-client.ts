@@ -27,9 +27,10 @@ export async function createServerSupabaseClient() {
       },
       setAll(cookiesToSet) {
         // Server Components can't set cookies — this throws there and is a
-        // no-op by design; the middleware is what actually persists refreshed
-        // session cookies on every request. Route Handlers (e.g. the auth
-        // callback) run in a context where this succeeds normally.
+        // no-op by design; the middleware (src/proxy.ts) is what actually
+        // persists refreshed session cookies on every request. Route
+        // Handlers and Server Actions run in a context where this succeeds
+        // normally.
         try {
           for (const { name, value, options } of cookiesToSet) {
             cookieStore.set(name, value, options);
