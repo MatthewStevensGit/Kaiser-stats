@@ -23,6 +23,8 @@ describe("resolveExtractionToGameRecord", () => {
       league: "sunday",
       homeRosterRaw: ["Ari Fox", "Bex Tanaka"],
       awayRosterRaw: ["Cy Okafor"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
       homeScore: 2,
       awayScore: 1,
       goals: [
@@ -40,6 +42,28 @@ describe("resolveExtractionToGameRecord", () => {
     expect(result.goalSumMismatch).toBe(false);
     expect(result.provisionedPlayers).toHaveLength(0);
     expect(result.flaggedNames).toHaveLength(0);
+    expect(result.gameRecord.homeTeamLabel).toBe("Orange");
+    expect(result.gameRecord.awayTeamLabel).toBe("Blue");
+  });
+
+  it("uses the report's own stated team names instead of the Orange/Blue default when given", () => {
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      homeRosterRaw: [],
+      awayRosterRaw: [],
+      homeTeamLabelRaw: "Orange",
+      awayTeamLabelRaw: "Blue",
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, players, meta);
+    expect(result.gameRecord.homeTeamLabel).toBe("Orange");
+    expect(result.gameRecord.awayTeamLabel).toBe("Blue");
   });
 
   it("flags goal-sum mismatches instead of silently trusting the parse", () => {
@@ -48,6 +72,8 @@ describe("resolveExtractionToGameRecord", () => {
       league: "sunday",
       homeRosterRaw: [],
       awayRosterRaw: [],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
       homeScore: 3,
       awayScore: 0,
       goals: [{ scorerRaw: "Ari Fox", assistRaw: null, team: "home" }],
@@ -65,6 +91,8 @@ describe("resolveExtractionToGameRecord", () => {
       league: "sunday",
       homeRosterRaw: [],
       awayRosterRaw: [],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
       homeScore: 1,
       awayScore: 0,
       goals: [{ scorerRaw: "Mystery Guest", assistRaw: null, team: "home" }],
@@ -88,6 +116,8 @@ describe("resolveExtractionToGameRecord", () => {
       league: "sunday",
       homeRosterRaw: [],
       awayRosterRaw: [],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
       homeScore: 0,
       awayScore: 0,
       goals: [],
@@ -107,6 +137,8 @@ describe("resolveExtractionToGameRecord", () => {
       league: "sunday",
       homeRosterRaw: ["Bex Tanaka", "Cy Okafor"],
       awayRosterRaw: ["Ari Fox"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
       homeScore: 0,
       awayScore: 0,
       goals: [],
@@ -130,6 +162,8 @@ describe("resolveExtractionToGameRecord", () => {
       league: "sunday",
       homeRosterRaw: ["Bex Tanaka"],
       awayRosterRaw: ["Cy Okafor"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
       homeScore: 0,
       awayScore: 0,
       goals: [],
@@ -149,6 +183,8 @@ describe("resolveExtractionToGameRecord", () => {
       league: "sunday",
       homeRosterRaw: ["Ari Fox"],
       awayRosterRaw: ["Bex Tanaka"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
       homeScore: 0,
       awayScore: 0,
       goals: [],

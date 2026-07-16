@@ -154,10 +154,10 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
           )}
           {preview.firstPickWarning && <p className="report-import-warning">{preview.firstPickWarning}</p>}
 
-          <h3>Home roster</h3>
+          <h3>{preview.gameRecord.homeTeamLabel} roster</h3>
           <p>{renderNameList(preview.gameRecord.homeRoster.map((s) => s.canonicalId))}</p>
 
-          <h3>Away roster</h3>
+          <h3>{preview.gameRecord.awayTeamLabel} roster</h3>
           <p>{renderNameList(preview.gameRecord.awayRoster.map((s) => s.canonicalId))}</p>
 
           {scorers.length > 0 && (

@@ -11,6 +11,8 @@ const gameRecord: GameRecord = {
     { canonicalId: "p2", pickNumber: 3 },
   ],
   awayRoster: [{ canonicalId: "p3", pickNumber: null }],
+  homeTeamLabel: "Orange",
+  awayTeamLabel: "Blue",
   homeScore: 2,
   awayScore: 1,
   goals: [
@@ -30,6 +32,8 @@ describe("buildPersistenceRows", () => {
       game_id: "report-2026-07-05-sunday",
       date: "2026-07-05",
       league: "sunday",
+      home_team_label: "Orange",
+      away_team_label: "Blue",
       home_score: 2,
       away_score: 1,
       mvp_canonical_id: "p1",

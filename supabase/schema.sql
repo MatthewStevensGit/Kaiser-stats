@@ -250,3 +250,10 @@ alter table scheduled_games add column if not exists created_by text references 
 -- comment in src/lib/stats-engine/types.ts); the original NOT NULL constraint
 -- predates any real write path and was never exercised until now.
 alter table roster_spots alter column pick_number drop not null;
+
+-- Migration (2026-07-16): "home"/"away" team display labels. Not null — the
+-- app always resolves a value before writing (the report's own stated team
+-- names when given, else a plain "Orange"/"Blue" default — see GameRecord's
+-- homeTeamLabel/awayTeamLabel doc comment in src/lib/stats-engine/types.ts).
+alter table game_records add column if not exists home_team_label text not null default 'Orange';
+alter table game_records add column if not exists away_team_label text not null default 'Blue';

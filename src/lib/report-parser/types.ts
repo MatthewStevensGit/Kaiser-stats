@@ -21,6 +21,16 @@ export interface RawExtraction {
   league: "saturday" | "sunday" | "unknown";
   homeRosterRaw: string[];
   awayRosterRaw: string[];
+  /**
+   * "Home"/"away" has no real meaning for a pickup game — these are only
+   * ever populated when the report itself names each side (e.g. "Team
+   * Orange"/"Team Blue"), same first-group/second-group convention as the
+   * rosters. Null when the report doesn't name sides at all — never guessed
+   * by the model; a default display label is applied later in code (see
+   * resolveExtractionToGameRecord), not here.
+   */
+  homeTeamLabelRaw: string | null;
+  awayTeamLabelRaw: string | null;
   homeScore: number | null;
   awayScore: number | null;
   goals: RawGoalEvent[];

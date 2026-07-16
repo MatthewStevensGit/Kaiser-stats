@@ -143,6 +143,18 @@ export interface GameRecord {
   league: League;
   homeRoster: RosterSpot[];
   awayRoster: RosterSpot[];
+  /**
+   * "Home"/"away" has no real meaning for this pickup league — these are
+   * the actual team names to show (e.g. "Orange"/"Blue"). Populated from
+   * the report when it names sides, from RawExtraction's
+   * homeTeamLabelRaw/awayTeamLabelRaw; when the report doesn't name sides,
+   * resolveExtractionToGameRecord() applies a plain default ("Orange"/
+   * "Blue") rather than leaving this null — unlike a player identity, a
+   * wrong guess here can't misattribute anyone's stats, it's just a label,
+   * so a default is fine where a guess elsewhere in this file wouldn't be.
+   */
+  homeTeamLabel: string;
+  awayTeamLabel: string;
   homeScore: number;
   awayScore: number;
   goals: GoalEvent[];

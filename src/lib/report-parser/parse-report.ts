@@ -165,6 +165,12 @@ export function resolveExtractionToGameRecord(
     league: extraction.league === "saturday" || extraction.league === "sunday" ? extraction.league : meta.fallbackLeague,
     homeRoster,
     awayRoster,
+    // Only ever populated by the model when the report itself names sides
+    // (see RawExtraction's doc comment) — otherwise this plain default
+    // applies. Unlike a player identity, a wrong guess here can't
+    // misattribute anyone's stats, it's just a label.
+    homeTeamLabel: extraction.homeTeamLabelRaw?.trim() || "Orange",
+    awayTeamLabel: extraction.awayTeamLabelRaw?.trim() || "Blue",
     homeScore,
     awayScore,
     goals,
