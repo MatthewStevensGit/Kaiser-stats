@@ -21,17 +21,33 @@ export function extractFirstPickAnnotation(rawFileText: string): { firstPickRaw:
   };
 }
 
+// A real response has been observed to come back HTTP 200, finishReason
+// "STOP" (Gemini considers itself done), but with the JSON body truncated
+// anyway — confirmed via usageMetadata showing thousands of tokens spent on
+// invisible "thinking" before a short visible completion, nowhere near the
+// maxOutputTokens cap. This is an intermittent model-side quirk, not a
+// truncation we can fix by raising the cap further, so one retry (a fresh
+// API call, not a re-parse of the same bad text) is the practical fix.
+const MAX_PARSE_ATTEMPTS = 2;
+
 export async function parseReportText(apiKey: string, threadText: string): Promise<RawExtraction> {
   const prompt = buildExtractionPrompt(threadText);
-  const responseText = await callGemini(apiKey, prompt);
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(responseText);
-  } catch {
-    throw new Error(`Gemini did not return valid JSON: ${responseText}`);
+  let lastMalformedResponse = "";
+  for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
+    // Network/HTTP errors (quota exhaustion, high-demand 503s) propagate
+    // immediately, never retried here — retrying those just burns more of a
+    // daily quota that may already be exhausted, for no chance of success.
+    const responseText = await callGemini(apiKey, prompt);
+    try {
+      return JSON.parse(responseText) as RawExtraction;
+    } catch {
+      lastMalformedResponse = responseText;
+    }
   }
-  return parsed as RawExtraction;
+  throw new Error(
+    `Gemini did not return valid JSON after ${MAX_PARSE_ATTEMPTS} attempts: ${lastMalformedResponse}`,
+  );
 }
 
 export interface ResolvedReport {

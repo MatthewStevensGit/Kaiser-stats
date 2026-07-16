@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { extractFirstPickAnnotation, resolveExtractionToGameRecord } from "../parse-report";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { extractFirstPickAnnotation, parseReportText, resolveExtractionToGameRecord } from "../parse-report";
+import { callGemini } from "../gemini-client";
 import type { RawExtraction } from "../types";
 import type { PlayerIdentity } from "../../stats-engine/types";
+
+vi.mock("../gemini-client", () => ({ callGemini: vi.fn() }));
+const mockedCallGemini = vi.mocked(callGemini);
 
 const players: PlayerIdentity[] = [
   { canonicalId: "p1", displayName: "Ari Fox", aliases: [], knownEmails: [], leagues: ["sunday"], status: "regular" },
@@ -267,6 +271,35 @@ describe("resolveExtractionToGameRecord", () => {
     const result = resolveExtractionToGameRecord(extraction, players, meta);
     expect(result.pickOrderWarning).toContain("Someone Else");
     expect(result.gameRecord.homeRoster.find((s) => s.canonicalId === "p2")?.pickNumber).toBe(4);
+  });
+});
+
+describe("parseReportText", () => {
+  beforeEach(() => {
+    mockedCallGemini.mockReset();
+  });
+
+  it("retries once when Gemini returns malformed JSON (the intermittent finishReason-STOP-but-truncated glitch)", async () => {
+    const validJson = JSON.stringify({ date: "2026-07-05", league: "sunday" });
+    mockedCallGemini.mockResolvedValueOnce('{"date": "2026-07-05", "league": "sunday"').mockResolvedValueOnce(validJson);
+
+    const result = await parseReportText("fake-key", "some report text");
+    expect(result).toEqual({ date: "2026-07-05", league: "sunday" });
+    expect(mockedCallGemini).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after exhausting retries if every attempt is malformed", async () => {
+    mockedCallGemini.mockResolvedValue('{"date": "2026-07-05"');
+
+    await expect(parseReportText("fake-key", "some report text")).rejects.toThrow(/did not return valid JSON after 2 attempts/);
+    expect(mockedCallGemini).toHaveBeenCalledTimes(2);
+  });
+
+  it("never retries a thrown error (quota/HTTP failures aren't worth burning more of a daily quota on)", async () => {
+    mockedCallGemini.mockRejectedValue(new Error("Gemini API request failed (429): quota exceeded"));
+
+    await expect(parseReportText("fake-key", "some report text")).rejects.toThrow(/429/);
+    expect(mockedCallGemini).toHaveBeenCalledTimes(1);
   });
 });
 
