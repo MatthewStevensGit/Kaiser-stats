@@ -95,8 +95,10 @@ input. `src/lib/stats-engine/__tests__/game-records.test.ts` is the executable
 proof the two paths agree on the contract.
 
 **Now built:** `src/lib/report-parser/` turns a report email's text into a
-`GameRecord`, via the Gemini API (`gemini-2.5-flash`, chosen over the
-Claude API originally named in `kaiser_BUILD_SPEC.md` for cost reasons —
+`GameRecord`, via the Gemini API (Google's Flash tier — see
+`src/lib/report-parser/gemini-client.ts` for why the model name is the
+`gemini-flash-latest` alias rather than a hard-pinned dated model name — chosen
+over the Claude API originally named in `kaiser_BUILD_SPEC.md` for cost reasons,
 Gemini's free tier comfortably covers this project's actual usage), and an
 admin-only web UI (`/matches/import`, see `docs/report-parsing.md`) now writes its
 resolved output into the real `game_records`/`roster_spots`/`goal_events`/

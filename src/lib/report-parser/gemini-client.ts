@@ -4,7 +4,13 @@
  * Server-side/local-script use only; GEMINI_API_KEY must never be
  * NEXT_PUBLIC_-prefixed or reach browser code.
  */
-const GEMINI_MODEL = "gemini-2.5-flash";
+// A hard-pinned dated model name (e.g. "gemini-2.5-flash") will eventually
+// get cut off for new API keys even while it keeps working for existing
+// ones — this app hit exactly that 404 in July 2026. "gemini-flash-latest"
+// is Google's own alias for whatever their current recommended Flash model
+// is, so it doesn't need to be manually bumped every time Google retires
+// an old one.
+const GEMINI_MODEL = "gemini-flash-latest";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 export async function callGemini(apiKey: string, prompt: string): Promise<string> {
