@@ -257,3 +257,12 @@ alter table roster_spots alter column pick_number drop not null;
 -- homeTeamLabel/awayTeamLabel doc comment in src/lib/stats-engine/types.ts).
 alter table game_records add column if not exists home_team_label text not null default 'Orange';
 alter table game_records add column if not exists away_team_label text not null default 'Blue';
+
+-- Migration (2026-07-16): game_records.description existed in this file's base
+-- "create table if not exists" since before the live table was first created,
+-- but that clause is a no-op against an already-existing table — the column
+-- was never actually added to the real database (confirmed by a real
+-- PGRST204 "Could not find the 'description' column" error on the first
+-- attempt to save a real report). Needed for the report-import write path
+-- (src/lib/report-parser/save.ts) to store the raw report text.
+alter table game_records add column if not exists description text;
