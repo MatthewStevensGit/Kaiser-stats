@@ -19,7 +19,11 @@ export async function callGemini(apiKey: string, prompt: string): Promise<string
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json" },
+      // Without an explicit cap, a report with many goals/mentions can hit
+      // Gemini's default output limit and get cut off mid-JSON (confirmed by
+      // a real response missing its final closing brace) — 8192 comfortably
+      // covers any report this league is realistically going to produce.
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 },
     }),
   });
 
@@ -29,6 +33,14 @@ export async function callGemini(apiKey: string, prompt: string): Promise<string
   }
 
   const data = await response.json();
+  const finishReason = data?.candidates?.[0]?.finishReason;
+  if (finishReason === "MAX_TOKENS") {
+    throw new Error(
+      "Gemini's response was cut off (hit the output token limit) before finishing — try again, " +
+        "or if this keeps happening, the maxOutputTokens cap in gemini-client.ts needs raising further.",
+    );
+  }
+
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== "string") {
     throw new Error(`Gemini API response missing expected text content: ${JSON.stringify(data)}`);
