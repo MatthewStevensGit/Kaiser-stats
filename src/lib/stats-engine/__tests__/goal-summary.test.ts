@@ -17,15 +17,30 @@ describe("summarizeGoalsByScorer", () => {
     ]);
   });
 
-  it("keeps different scorers separate, in first-appearance order, with their own team", () => {
+  it("keeps different scorers separate, with their own team and goal count", () => {
     const goals: GoalEvent[] = [
       { scorerCanonicalId: "p2", assistCanonicalId: null, team: "away" },
       { scorerCanonicalId: "p1", assistCanonicalId: "p2", team: "home" },
       { scorerCanonicalId: "p2", assistCanonicalId: null, team: "away" },
     ];
     expect(summarizeGoalsByScorer(goals)).toEqual([
-      { scorerCanonicalId: "p2", team: "away", goals: 2 },
       { scorerCanonicalId: "p1", team: "home", goals: 1 },
+      { scorerCanonicalId: "p2", team: "away", goals: 2 },
+    ]);
+  });
+
+  it("groups every home scorer before every away scorer, regardless of scoring order", () => {
+    const goals: GoalEvent[] = [
+      { scorerCanonicalId: "away1", assistCanonicalId: null, team: "away" },
+      { scorerCanonicalId: "home1", assistCanonicalId: null, team: "home" },
+      { scorerCanonicalId: "away2", assistCanonicalId: null, team: "away" },
+      { scorerCanonicalId: "home2", assistCanonicalId: null, team: "home" },
+    ];
+    expect(summarizeGoalsByScorer(goals).map((s) => s.scorerCanonicalId)).toEqual([
+      "home1",
+      "home2",
+      "away1",
+      "away2",
     ]);
   });
 });

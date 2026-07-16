@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { previewReportImport, saveReportImport, type ReportPreview } from "@/lib/report-parser/actions";
 import { formatScoreLine, getMultiGoalNickname } from "@/lib/format";
@@ -7,14 +8,14 @@ import { summarizeGoalsByScorer } from "@/lib/stats-engine/goal-summary";
 import type { League } from "@/lib/stats-engine/types";
 import { GoalChip } from "./GoalChip";
 
-export function ReportImportForm() {
+export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanonicalId: string }) {
+  const router = useRouter();
   const [date, setDate] = useState("");
   const [league, setLeague] = useState<League>("saturday");
   const [firstPickRaw, setFirstPickRaw] = useState("");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isParsing, startParsing] = useTransition();
   const [isSaving, startSaving] = useTransition();
 
@@ -22,10 +23,25 @@ export function ReportImportForm() {
     return preview?.displayNames[canonicalId] ?? canonicalId;
   }
 
+  /** Bolds whoever is logged in, wherever a name renders — instead of baking a "(you)" marker into stored data. */
+  function renderName(canonicalId: string) {
+    const name = nameFor(canonicalId);
+    return canonicalId === currentUserCanonicalId ? <strong>{name}</strong> : name;
+  }
+
+  function renderNameList(canonicalIds: string[]) {
+    if (canonicalIds.length === 0) return "—";
+    return canonicalIds.map((id, i) => (
+      <span key={id}>
+        {i > 0 && ", "}
+        {renderName(id)}
+      </span>
+    ));
+  }
+
   function handleParse(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSuccessMessage(null);
     setPreview(null);
     startParsing(async () => {
       const result = await previewReportImport({
@@ -51,9 +67,8 @@ export function ReportImportForm() {
         setError(result.error);
         return;
       }
-      setSuccessMessage(`Saved ${preview.gameRecord.gameId}.`);
-      setPreview(null);
-      setText("");
+      router.push("/matches");
+      router.refresh();
     });
   }
 
@@ -118,7 +133,6 @@ export function ReportImportForm() {
         />
 
         {error && <p className="note login-form-error">{error}</p>}
-        {successMessage && <p className="note">{successMessage}</p>}
 
         <button type="submit" className="login-form-submit" disabled={isPending}>
           {isParsing ? "Parsing..." : "Parse"}
@@ -141,10 +155,10 @@ export function ReportImportForm() {
           {preview.firstPickWarning && <p className="report-import-warning">{preview.firstPickWarning}</p>}
 
           <h3>Home roster</h3>
-          <p>{preview.gameRecord.homeRoster.map((s) => nameFor(s.canonicalId)).join(", ") || "—"}</p>
+          <p>{renderNameList(preview.gameRecord.homeRoster.map((s) => s.canonicalId))}</p>
 
           <h3>Away roster</h3>
-          <p>{preview.gameRecord.awayRoster.map((s) => nameFor(s.canonicalId)).join(", ") || "—"}</p>
+          <p>{renderNameList(preview.gameRecord.awayRoster.map((s) => s.canonicalId))}</p>
 
           {scorers.length > 0 && (
             <>
@@ -154,7 +168,7 @@ export function ReportImportForm() {
                   const nickname = getMultiGoalNickname(scorer.goals);
                   return (
                     <li key={scorer.scorerCanonicalId} className={`match-detail-goal-${scorer.team}`}>
-                      <span className="match-detail-scorer-name">{nameFor(scorer.scorerCanonicalId)}</span>
+                      <span className="match-detail-scorer-name">{renderName(scorer.scorerCanonicalId)}</span>
                       <GoalChip count={scorer.goals} />
                       {nickname && <span className="match-detail-goal-nickname">{nickname}</span>}
                     </li>
@@ -167,7 +181,7 @@ export function ReportImportForm() {
           {preview.gameRecord.mvpCanonicalId && (
             <>
               <h3>MVP</h3>
-              <p>{nameFor(preview.gameRecord.mvpCanonicalId)}</p>
+              <p>{renderName(preview.gameRecord.mvpCanonicalId)}</p>
             </>
           )}
 
