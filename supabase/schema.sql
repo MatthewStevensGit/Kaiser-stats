@@ -302,3 +302,22 @@ create table if not exists chat_messages (
 
 alter table chat_messages enable row level security;
 create index if not exists chat_messages_created_at_idx on chat_messages (created_at);
+
+-- Migration (2026-07-17): registration reminder emails. DRY RUN ONLY right
+-- now (see src/lib/matchday/reminders.ts's SENDING_ENABLED constant) --
+-- explicit project decision not to email real people yet (still in the demo
+-- phase). This table's unique(game_id, email_type) is what makes the
+-- send-reminders cron idempotent: once a row exists for a game+type, it's
+-- never sent (or dry-run-logged) again, no matter how many times the cron
+-- re-checks that same still-open window.
+create table if not exists reminder_email_log (
+  id bigint generated always as identity primary key,
+  game_id text not null references scheduled_games (game_id),
+  email_type text not null check (email_type in ('registration_open', 'closing_soon')),
+  recipient_count integer not null,
+  dry_run boolean not null default true,
+  sent_at timestamptz not null default now(),
+  unique (game_id, email_type)
+);
+
+alter table reminder_email_log enable row level security;
