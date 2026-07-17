@@ -198,6 +198,43 @@ describe("resolveExtractionToGameRecord", () => {
     ]);
   });
 
+  it("keeps a flagged name's gap in the pick-number sequence instead of shifting everyone after it (real bug, found 2026-07-17)", () => {
+    const flaggedPlayers: PlayerIdentity[] = [
+      ...players,
+      { canonicalId: "p4", displayName: "Gena", aliases: [], knownEmails: [], leagues: ["sunday"], status: "regular" },
+    ];
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      // Ari Fox is captain (never numbered). "Gera" is one edit from the
+      // existing "Gena" — flagged, excluded entirely. Dana Petrov is listed
+      // AFTER the flagged name — this is exactly the case that used to
+      // silently shift her pick number down by one.
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka", "Gera", "Dana Petrov"],
+      awayRosterRaw: [],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: null,
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, flaggedPlayers, meta);
+    expect(result.flaggedNames).toHaveLength(1);
+    expect(result.flaggedNames[0]?.raw).toBe("Gera");
+    // Bex Tanaka keeps pick 1 (unaffected — listed before the gap). Dana
+    // Petrov must get pick 5 (her real original position, 3rd non-captain
+    // slot: 2*2+1), NOT pick 3 (what she'd get if the gap were collapsed).
+    expect(result.gameRecord.homeRoster).toEqual([
+      { canonicalId: "p1", pickNumber: null },
+      { canonicalId: "p2", pickNumber: 1 },
+      { canonicalId: "auto-dana-petrov", pickNumber: 5 },
+    ]);
+  });
+
   it("computes real pick numbers for a game with a confirmed first-pick annotation, overriding the default", () => {
     const extraction: RawExtraction = {
       date: "2026-07-05",

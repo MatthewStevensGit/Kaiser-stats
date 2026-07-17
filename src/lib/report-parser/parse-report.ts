@@ -148,17 +148,25 @@ export function resolveExtractionToGameRecord(
     return provisional.canonicalId;
   }
 
-  function resolveRoster(namesRaw: string[]): RosterSpot[] {
-    const spots: RosterSpot[] = [];
-    for (const raw of namesRaw) {
+  // Keeps a `null` placeholder for a flagged/unresolved name instead of just
+  // dropping it — critical for the pick-number math below, which needs each
+  // resolved spot's ORIGINAL position in the report's listing (gaps and
+  // all), not its position after excluded names are filtered out. An
+  // earlier version filtered before numbering, which silently shifted every
+  // subsequent teammate's pick number down by one per exclusion (confirmed
+  // 2026-07-17 on two real games where a flagged name wasn't the last one
+  // listed on its side).
+  function resolveRosterSlots(namesRaw: string[]): (RosterSpot | null)[] {
+    return namesRaw.map((raw) => {
       const canonicalId = resolve(raw);
-      if (canonicalId) spots.push({ canonicalId, pickNumber: null });
-    }
-    return spots;
+      return canonicalId ? { canonicalId, pickNumber: null } : null;
+    });
   }
 
-  const homeRoster = resolveRoster(extraction.homeRosterRaw ?? []);
-  const awayRoster = resolveRoster(extraction.awayRosterRaw ?? []);
+  const homeRosterSlots = resolveRosterSlots(extraction.homeRosterRaw ?? []);
+  const awayRosterSlots = resolveRosterSlots(extraction.awayRosterRaw ?? []);
+  const homeRoster = homeRosterSlots.filter((spot): spot is RosterSpot => spot !== null);
+  const awayRoster = awayRosterSlots.filter((spot): spot is RosterSpot => spot !== null);
 
   let firstPickWarning: string | null = null;
   let homePicksFirst = true; // default: the team listed first (home) picked first — see resolveExtractionToGameRecord's doc comment
@@ -186,13 +194,19 @@ export function resolveExtractionToGameRecord(
 
   let pickOrderWarning: string | null = null;
   if (!firstPickWarning && rosterOrderIsDraftOrder) {
-    const firstRoster = homePicksFirst ? homeRoster : awayRoster;
-    const secondRoster = homePicksFirst ? awayRoster : homeRoster;
+    const firstSlots = homePicksFirst ? homeRosterSlots : awayRosterSlots;
+    const secondSlots = homePicksFirst ? awayRosterSlots : homeRosterSlots;
     // roster[0] of each side is that team's captain — never actually
     // picked, so it's skipped here and keeps its default pickNumber: null
-    // rather than reserving 1/2 for it.
-    firstRoster.slice(1).forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
-    secondRoster.slice(1).forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+    // rather than reserving 1/2 for it. Iterating the SLOTS array (not the
+    // filtered roster) so a gap left by an excluded name doesn't shift
+    // every later teammate's pick number down — see resolveRosterSlots.
+    firstSlots.slice(1).forEach((spot, i) => {
+      if (spot) spot.pickNumber = 2 * i + 1;
+    });
+    secondSlots.slice(1).forEach((spot, i) => {
+      if (spot) spot.pickNumber = 2 * i + 2;
+    });
   }
 
   // Independent of rosterOrderIsDraftOrder — a narrated pick order is real,
