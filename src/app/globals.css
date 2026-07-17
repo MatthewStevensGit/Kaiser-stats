@@ -94,6 +94,12 @@ main {
   letter-spacing: 0.01em;
 }
 
+/* A player's own name is a proper noun, not a section title like "Table"/
+   "Past Matches" — cancels .screen-header's all-caps treatment for it. */
+.screen-header-name-case {
+  text-transform: none;
+}
+
 .page-header {
   margin-top: 1.25rem;
   margin-bottom: 1.25rem;

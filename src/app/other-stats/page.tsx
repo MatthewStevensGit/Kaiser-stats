@@ -87,7 +87,7 @@ export default async function OtherStatsPage({
                     <td className="num">{i + 1}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName.toUpperCase()}
+                        {p.displayName}
                       </a>
                     </td>
                     <td className="num">{p.assists}</td>
@@ -120,7 +120,7 @@ export default async function OtherStatsPage({
                     <td className="num">{i + 1}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName.toUpperCase()}
+                        {p.displayName}
                       </a>
                     </td>
                     <td className="num">{p.avgDraftPosition.toFixed(1)}</td>
