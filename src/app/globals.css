@@ -830,6 +830,7 @@ th.num {
   cursor: pointer;
 }
 
+
 /* Admin check-in editing */
 .checkin-edit-list {
   list-style: none;
@@ -1011,6 +1012,30 @@ th.num {
   background: var(--surface-2);
   color: var(--text-primary);
   border: 1px solid var(--border);
+}
+
+/* Same row width/shape as .self-checkin-button, distinct neutral color so it
+   doesn't read as the same action as checking in. */
+.start-draft-button {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.start-draft-button-disabled {
+  color: var(--text-muted);
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .game-cancelled-banner {

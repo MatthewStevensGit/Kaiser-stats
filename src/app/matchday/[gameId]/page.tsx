@@ -61,11 +61,16 @@ export default async function CheckInPortalPage({
               registrationOpen={getRegistrationStatus(new Date(), game.date, game.league) === "open"}
             />
           )}
-          {user?.isAdmin && getRegistrationStatus(new Date(), game.date, game.league) === "closed" && (
-            <Link href={`/matchday/${gameId}/draft`} className="edit-game-button">
-              Start Draft
-            </Link>
-          )}
+          {user?.isAdmin &&
+            (getRegistrationStatus(new Date(), game.date, game.league) === "closed" ? (
+              <Link href={`/matchday/${gameId}/draft`} className="start-draft-button">
+                Start Draft
+              </Link>
+            ) : (
+              <span className="start-draft-button start-draft-button-disabled" aria-disabled="true">
+                Start Draft
+              </span>
+            ))}
         </>
       )}
     </main>
