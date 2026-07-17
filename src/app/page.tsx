@@ -290,6 +290,13 @@ export default async function Home({
           </div>
         ))}
 
+      {tab === "mvp" && (
+        <p className="note">
+          * MVP isn&rsquo;t officially tracked during games — these are a best estimate from
+          the match reports, not a verified stat.
+        </p>
+      )}
+
       {tab === "mvp" &&
         (mvpRanked.length === 0 ? (
           <div className="empty-state">
