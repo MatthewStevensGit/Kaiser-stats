@@ -4,13 +4,16 @@
  * Server-side/local-script use only; GEMINI_API_KEY must never be
  * NEXT_PUBLIC_-prefixed or reach browser code.
  */
-// A hard-pinned dated model name (e.g. "gemini-2.5-flash") will eventually
-// get cut off for new API keys even while it keeps working for existing
-// ones — this app hit exactly that 404 in July 2026. "gemini-flash-latest"
-// is Google's own alias for whatever their current recommended Flash model
-// is, so it doesn't need to be manually bumped every time Google retires
-// an old one.
-const GEMINI_MODEL = "gemini-flash-latest";
+// Deliberately pinned to a SPECIFIC model, not the floating "gemini-flash-latest"
+// alias this used to point to — confirmed via Google's own rate-limits page
+// (2026-07-17) that gemini-3.1-flash-lite's free tier is 500 requests/day,
+// vs. 20/day for whatever "flash-latest" currently resolves to
+// (gemini-3.5-flash). Quota was the actual bottleneck on this feature, so
+// the explicit pin's usual downside (needs a manual bump if Google retires
+// this model — see the July 2026 404 that motivated the alias in the first
+// place) is worth it here. Re-check ".../v1beta/models" (free, no quota
+// cost) if this one ever 404s.
+const GEMINI_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 export async function callGemini(apiKey: string, prompt: string): Promise<string> {
