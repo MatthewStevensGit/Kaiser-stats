@@ -39,6 +39,24 @@ function rowMatchesView(row: SeasonStandingRow, view: StatsView): boolean {
   return row.league === view;
 }
 
+const SOURCE_YEAR = /\d{4}/;
+
+/**
+ * Every season-standings source string embeds its year (e.g.
+ * "soccer_2023_2.xlsx#Sheet1" -> "2023") — there's no separate year column
+ * on SeasonStandingRow, so this is the only way to scope the Table page to
+ * one season instead of the all-time total every row sums into today.
+ * `year: "all"` (or anything that matches no row) is the existing
+ * all-time-cumulative behavior, unchanged.
+ */
+export function filterSeasonStandingRowsByYear(
+  rows: SeasonStandingRow[],
+  year: string,
+): SeasonStandingRow[] {
+  if (year === "all") return rows;
+  return rows.filter((row) => row.source.match(SOURCE_YEAR)?.[0] === year);
+}
+
 export interface AggregateResult {
   players: PlayerSeasonStats[];
   /** Names close to an existing, different identity — genuinely ambiguous, still need a human. */

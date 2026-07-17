@@ -1,4 +1,4 @@
-import { aggregateStandings, rankByRate } from "@/lib/stats-engine/aggregate";
+import { aggregateStandings, filterSeasonStandingRowsByYear, rankByRate } from "@/lib/stats-engine/aggregate";
 import { listPlayers, listSeasonStandingRows } from "@/lib/stats-engine/data";
 import { formatPlusMinus, formatWDL } from "@/lib/format";
 import { PillTabs } from "./_components/PillTabs";
@@ -7,8 +7,19 @@ const GOLDEN_BOOT_MIN_GAMES = 3;
 
 type TableTab = "plus-minus" | "golden-boot";
 
+// Same real seasons this league has data for as the Past Matches page's
+// YEARS list — "all" is an extra tab (not a real year) showing every
+// season's stats summed together, i.e. today's existing all-time behavior.
+const ALL_YEARS_ID = "all";
+const YEARS = ["2026", "2025", "2024", "2023", "2022", ALL_YEARS_ID];
+const DEFAULT_YEAR = ALL_YEARS_ID;
+
 function isTableTab(value: string | undefined): value is TableTab {
   return value === "plus-minus" || value === "golden-boot";
+}
+
+function isYear(value: string | undefined): value is string {
+  return value !== undefined && YEARS.includes(value);
 }
 
 function plusMinusClass(value: number): string {
@@ -20,13 +31,15 @@ function plusMinusClass(value: number): string {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; year?: string }>;
 }) {
-  const { tab: rawTab } = await searchParams;
+  const { tab: rawTab, year: rawYear } = await searchParams;
   const tab: TableTab = isTableTab(rawTab) ? rawTab : "plus-minus";
+  const year = isYear(rawYear) ? rawYear : DEFAULT_YEAR;
 
-  // Merged only, for now — Saturday/Sunday split may return in a later slice.
-  const [players, rows] = await Promise.all([listPlayers(), listSeasonStandingRows()]);
+  // Merged (saturday+sunday) only, for now — league split may return in a later slice.
+  const [players, allRows] = await Promise.all([listPlayers(), listSeasonStandingRows()]);
+  const rows = filterSeasonStandingRowsByYear(allRows, year);
   const { players: totals } = aggregateStandings(rows, players, "merged");
 
   const plusMinusRanked = [...totals].sort(
@@ -48,9 +61,18 @@ export default async function Home({
       <PillTabs
         activeId={tab}
         tabs={[
-          { id: "plus-minus", label: "Plus-Minus", href: "/?tab=plus-minus" },
-          { id: "golden-boot", label: "Golden Boot", href: "/?tab=golden-boot" },
+          { id: "plus-minus", label: "Plus-Minus", href: `/?tab=plus-minus&year=${year}` },
+          { id: "golden-boot", label: "Golden Boot", href: `/?tab=golden-boot&year=${year}` },
         ]}
+      />
+
+      <PillTabs
+        activeId={year}
+        tabs={YEARS.map((y) => ({
+          id: y,
+          label: y === ALL_YEARS_ID ? "All Years" : y,
+          href: `/?tab=${tab}&year=${y}`,
+        }))}
       />
 
       {tab === "plus-minus" &&

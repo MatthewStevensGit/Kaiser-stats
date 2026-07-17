@@ -3,11 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { aggregateStandings, findPlusMinusMismatches, rankByRate } from "../aggregate";
+import { aggregateStandings, filterSeasonStandingRowsByYear, findPlusMinusMismatches, rankByRate } from "../aggregate";
 import { resolvePlayerName } from "../identity";
 import { computePowerRankings } from "../rankings";
 import { parseAllStandingsSheets, parsePrimaryStandingsSheet } from "../season-standings-parser";
-import type { PlayerIdentity } from "../types";
+import type { PlayerIdentity, SeasonStandingRow } from "../types";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -111,6 +111,32 @@ describe("aggregateStandings", () => {
     const rows = parsePrimaryStandingsSheet(wb, "sample", "saturday");
     const { players } = aggregateStandings(rows, samplePlayers, "sunday");
     expect(players).toHaveLength(0);
+  });
+});
+
+describe("filterSeasonStandingRowsByYear", () => {
+  const rowFor = (source: string): SeasonStandingRow => ({
+    source,
+    league: "sunday",
+    playerNameRaw: "Someone",
+    games: 1,
+    wins: 1,
+    losses: 0,
+    ties: 0,
+    goals: null,
+    plusMinus: null,
+    percent: null,
+    points: null,
+  });
+
+  it("keeps only rows whose source embeds the requested year", () => {
+    const rows = [rowFor("soccer_2023.xlsx#Sheet1"), rowFor("soccer_2025_1.xlsx#Sheet1")];
+    expect(filterSeasonStandingRowsByYear(rows, "2023")).toEqual([rows[0]]);
+  });
+
+  it("'all' returns every row unfiltered — today's existing all-time behavior", () => {
+    const rows = [rowFor("soccer_2023.xlsx#Sheet1"), rowFor("soccer_2025_1.xlsx#Sheet1")];
+    expect(filterSeasonStandingRowsByYear(rows, "all")).toEqual(rows);
   });
 });
 
