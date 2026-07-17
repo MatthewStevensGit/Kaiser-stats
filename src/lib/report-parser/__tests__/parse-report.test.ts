@@ -423,8 +423,13 @@ describe("stripGmailChrome", () => {
     expect(cleaned).not.toContain("to Eduard");
   });
 
-  it("handles a date line that does include the year", () => {
-    const raw = ["Alan Cho", "Sat, Jul 11, 2026, 7:45 AM", "to Someone, Else", "", "Report body here."].join("\n");
+  it("handles a date line with a weekday prefix and no year", () => {
+    const raw = ["Alan Cho", "Sat, Jul 11, 7:45 AM", "to Someone, Else", "", "Report body here."].join("\n");
+    expect(stripGmailChrome(raw)).toBe("Report body here.");
+  });
+
+  it("handles a date line with a year and no weekday prefix (real variant, e.g. June 28's report)", () => {
+    const raw = ["Vadim Palmer", "Jun 28, 2026, 11:46 AM", "to Eduard, Muravchik", "", "Report body here."].join("\n");
     expect(stripGmailChrome(raw)).toBe("Report body here.");
   });
 

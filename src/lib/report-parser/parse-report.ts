@@ -23,13 +23,17 @@ export function extractFirstPickAnnotation(rawFileText: string): { firstPickRaw:
 }
 
 // Gmail's own "copy the thread text" output repeats this exact boilerplate
-// once per message: a sender-name line, then a "Day, Mon DD[, YYYY],
-// H:MM AM/PM" line, then a "to <comma-separated recipients>" line — none of
-// it is report content, and leaving it in wastes the model's attention (and
-// once already caused a real parse to trip up trying to treat "to Eduard,
-// Muravchik, ..." as game content). "Inbox" and "Summarize this email" are
-// separate stray UI-chrome lines Gmail's copy also includes.
-const GMAIL_DATE_LINE = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+\w+\s+\d{1,2}(,\s+\d{4})?,?\s+\d{1,2}:\d{2}\s*(AM|PM)$/i;
+// once per message: a sender-name line, then a date/time line, then a
+// "to <comma-separated recipients>" line — none of it is report content,
+// and leaving it in wastes the model's attention (and once already caused a
+// real parse to trip up trying to treat "to Eduard, Muravchik, ..." as game
+// content). "Inbox" and "Summarize this email" are separate stray UI-chrome
+// lines Gmail's copy also includes. The date/time line's exact format
+// varies (confirmed two real variants): "Sun, Jun 21, 11:14 AM" (weekday,
+// no year) and "Jun 28, 2026, 11:46 AM" (year, no weekday) — both the
+// weekday prefix and the year are optional here to cover either.
+const GMAIL_DATE_LINE =
+  /^((Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+)?\w+\s+\d{1,2},\s+(\d{4},\s+)?\d{1,2}:\d{2}\s*(AM|PM)$/i;
 
 /**
  * Strips Gmail copy-paste chrome (see GMAIL_DATE_LINE's comment) out of a
