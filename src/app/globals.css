@@ -696,23 +696,6 @@ th.num {
   flex-shrink: 0;
 }
 
-/* Golden Boot award badge — gold pill, distinct from the plain repeated-icon
-   GoalChip/AssistChip style since this represents a season award, not a
-   per-game counted stat. */
-.golden-boot-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  background: var(--mvp-bg);
-  color: var(--mvp-fg);
-  font-size: 0.72rem;
-  font-weight: 800;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  margin-left: 0.4rem;
-  vertical-align: middle;
-}
-
 /* MVP badge — trophy ribbon shown when a game has a determined MVP */
 .mvp-badge {
   display: inline-flex;
@@ -954,44 +937,11 @@ th.num {
   color: var(--nav-fg-active);
 }
 
-.bottom-nav-account {
-  position: relative;
-}
-
-.bottom-nav-account > button.bottom-nav-item {
+.bottom-nav-logout {
   background: none;
   border: none;
   font: inherit;
   cursor: pointer;
-}
-
-.bottom-nav-account-menu {
-  position: absolute;
-  bottom: 100%;
-  right: 0;
-  margin-bottom: 0.5rem;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-  min-width: 8rem;
-}
-
-.bottom-nav-account-menu-item {
-  display: block;
-  width: 100%;
-  background: none;
-  border: none;
-  font: inherit;
-  text-align: left;
-  padding: 0.7rem 1rem;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.bottom-nav-account-menu-item:hover {
-  background: var(--surface-2);
 }
 
 /* Loading skeleton */

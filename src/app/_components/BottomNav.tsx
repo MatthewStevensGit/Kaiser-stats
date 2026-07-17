@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 
 const NAV_ITEMS = [
@@ -19,26 +18,10 @@ function isActive(pathname: string, href: string): boolean {
 export function BottomNav({ displayName }: { displayName?: string }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Closes the log-out menu on an outside click — same expectation as any
-  // other popup menu, not just the toggle button itself.
-  useEffect(() => {
-    if (!menuOpen) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [menuOpen]);
 
   async function handleLogOut() {
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.signOut();
-    setMenuOpen(false);
     router.push("/login");
     router.refresh();
   }
@@ -60,24 +43,14 @@ export function BottomNav({ displayName }: { displayName?: string }) {
       })}
 
       {displayName ? (
-        <div className="bottom-nav-account" ref={menuRef}>
-          {menuOpen && (
-            <div className="bottom-nav-account-menu">
-              <button type="button" onClick={handleLogOut} className="bottom-nav-account-menu-item">
-                Log Out
-              </button>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setMenuOpen((open) => !open)}
-            className="bottom-nav-item"
-            aria-haspopup="true"
-            aria-expanded={menuOpen}
-          >
+        <>
+          <a href="/" className="bottom-nav-item">
             {displayName.split(" ")[0] ?? displayName}
+          </a>
+          <button type="button" onClick={handleLogOut} className="bottom-nav-item bottom-nav-logout">
+            Log Out
           </button>
-        </div>
+        </>
       ) : (
         <a href="/login" className="bottom-nav-item">
           Log In
