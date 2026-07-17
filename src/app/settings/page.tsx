@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { LogOutButton } from "../_components/LogOutButton";
 import { SettingsForm } from "../_components/SettingsForm";
 
 export default async function SettingsPage() {
@@ -14,6 +15,10 @@ export default async function SettingsPage() {
 
       <div className="card">
         <SettingsForm displayName={user.displayName} email={user.email} />
+      </div>
+
+      <div className="card">
+        <LogOutButton />
       </div>
     </main>
   );

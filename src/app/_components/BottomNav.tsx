@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
+import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { id: "table", label: "Stats", href: "/" },
@@ -19,14 +18,6 @@ function isActive(pathname: string, href: string): boolean {
 
 export function BottomNav({ displayName }: { displayName?: string }) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function handleLogOut() {
-    const supabase = createBrowserSupabaseClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
 
   return (
     <nav className="bottom-nav" aria-label="Primary">
@@ -45,20 +36,13 @@ export function BottomNav({ displayName }: { displayName?: string }) {
         );
       })}
 
-      {displayName ? (
-        <>
-          <a href="/settings" className="bottom-nav-item" aria-label="Settings">
-            ⚙️
-          </a>
-          <button type="button" onClick={handleLogOut} className="bottom-nav-item bottom-nav-logout">
-            Log Out
-          </button>
-        </>
-      ) : (
-        <a href="/login" className="bottom-nav-item">
-          Log In
-        </a>
-      )}
+      <a
+        href={displayName ? "/settings" : "/login"}
+        className="bottom-nav-item"
+        aria-label={displayName ? "Settings" : "Log In"}
+      >
+        {displayName ? "⚙️" : "Log In"}
+      </a>
     </nav>
   );
 }

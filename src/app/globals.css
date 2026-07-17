@@ -1052,13 +1052,6 @@ th.num {
   color: var(--nav-fg-active);
 }
 
-.bottom-nav-logout {
-  background: none;
-  border: none;
-  font-family: inherit;
-  cursor: pointer;
-}
-
 /* Loading skeleton */
 @keyframes skeleton-pulse {
   0%,
