@@ -175,6 +175,26 @@ main {
   color: var(--pill-fg-active);
 }
 
+/* Two independent filters side by side on one row, each its own dropdown —
+   used where two separate PillTabs rows would otherwise stack (Table,
+   Other Stats). */
+.tab-select-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.tab-select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 /* Card — the standard container for a stats block */
 .card {
   background: var(--surface-1);

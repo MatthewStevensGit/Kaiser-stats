@@ -15,7 +15,7 @@ import {
 import { formatPlusMinus, formatWDL } from "@/lib/format";
 import { GoldenBootChip } from "./_components/GoldenBootChip";
 import { LeagueTitleChip } from "./_components/LeagueTitleChip";
-import { PillTabs } from "./_components/PillTabs";
+import { TabSelect } from "./_components/TabSelect";
 
 const GOLDEN_BOOT_MIN_GAMES = 3;
 
@@ -101,23 +101,24 @@ export default async function Home({
 
   return (
     <main>
-      <PillTabs
-        activeId={year}
-        tabs={YEARS.map((y) => ({
-          id: y,
-          label: y === ALL_YEARS_ID ? "All Years" : y,
-          href: `/?tab=${tab}&year=${y}`,
-        }))}
-      />
-
-      <PillTabs
-        activeId={tab}
-        tabs={[
-          { id: "plus-minus", label: "Plus-Minus", href: `/?tab=plus-minus&year=${year}` },
-          { id: "golden-boot", label: "Golden Boot", href: `/?tab=golden-boot&year=${year}` },
-          { id: "mvp", label: "MVP", href: `/?tab=mvp&year=${year}` },
-        ]}
-      />
+      <div className="tab-select-row">
+        <TabSelect
+          value={year}
+          ariaLabel="Year"
+          options={YEARS.map((y) => ({ id: y, label: y === ALL_YEARS_ID ? "All Years" : y }))}
+          hrefFor={(y) => `/?tab=${tab}&year=${y}`}
+        />
+        <TabSelect
+          value={tab}
+          ariaLabel="View"
+          options={[
+            { id: "plus-minus", label: "Plus-Minus" },
+            { id: "golden-boot", label: "Golden Boot" },
+            { id: "mvp", label: "MVP" },
+          ]}
+          hrefFor={(t) => `/?tab=${t}&year=${year}`}
+        />
+      </div>
 
       {tab === "plus-minus" &&
         (plusMinusRanked.length === 0 ? (

@@ -1,6 +1,6 @@
 import { listGameRecords, listPlayers } from "@/lib/stats-engine/data";
 import { filterGameRecordsByYear, rollupGameRecords } from "@/lib/stats-engine/game-records";
-import { PillTabs } from "../_components/PillTabs";
+import { TabSelect } from "../_components/TabSelect";
 
 type OtherStatsTab = "assists" | "draft-position";
 
@@ -44,22 +44,23 @@ export default async function OtherStatsPage({
 
   return (
     <main>
-      <PillTabs
-        activeId={year}
-        tabs={YEARS.map((y) => ({
-          id: y,
-          label: y === ALL_YEARS_ID ? "All Years" : y,
-          href: `/other-stats?tab=${tab}&year=${y}`,
-        }))}
-      />
-
-      <PillTabs
-        activeId={tab}
-        tabs={[
-          { id: "assists", label: "Assists", href: `/other-stats?tab=assists&year=${year}` },
-          { id: "draft-position", label: "Draft Position", href: `/other-stats?tab=draft-position&year=${year}` },
-        ]}
-      />
+      <div className="tab-select-row">
+        <TabSelect
+          value={year}
+          ariaLabel="Year"
+          options={YEARS.map((y) => ({ id: y, label: y === ALL_YEARS_ID ? "All Years" : y }))}
+          hrefFor={(y) => `/other-stats?tab=${tab}&year=${y}`}
+        />
+        <TabSelect
+          value={tab}
+          ariaLabel="View"
+          options={[
+            { id: "assists", label: "Assists" },
+            { id: "draft-position", label: "Draft Position" },
+          ]}
+          hrefFor={(t) => `/other-stats?tab=${t}&year=${year}`}
+        />
+      </div>
 
       {tab === "assists" &&
         (assistsRanked.length === 0 ? (
