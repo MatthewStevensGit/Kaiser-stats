@@ -321,3 +321,37 @@ create table if not exists reminder_email_log (
 );
 
 alter table reminder_email_log enable row level security;
+
+-- Migration (2026-07-17): live snake draft sessions. Multiple draft_sessions rows can
+-- exist per game_id (a "redo" when the roster changes after an earlier draft) — the app
+-- always reads/writes against the most recent one by created_at, no explicit
+-- supersede/cancel flag needed. No new RLS policy — same service-role-only access as
+-- every other table here.
+create table if not exists draft_sessions (
+  id bigint generated always as identity primary key,
+  game_id text not null references scheduled_games (game_id),
+  league text not null,
+  status text not null default 'setup', -- 'setup' | 'in_progress' | 'completed'
+  home_captain_canonical_id text references players (canonical_id),
+  away_captain_canonical_id text references players (canonical_id),
+  first_pick_side text, -- 'home' | 'away', set once the coin flip is recorded
+  pool_canonical_ids text[] not null default '{}', -- draftable pool, captains excluded
+  turn_sizes int[], -- admin-overridable pick-sequence; null until confirmed at start
+  created_by text not null references players (canonical_id),
+  created_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+create index if not exists draft_sessions_game_idx on draft_sessions (game_id);
+
+create table if not exists draft_picks (
+  id bigint generated always as identity primary key,
+  draft_session_id bigint not null references draft_sessions (id) on delete cascade,
+  pick_number int not null,
+  side text not null, -- 'home' | 'away'
+  canonical_id text not null references players (canonical_id),
+  picked_at timestamptz not null default now(),
+  unique (draft_session_id, pick_number)
+);
+
+alter table draft_sessions enable row level security;
+alter table draft_picks enable row level security;

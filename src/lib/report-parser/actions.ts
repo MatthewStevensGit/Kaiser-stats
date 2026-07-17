@@ -4,7 +4,7 @@ import { getCurrentUser } from "../auth/session";
 import { createServiceRoleClient } from "../supabase/client";
 import type { GameRecord, NameResolution, PlayerIdentity } from "../stats-engine/types";
 import { parseReportText, resolveExtractionToGameRecord } from "./parse-report";
-import { saveResolvedGame, type SaveResult } from "./save";
+import { findExistingDraftGameId, mergeReportIntoDraftGame, saveResolvedGame, type SaveResult } from "./save";
 
 export interface ReportPreview {
   gameRecord: GameRecord;
@@ -126,7 +126,28 @@ export async function saveReportImport(
   const admin = await requireAdminResult();
   if ("ok" in admin) return admin;
 
-  return saveResolvedGame(createServiceRoleClient(), {
+  const client = createServiceRoleClient();
+
+  // A live draft may have already created a real game_records row for this exact
+  // date/league (see draft-actions.ts's finalizeDraft) — its roster/pick numbers are
+  // ground truth, not this parse's estimate, so this report only ever fills in the
+  // score/goals/MVP on top of it rather than inserting a second, conflicting row.
+  const existingDraftGameId = await findExistingDraftGameId(
+    client,
+    preview.gameRecord.date,
+    preview.gameRecord.league,
+  );
+  if (existingDraftGameId) {
+    return mergeReportIntoDraftGame(client, {
+      draftGameId: existingDraftGameId,
+      gameRecord: preview.gameRecord,
+      provisionedPlayers: preview.provisionedPlayers,
+      flaggedNames: preview.flaggedNames,
+      rawText,
+    });
+  }
+
+  return saveResolvedGame(client, {
     gameRecord: preview.gameRecord,
     provisionedPlayers: preview.provisionedPlayers,
     flaggedNames: preview.flaggedNames,
