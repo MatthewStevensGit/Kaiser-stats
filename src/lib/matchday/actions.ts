@@ -2,12 +2,28 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth/session";
-import { createProvisionalIdentity } from "@/lib/stats-engine/identity";
+import { createProvisionalIdentity, resolvePlayerName } from "@/lib/stats-engine/identity";
+import type { PlayerIdentity } from "@/lib/stats-engine/types";
 import { createServiceRoleClient } from "@/lib/supabase/client";
 import { getRegistrationStatus } from "./registration-window";
 import type { MatchdayActionResult, ScheduledLeague } from "./types";
 
 const UNIQUE_VIOLATION = "23505";
+
+// Zero-width space, zero-width non-joiner, zero-width joiner, and the
+// BOM/zero-width-no-break-space — Google Docs/Gmail copy-paste sometimes
+// leaves one at the start of a pasted line (confirmed on a real pasted
+// roster). Filtered by code point rather than a `[...]` character class:
+// a class containing the zero-width joiner reads as a misleading/joined
+// character sequence to static analysis, since ZWJ's entire purpose is
+// combining adjacent code points into one glyph.
+const ZERO_WIDTH_CODE_POINTS = new Set([0x200b, 0x200c, 0x200d, 0xfeff]);
+
+function stripZeroWidthChars(text: string): string {
+  return Array.from(text)
+    .filter((ch) => !ZERO_WIDTH_CODE_POINTS.has(ch.codePointAt(0) ?? -1))
+    .join("");
+}
 
 function revalidateGamePaths(gameId: string) {
   revalidatePath("/matchday");
@@ -265,4 +281,131 @@ export async function createOneOffGame(input: {
   revalidatePath("/matchday");
   revalidatePath(`/matchday/${gameId}`);
   return { ok: true };
+}
+
+export interface PasteRosterResult {
+  ok: true;
+  checkedIn: string[];
+  alreadyCheckedIn: string[];
+  provisioned: string[];
+  flagged: { raw: string; closestMatch: string | null }[];
+}
+
+/**
+ * Bulk check-in from a plain pasted roster list — one name per line, no "N
+ * people" header or team split needed (unlike the report parser's rosters,
+ * these people haven't necessarily logged in themselves, e.g. Vadim's
+ * pre-game "here's who's coming" email). Uses the same fuzzy identity
+ * resolution as the report parser (resolvePlayerName), not a naive exact-slug
+ * match like checkInNewPlayer's single-name path — bulk-pasting many names
+ * at once has a much higher chance of colliding with an already-known
+ * player under a slightly different spelling, so a flagged near-miss is
+ * surfaced for a human to confirm rather than silently creating a duplicate
+ * identity.
+ */
+export async function checkInPastedRoster(
+  gameId: string,
+  rawText: string,
+): Promise<PasteRosterResult | { ok: false; error: string }> {
+  // Inlined rather than requireAdminResult() — that helper's return type is
+  // exactly MatchdayActionResult ({ok:true}|{ok:false,error}), and this
+  // function's own {ok:true} shape (PasteRosterResult) has extra required
+  // fields, so the two "ok:true" shapes would be indistinguishable to callers
+  // narrowing on `.ok` alone.
+  const admin = await getCurrentUser();
+  if (!admin?.isAdmin) return { ok: false, error: "Admin access required." };
+
+  const client = createServiceRoleClient();
+
+  const { data: gameRow } = await client.from("scheduled_games").select("league").eq("game_id", gameId).maybeSingle();
+  if (!gameRow) return { ok: false, error: "Game not found." };
+
+  // Strips zero-width/BOM characters Gmail/Google Docs copy-paste sometimes
+  // leaves at the start of a line (confirmed on a real pasted list), not
+  // just plain whitespace.
+  const names = rawText
+    .split("\n")
+    .map((line) => stripZeroWidthChars(line).trim())
+    .filter(Boolean);
+  if (names.length === 0) return { ok: false, error: "Paste at least one name." };
+
+  const { data: playerRows } = await client
+    .from("players")
+    .select("canonical_id, display_name, aliases, known_emails, leagues, status");
+  const knownPlayers: PlayerIdentity[] = (playerRows ?? []).map((row) => ({
+    canonicalId: row.canonical_id,
+    displayName: row.display_name,
+    aliases: row.aliases ?? [],
+    knownEmails: row.known_emails ?? [],
+    leagues: row.leagues ?? [],
+    status: row.status,
+  }));
+
+  const { data: existingCheckins } = await client
+    .from("game_checkins")
+    .select("canonical_id")
+    .eq("game_id", gameId)
+    .is("removed_at", null);
+  const checkedInIds = new Set((existingCheckins ?? []).map((r) => r.canonical_id));
+
+  const provisioned: PlayerIdentity[] = [];
+  const flagged: { raw: string; closestMatch: string | null }[] = [];
+  const toCheckIn: { canonicalId: string; displayName: string }[] = [];
+  const alreadyCheckedIn: string[] = [];
+
+  for (const raw of names) {
+    const resolution = resolvePlayerName(raw, [...knownPlayers, ...provisioned]);
+    let canonicalId: string;
+    let displayName: string;
+
+    if (resolution.status === "exact" && resolution.canonicalId) {
+      canonicalId = resolution.canonicalId;
+      displayName = knownPlayers.find((p) => p.canonicalId === canonicalId)?.displayName ?? raw;
+    } else if (resolution.status === "flagged") {
+      flagged.push({ raw, closestMatch: resolution.candidates[0]?.displayName ?? null });
+      continue;
+    } else {
+      const provisional = createProvisionalIdentity(raw);
+      provisioned.push({ ...provisional, leagues: [gameRow.league as ScheduledLeague] });
+      canonicalId = provisional.canonicalId;
+      displayName = provisional.displayName;
+    }
+
+    if (checkedInIds.has(canonicalId)) {
+      alreadyCheckedIn.push(displayName);
+    } else {
+      toCheckIn.push({ canonicalId, displayName });
+      checkedInIds.add(canonicalId); // a repeated line in the paste shouldn't double-insert
+    }
+  }
+
+  if (provisioned.length > 0) {
+    const { error } = await client.from("players").upsert(
+      provisioned.map((p) => ({
+        canonical_id: p.canonicalId,
+        display_name: p.displayName,
+        aliases: p.aliases,
+        known_emails: p.knownEmails,
+        leagues: p.leagues,
+        status: p.status,
+      })),
+    );
+    if (error) return { ok: false, error: "Could not save the new players from this roster." };
+  }
+
+  if (toCheckIn.length > 0) {
+    const { error } = await client.from("game_checkins").insert(
+      toCheckIn.map((p) => ({ game_id: gameId, canonical_id: p.canonicalId, checked_in_by: admin.canonicalId })),
+    );
+    if (error) return { ok: false, error: "Could not check in these players." };
+  }
+
+  revalidateGamePaths(gameId);
+  return {
+    ok: true,
+    checkedIn: toCheckIn.map((p) => p.displayName),
+    alreadyCheckedIn,
+    provisioned: provisioned.map((p) => p.displayName),
+    flagged,
+  };
 }

@@ -4,6 +4,8 @@ import { formatMatchDateLabel } from "@/lib/format";
 import { getGameCheckinDetails, getRosterForPicker, getScheduledGameById } from "@/lib/matchday/data";
 import { cancelScheduledGameFormAction, removeCheckInFormAction } from "@/lib/matchday/actions";
 import { AddPlayerPicker } from "../../../_components/AddPlayerPicker";
+import { BackLink } from "../../../_components/BackLink";
+import { PasteRosterForm } from "../../../_components/PasteRosterForm";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +25,7 @@ export default async function EditGamePage({
 
   return (
     <main>
-      <a href={`/matchday/${gameId}`} className="back-link">
-        ← Back to check-in
-      </a>
+      <BackLink fallbackHref={`/matchday/${gameId}`} />
       <header className="screen-header-row">
         <h1 className="screen-header">Edit {formatMatchDateLabel(game.date)}</h1>
       </header>
@@ -53,6 +53,22 @@ export default async function EditGamePage({
       <section className="card">
         <h2>Add a player</h2>
         <AddPlayerPicker gameId={gameId} roster={roster} />
+      </section>
+
+      <section className="card">
+        <h2>Paste a roster list</h2>
+        <PasteRosterForm gameId={gameId} />
+      </section>
+
+      <section className="card">
+        <h2>Already have the match report?</h2>
+        <p className="note">
+          Once the game&rsquo;s been played, paste the full report (score, goals, MVP) instead —
+          that&rsquo;s a separate step from checking people in beforehand.
+        </p>
+        <a href="/matches/import" className="rulebook-link">
+          Import match report →
+        </a>
       </section>
 
       <section className="card">
