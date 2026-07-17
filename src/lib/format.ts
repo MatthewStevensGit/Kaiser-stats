@@ -12,6 +12,11 @@ export function formatMatchDateLabel(iso: string): string {
     .replace(",", "");
 }
 
+/** A chat message's send time in the viewer's own local time, e.g. "3:45 PM" — unlike match dates, this is a live timestamp, not a fixed calendar date, so it deliberately isn't forced to UTC. */
+export function formatChatTimestamp(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 export function formatScoreLine(homeScore: number, awayScore: number): string {
   return `${homeScore} – ${awayScore}`;
 }

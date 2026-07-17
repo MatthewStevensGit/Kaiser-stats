@@ -284,3 +284,21 @@ create table if not exists season_stats_cutoff (
 );
 
 alter table season_stats_cutoff enable row level security;
+
+-- Migration (2026-07-16): club chat. Same RLS-with-no-public-policies
+-- posture as every other table in this app -- reads and writes both go
+-- through the service-role client (src/lib/chat/data.ts, src/lib/chat/actions.ts),
+-- gated by requiring a logged-in session server-side, never a public policy.
+-- No Realtime wiring (that would need a public/authenticated SELECT policy for
+-- the browser client to receive postgres_changes events) -- the chat page
+-- polls (client-side refresh interval) instead, matching this app's existing
+-- "no public policies, ever" rule rather than carving out an exception.
+create table if not exists chat_messages (
+  id bigint generated always as identity primary key,
+  sender_canonical_id text not null references players (canonical_id),
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table chat_messages enable row level security;
+create index if not exists chat_messages_created_at_idx on chat_messages (created_at);

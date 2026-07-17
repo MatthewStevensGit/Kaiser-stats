@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { id: "matchday", label: "Matchday", href: "/matchday" },
   { id: "other-stats", label: "Other Stats", href: "/other-stats" },
   { id: "rules", label: "Rules", href: "/rules" },
+  { id: "chat", label: "Chat", href: "/chat" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
