@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { id: "matchday", label: "Matchday", href: "/matchday" },
   { id: "other-stats", label: "Other Stats", href: "/other-stats" },
   { id: "rules", label: "Rules", href: "/rules" },
-  { id: "chat", label: "Chat", href: "/chat" },
+  { id: "chat", label: "💬", href: "/chat", ariaLabel: "Chat" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -38,6 +38,7 @@ export function BottomNav({ displayName }: { displayName?: string }) {
             href={item.href}
             className={active ? "bottom-nav-item bottom-nav-item-active" : "bottom-nav-item"}
             aria-current={active ? "page" : undefined}
+            aria-label={"ariaLabel" in item ? item.ariaLabel : undefined}
           >
             {item.label}
           </a>
@@ -46,8 +47,8 @@ export function BottomNav({ displayName }: { displayName?: string }) {
 
       {displayName ? (
         <>
-          <a href="/settings" className="bottom-nav-item bottom-nav-item-name-case">
-            {displayName.split(" ")[0] ?? displayName}
+          <a href="/settings" className="bottom-nav-item" aria-label="Settings">
+            ⚙️
           </a>
           <button type="button" onClick={handleLogOut} className="bottom-nav-item bottom-nav-logout">
             Log Out

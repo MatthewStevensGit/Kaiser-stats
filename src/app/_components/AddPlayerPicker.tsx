@@ -66,11 +66,14 @@ export function AddPlayerPicker({
           </li>
         ))}
       </ul>
-      {filter.trim() && (
-        <button type="button" className="add-player-picker-new" onClick={addNew} disabled={isPending}>
-          + Add &ldquo;{filter.trim()}&rdquo; as a new player
-        </button>
-      )}
+      <button
+        type="button"
+        className="add-player-picker-new"
+        onClick={addNew}
+        disabled={isPending || !filter.trim()}
+      >
+        {filter.trim() ? <>+ Create Player: &ldquo;{filter.trim()}&rdquo;</> : "+ Create Player"}
+      </button>
     </div>
   );
 }

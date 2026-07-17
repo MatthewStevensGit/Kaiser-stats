@@ -892,6 +892,9 @@ th.num {
 }
 
 .add-player-picker-new {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
   background: none;
   border: 1px dashed var(--accent);
   color: var(--accent);
@@ -900,6 +903,12 @@ th.num {
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.add-player-picker-new:disabled {
+  border-color: var(--border);
+  color: var(--text-secondary);
+  cursor: not-allowed;
 }
 
 /* Capacity gauge — semicircle speedometer style, replacing the old
@@ -1039,12 +1048,6 @@ th.num {
 
 .bottom-nav-item-active {
   color: var(--nav-fg-active);
-}
-
-/* A person's own name, not a section label like "Table" — cancels
-   .bottom-nav-item's all-caps treatment for it. */
-.bottom-nav-item-name-case {
-  text-transform: none;
 }
 
 .bottom-nav-logout {
