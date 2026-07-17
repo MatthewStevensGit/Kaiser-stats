@@ -207,21 +207,25 @@ export function computeSeasonAwards(
 }
 
 export interface AwardTally {
-  leagueTitles: number;
-  goldenBoots: number;
+  leagueTitleYears: number[];
+  goldenBootYears: number[];
 }
 
-/** Tallies league titles and Golden Boots per player across every closed season's awards. */
+/**
+ * Tallies league titles and Golden Boots per player across every closed
+ * season's awards — keeps the actual YEAR of each win (not just a count),
+ * so the UI can show e.g. "'23 '24" instead of an opaque "x2".
+ */
 export function tallyAwardCounts(awards: SeasonAwardWinners[]): Map<string, AwardTally> {
   const tally = new Map<string, AwardTally>();
-  function bump(canonicalId: string, key: keyof AwardTally) {
-    const existing = tally.get(canonicalId) ?? { leagueTitles: 0, goldenBoots: 0 };
-    existing[key] += 1;
+  function bump(canonicalId: string, key: keyof AwardTally, year: number) {
+    const existing = tally.get(canonicalId) ?? { leagueTitleYears: [], goldenBootYears: [] };
+    existing[key].push(year);
     tally.set(canonicalId, existing);
   }
   for (const award of awards) {
-    for (const id of award.leagueWinnerIds) bump(id, "leagueTitles");
-    for (const id of award.goldenBootWinnerIds) bump(id, "goldenBoots");
+    for (const id of award.leagueWinnerIds) bump(id, "leagueTitleYears", award.year);
+    for (const id of award.goldenBootWinnerIds) bump(id, "goldenBootYears", award.year);
   }
   return tally;
 }

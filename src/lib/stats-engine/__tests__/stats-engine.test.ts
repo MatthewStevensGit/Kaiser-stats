@@ -188,14 +188,14 @@ describe("computeSeasonAwards / tallyAwardCounts", () => {
     expect(award.goldenBootWinnerIds).toEqual(["p2"]);
   });
 
-  it("tallies league titles and Golden Boots per player across multiple seasons", () => {
+  it("tallies league titles and Golden Boots per player across multiple seasons, keeping the actual years", () => {
     const awards = [
       { year: 2022, leagueWinnerIds: ["p1"], goldenBootWinnerIds: ["p2"] },
       { year: 2023, leagueWinnerIds: ["p1"], goldenBootWinnerIds: ["p1"] },
     ];
     const tally = tallyAwardCounts(awards);
-    expect(tally.get("p1")).toEqual({ leagueTitles: 2, goldenBoots: 1 });
-    expect(tally.get("p2")).toEqual({ leagueTitles: 0, goldenBoots: 1 });
+    expect(tally.get("p1")).toEqual({ leagueTitleYears: [2022, 2023], goldenBootYears: [2023] });
+    expect(tally.get("p2")).toEqual({ leagueTitleYears: [], goldenBootYears: [2022] });
   });
 });
 

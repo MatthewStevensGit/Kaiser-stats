@@ -281,7 +281,9 @@ main {
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  /* 16px, not smaller — iOS Safari auto-zooms the whole page on focus for
+     any input under 16px, a jarring mobile-specific annoyance. */
+  font-size: 1rem;
 }
 
 .login-form-input:focus-visible {

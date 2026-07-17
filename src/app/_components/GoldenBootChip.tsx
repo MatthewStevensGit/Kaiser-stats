@@ -1,9 +1,13 @@
-/** One boot icon per season Golden Boot won — same size/repeat pattern as GoalChip/AssistChip. */
-export function GoldenBootChip({ count }: { count: number }) {
-  if (count <= 0) return null;
+/** One boot per season Golden Boot won, each tagged with that season's 2-digit year. */
+export function GoldenBootChip({ years }: { years: number[] }) {
+  if (years.length === 0) return null;
   return (
-    <span className="goal-chip" aria-label={`${count} Golden Boot${count === 1 ? "" : "s"}`}>
-      <span aria-hidden="true">{"🥾".repeat(count)}</span>
+    <span className="goal-chip" aria-label={`Golden Boot in ${years.join(", ")}`}>
+      {years.map((y) => (
+        <span key={y} aria-hidden="true">
+          🥾&apos;{String(y).slice(-2)}
+        </span>
+      ))}
     </span>
   );
 }

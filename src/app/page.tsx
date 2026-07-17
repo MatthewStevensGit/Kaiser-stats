@@ -146,7 +146,7 @@ export default async function Home({
                         {p.displayName}
                       </a>
                       {year === ALL_YEARS_ID && (
-                        <LeagueTitleChip count={awardTally.get(p.canonicalId)?.leagueTitles ?? 0} />
+                        <LeagueTitleChip years={awardTally.get(p.canonicalId)?.leagueTitleYears ?? []} />
                       )}
                     </td>
                     <td className="num">{p.games}</td>
@@ -186,7 +186,7 @@ export default async function Home({
                         {p.displayName}
                       </a>
                       {year === ALL_YEARS_ID && (
-                        <GoldenBootChip count={awardTally.get(p.canonicalId)?.goldenBoots ?? 0} />
+                        <GoldenBootChip years={awardTally.get(p.canonicalId)?.goldenBootYears ?? []} />
                       )}
                     </td>
                     <td className="num">{p.goals}</td>
