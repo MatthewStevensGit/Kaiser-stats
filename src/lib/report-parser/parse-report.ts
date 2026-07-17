@@ -22,6 +22,44 @@ export function extractFirstPickAnnotation(rawFileText: string): { firstPickRaw:
   };
 }
 
+// Gmail's own "copy the thread text" output repeats this exact boilerplate
+// once per message: a sender-name line, then a "Day, Mon DD[, YYYY],
+// H:MM AM/PM" line, then a "to <comma-separated recipients>" line — none of
+// it is report content, and leaving it in wastes the model's attention (and
+// once already caused a real parse to trip up trying to treat "to Eduard,
+// Muravchik, ..." as game content). "Inbox" and "Summarize this email" are
+// separate stray UI-chrome lines Gmail's copy also includes.
+const GMAIL_DATE_LINE = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+\w+\s+\d{1,2}(,\s+\d{4})?,?\s+\d{1,2}:\d{2}\s*(AM|PM)$/i;
+
+/**
+ * Strips Gmail copy-paste chrome (see GMAIL_DATE_LINE's comment) out of a
+ * pasted thread before it reaches the model — deliberately applied inside
+ * parseReportText itself (not left to each caller, unlike
+ * extractFirstPickAnnotation's human-supplied annotation) since this is
+ * pure noise removal that's always safe, regardless of source.
+ */
+export function stripGmailChrome(rawText: string): string {
+  const lines = rawText.split("\n");
+  const kept: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trim();
+
+    if (/^inbox$/i.test(trimmed) || /^summarize this email$/i.test(trimmed)) continue;
+
+    const nextTrimmed = lines[i + 1]?.trim() ?? "";
+    if (trimmed.length > 0 && GMAIL_DATE_LINE.test(nextTrimmed)) {
+      i += 1; // also skip the date line
+      if (lines[i + 1]?.trim().toLowerCase().startsWith("to ")) i += 1; // and the recipients line, if present
+      continue;
+    }
+
+    kept.push(lines[i]!);
+  }
+
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // A real response has been observed to come back HTTP 200, finishReason
 // "STOP" (Gemini considers itself done), but with the JSON body truncated
 // anyway — confirmed via usageMetadata showing thousands of tokens spent on
@@ -33,7 +71,7 @@ const MAX_PARSE_ATTEMPTS = 2;
 
 export async function parseReportText(apiKey: string, threadText: string): Promise<RawExtraction> {
   const todayIso = new Date().toISOString().slice(0, 10);
-  const prompt = buildExtractionPrompt(threadText, todayIso);
+  const prompt = buildExtractionPrompt(stripGmailChrome(threadText), todayIso);
 
   let lastMalformedResponse = "";
   for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {

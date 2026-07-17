@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { extractFirstPickAnnotation, parseReportText, resolveExtractionToGameRecord } from "../parse-report";
+import { extractFirstPickAnnotation, parseReportText, resolveExtractionToGameRecord, stripGmailChrome } from "../parse-report";
 import { callGemini } from "../gemini-client";
 import type { RawExtraction } from "../types";
 import type { PlayerIdentity } from "../../stats-engine/types";
@@ -393,5 +393,50 @@ describe("extractFirstPickAnnotation", () => {
     const { firstPickRaw, threadText } = extractFirstPickAnnotation(raw);
     expect(firstPickRaw).toBeNull();
     expect(threadText).toBe(raw);
+  });
+});
+
+describe("stripGmailChrome", () => {
+  it("strips Inbox/Summarize/sender-date-recipients chrome, keeps the subject line (real pasted example)", () => {
+    const raw = [
+      "Sunday, june 14",
+      "Inbox",
+      "Summarize this email",
+      "",
+      "Vadim Palmer",
+      "Sun, Jun 14, 1:22 PM",
+      "to Eduard, Muravchik, idolg, kbarona, Mihail, ruscharge, evreychik1, quanmng, avolkin67, Isaac, Jonathan, Boris, nos01, Oleg, bryanfrid, me, matthew.rakov, levinmik, stolyarmarc18, dsherlis, kirill011594, emre.kapuzov94, lazzturkkemran49, Bryan, polarbear1850",
+      "",
+      "20 people",
+      "",
+      "Sandrik, Alan, Lesha, Denis, Boris",
+    ].join("\n");
+
+    const cleaned = stripGmailChrome(raw);
+    expect(cleaned).toContain("Sunday, june 14");
+    expect(cleaned).toContain("20 people");
+    expect(cleaned).toContain("Sandrik, Alan, Lesha, Denis, Boris");
+    expect(cleaned).not.toContain("Inbox");
+    expect(cleaned).not.toContain("Summarize this email");
+    expect(cleaned).not.toContain("Vadim Palmer");
+    expect(cleaned).not.toContain("1:22 PM");
+    expect(cleaned).not.toContain("to Eduard");
+  });
+
+  it("handles a date line that does include the year", () => {
+    const raw = ["Alan Cho", "Sat, Jul 11, 2026, 7:45 AM", "to Someone, Else", "", "Report body here."].join("\n");
+    expect(stripGmailChrome(raw)).toBe("Report body here.");
+  });
+
+  it("leaves plain report text with no Gmail chrome completely unchanged in substance", () => {
+    const raw = "Vadim, 2026-06-27:\n\n18 people\n\nTeam Orange: Isaac, Slava";
+    expect(stripGmailChrome(raw)).toBe(raw);
+  });
+
+  it("doesn't mistake the subject line itself for a Gmail date line", () => {
+    // "Sunday, june 14" starts with "Sun" but isn't followed by a comma
+    // immediately after the day abbreviation — must not be stripped.
+    const cleaned = stripGmailChrome("Sunday, june 14\nSome report content.");
+    expect(cleaned).toContain("Sunday, june 14");
   });
 });
