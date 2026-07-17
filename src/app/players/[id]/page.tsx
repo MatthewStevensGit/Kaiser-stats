@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { aggregateStandings } from "@/lib/stats-engine/aggregate";
-import { listGameRecords, listPlayers, listSeasonStandingRows } from "@/lib/stats-engine/data";
+import { listGameRecords, listPlayers, listSeasonStandingRows, listSeasonStatsCutoffs } from "@/lib/stats-engine/data";
+import { mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "@/lib/stats-engine/game-records";
 import { formatWDL } from "@/lib/format";
 import { getPlayerGameLog } from "@/lib/stats-engine/player-game-log";
 import { PlayerMatchRow } from "../../_components/PlayerMatchRow";
@@ -11,12 +12,20 @@ export default async function PlayerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [players, rows, games] = await Promise.all([listPlayers(), listSeasonStandingRows(), listGameRecords()]);
+  const [players, rows, games, cutoffs] = await Promise.all([
+    listPlayers(),
+    listSeasonStandingRows(),
+    listGameRecords(),
+    listSeasonStatsCutoffs(),
+  ]);
 
   const player = players.find((p) => p.canonicalId === id);
   if (!player) notFound();
 
-  const { players: totals } = aggregateStandings(rows, players, "merged");
+  const { players: spreadsheetTotals } = aggregateStandings(rows, players, "merged");
+  const eligibleGames = selectStatsEligibleGames(games, cutoffs, "all");
+  const reportTotals = rollupGameRecords(eligibleGames, players);
+  const totals = mergePlayerSeasonStats(spreadsheetTotals, reportTotals);
   const stats = totals.find((p) => p.canonicalId === id);
   const summary = stats
     ? `${formatWDL(stats.wins, stats.ties, stats.losses)} · ${stats.goals} GOALS`

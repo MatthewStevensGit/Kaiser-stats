@@ -266,3 +266,21 @@ alter table game_records add column if not exists away_team_label text not null 
 -- attempt to save a real report). Needed for the report-import write path
 -- (src/lib/report-parser/save.ts) to store the raw report text.
 alter table game_records add column if not exists description text;
+
+-- Migration (2026-07-16): per-year stats cutoff. season_standing_rows is a
+-- cumulative spreadsheet snapshot as of some date; a report-imported
+-- game_records row only adds to the Table's totals (see
+-- src/lib/stats-engine/game-records.ts's mergePlayerSeasonStats and
+-- selectStatsEligibleGames, wired in from src/app/page.tsx) when its date is
+-- strictly after that year's cutoff_date here -- otherwise it's presumed
+-- already counted in the spreadsheet. A year with no row here is a fully
+-- closed season (spreadsheet already covers the whole year), so nothing
+-- ever auto-counts for it. Only the current in-progress season needs a row;
+-- update cutoff_date each time a newer spreadsheet gets backfilled
+-- (see docs/data-contract.md).
+create table if not exists season_stats_cutoff (
+  year integer primary key,
+  cutoff_date date not null
+);
+
+alter table season_stats_cutoff enable row level security;

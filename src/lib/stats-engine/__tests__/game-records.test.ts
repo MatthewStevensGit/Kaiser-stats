@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { rollupGameRecords } from "../game-records";
-import type { GameRecord, PlayerIdentity } from "../types";
+import { mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "../game-records";
+import type { GameRecord, PlayerIdentity, PlayerSeasonStats } from "../types";
 
 const players: PlayerIdentity[] = [
   { canonicalId: "p1", displayName: "Ari Fox", aliases: [], knownEmails: [], leagues: ["sunday"], status: "regular" },
@@ -143,5 +143,88 @@ describe("rollupGameRecords", () => {
       players,
     );
     expect(stats.find((s) => s.canonicalId === "mystery")?.displayName).toBe("mystery");
+  });
+});
+
+describe("selectStatsEligibleGames", () => {
+  // games[0].date = "2026-07-05", games[1].date = "2026-07-06"
+  it("only includes games strictly after that year's cutoff", () => {
+    const cutoffs = new Map([[2026, "2026-07-05"]]);
+    const eligible = selectStatsEligibleGames(games, cutoffs, "all");
+    expect(eligible.map((g) => g.gameId)).toEqual(["g2"]);
+  });
+
+  it("excludes every game for a year with no cutoff row at all (fully closed season)", () => {
+    const eligible = selectStatsEligibleGames(games, new Map(), "all");
+    expect(eligible).toEqual([]);
+  });
+
+  it("also filters by the requested year, on top of the cutoff", () => {
+    const cutoffs = new Map([
+      [2025, "2025-01-01"],
+      [2026, "2026-01-01"],
+    ]);
+    const mixedYearGames: GameRecord[] = [
+      ...games,
+      { ...games[0]!, gameId: "g-2025", date: "2025-06-01" },
+    ];
+    expect(selectStatsEligibleGames(mixedYearGames, cutoffs, "2026").map((g) => g.gameId)).toEqual(["g1", "g2"]);
+    expect(selectStatsEligibleGames(mixedYearGames, cutoffs, "2025").map((g) => g.gameId)).toEqual(["g-2025"]);
+  });
+});
+
+describe("mergePlayerSeasonStats", () => {
+  function stat(overrides: Partial<PlayerSeasonStats>): PlayerSeasonStats {
+    return {
+      canonicalId: "p1",
+      displayName: "Ari Fox",
+      games: 0,
+      wins: 0,
+      losses: 0,
+      ties: 0,
+      goals: 0,
+      assists: 0,
+      mvpCount: 0,
+      avgDraftPosition: null,
+      notableMentions: [],
+      plusMinus: 0,
+      sources: [],
+      ...overrides,
+    };
+  }
+
+  it("adds a report-side player's stats on top of their spreadsheet-side stats", () => {
+    const spreadsheet = [stat({ games: 10, wins: 6, losses: 3, ties: 1, goals: 4, plusMinus: 3, sources: ["soccer_2026.xlsx"] })];
+    const report = [stat({ games: 1, wins: 1, losses: 0, ties: 0, goals: 2, assists: 1, mvpCount: 1, plusMinus: 1, sources: ["email:g1"] })];
+
+    const merged = mergePlayerSeasonStats(spreadsheet, report);
+    expect(merged).toEqual([
+      stat({
+        games: 11,
+        wins: 7,
+        losses: 3,
+        ties: 1,
+        goals: 6,
+        assists: 1,
+        mvpCount: 1,
+        plusMinus: 4,
+        sources: ["soccer_2026.xlsx", "email:g1"],
+      }),
+    ]);
+  });
+
+  it("includes a player who only exists on one side untouched", () => {
+    const spreadsheet = [stat({ canonicalId: "p1", games: 5 })];
+    const report = [stat({ canonicalId: "p2", displayName: "Bex Tanaka", games: 1 })];
+
+    const merged = mergePlayerSeasonStats(spreadsheet, report);
+    expect(merged.find((p) => p.canonicalId === "p1")).toMatchObject({ games: 5 });
+    expect(merged.find((p) => p.canonicalId === "p2")).toMatchObject({ games: 1, displayName: "Bex Tanaka" });
+  });
+
+  it("takes the report side's avgDraftPosition when the spreadsheet side's is null", () => {
+    const spreadsheet = [stat({ avgDraftPosition: null })];
+    const report = [stat({ avgDraftPosition: 2.5 })];
+    expect(mergePlayerSeasonStats(spreadsheet, report)[0]?.avgDraftPosition).toBe(2.5);
   });
 });

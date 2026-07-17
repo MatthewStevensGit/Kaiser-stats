@@ -159,6 +159,18 @@ export function buildGameRecords(
   });
 }
 
+interface SeasonStatsCutoffDbRow {
+  year: number;
+  cutoff_date: string;
+}
+
+/** See season_stats_cutoff's doc comment in supabase/schema.sql. */
+export async function listSeasonStatsCutoffs(): Promise<Map<number, string>> {
+  const client = createServiceRoleClient();
+  const { data } = await client.from("season_stats_cutoff").select("year, cutoff_date");
+  return new Map((data as SeasonStatsCutoffDbRow[] | null ?? []).map((row) => [row.year, row.cutoff_date]));
+}
+
 export async function listGameRecords(): Promise<GameRecord[]> {
   const client = createServiceRoleClient();
   const [{ data: gameRows }, { data: rosterRows }, { data: goalRows }, { data: mentionRows }] = await Promise.all([

@@ -1,5 +1,6 @@
 import { aggregateStandings, filterSeasonStandingRowsByYear, rankByRate } from "@/lib/stats-engine/aggregate";
-import { listPlayers, listSeasonStandingRows } from "@/lib/stats-engine/data";
+import { listGameRecords, listPlayers, listSeasonStandingRows, listSeasonStatsCutoffs } from "@/lib/stats-engine/data";
+import { mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "@/lib/stats-engine/game-records";
 import { formatPlusMinus, formatWDL } from "@/lib/format";
 import { PillTabs } from "./_components/PillTabs";
 
@@ -12,7 +13,10 @@ type TableTab = "plus-minus" | "golden-boot";
 // season's stats summed together, i.e. today's existing all-time behavior.
 const ALL_YEARS_ID = "all";
 const YEARS = ["2026", "2025", "2024", "2023", "2022", ALL_YEARS_ID];
-const DEFAULT_YEAR = ALL_YEARS_ID;
+// Most recent real season, not "all" — see season_stats_cutoff's doc comment
+// in supabase/schema.sql for why "all" isn't a great default once report-
+// imported games start needing to merge in on top of the spreadsheet backfill.
+const DEFAULT_YEAR = "2026";
 
 function isTableTab(value: string | undefined): value is TableTab {
   return value === "plus-minus" || value === "golden-boot";
@@ -38,9 +42,17 @@ export default async function Home({
   const year = isYear(rawYear) ? rawYear : DEFAULT_YEAR;
 
   // Merged (saturday+sunday) only, for now — league split may return in a later slice.
-  const [players, allRows] = await Promise.all([listPlayers(), listSeasonStandingRows()]);
+  const [players, allRows, allGames, cutoffs] = await Promise.all([
+    listPlayers(),
+    listSeasonStandingRows(),
+    listGameRecords(),
+    listSeasonStatsCutoffs(),
+  ]);
   const rows = filterSeasonStandingRowsByYear(allRows, year);
-  const { players: totals } = aggregateStandings(rows, players, "merged");
+  const { players: spreadsheetTotals } = aggregateStandings(rows, players, "merged");
+  const eligibleGames = selectStatsEligibleGames(allGames, cutoffs, year);
+  const reportTotals = rollupGameRecords(eligibleGames, players);
+  const totals = mergePlayerSeasonStats(spreadsheetTotals, reportTotals);
 
   const plusMinusRanked = [...totals].sort(
     (a, b) => b.plusMinus - a.plusMinus || b.games - a.games,

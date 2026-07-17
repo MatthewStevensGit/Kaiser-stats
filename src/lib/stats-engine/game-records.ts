@@ -109,3 +109,75 @@ export function rollupGameRecords(
 
   return Array.from(totals.values());
 }
+
+/**
+ * Picks which report-imported games (see rollupGameRecords above) should
+ * additionally count toward the Table's totals, on top of the spreadsheet
+ * backfill (aggregateStandings()) — see season_stats_cutoff's doc comment in
+ * supabase/schema.sql. A game only counts when its year has a cutoff row AND
+ * its date is strictly after that cutoff; a year with no cutoff row is
+ * treated as a fully closed season (its spreadsheet is already complete),
+ * so nothing for it ever auto-counts here, no matter how many game_records
+ * exist for that year (e.g. from a later historical report backfill).
+ * `year: "all"` matches every year that has a cutoff, same "all" convention
+ * as filterSeasonStandingRowsByYear.
+ */
+export function selectStatsEligibleGames(
+  games: GameRecord[],
+  cutoffsByYear: Map<number, string>,
+  year: string,
+): GameRecord[] {
+  return games.filter((game) => {
+    const gameYear = Number(game.date.slice(0, 4));
+    if (year !== "all" && String(gameYear) !== year) return false;
+    const cutoff = cutoffsByYear.get(gameYear);
+    return cutoff !== undefined && game.date > cutoff;
+  });
+}
+
+/**
+ * Combines a spreadsheet-derived PlayerSeasonStats[] (aggregateStandings())
+ * with a report-derived one (rollupGameRecords(), already narrowed to
+ * stats-eligible games via selectStatsEligibleGames) into one per-player
+ * total — the "going live with real data" query layer's last step, so a
+ * player who appears in both sources gets one combined row instead of two.
+ * avgDraftPosition only ever comes from the report side in practice (the
+ * spreadsheet path always reports it null — see PlayerSeasonStats' doc
+ * comment); this simple averages both sides' non-null values, which is only
+ * an approximation (not weighted by game count) in the generic case.
+ */
+export function mergePlayerSeasonStats(
+  spreadsheetStats: PlayerSeasonStats[],
+  reportStats: PlayerSeasonStats[],
+): PlayerSeasonStats[] {
+  const merged = new Map<string, PlayerSeasonStats>();
+  for (const stats of spreadsheetStats) {
+    merged.set(stats.canonicalId, { ...stats, notableMentions: [...stats.notableMentions], sources: [...stats.sources] });
+  }
+
+  for (const stats of reportStats) {
+    const existing = merged.get(stats.canonicalId);
+    if (!existing) {
+      merged.set(stats.canonicalId, { ...stats, notableMentions: [...stats.notableMentions], sources: [...stats.sources] });
+      continue;
+    }
+    existing.games += stats.games;
+    existing.wins += stats.wins;
+    existing.losses += stats.losses;
+    existing.ties += stats.ties;
+    existing.goals += stats.goals;
+    existing.assists += stats.assists;
+    existing.mvpCount += stats.mvpCount;
+    existing.plusMinus += stats.plusMinus;
+    existing.notableMentions.push(...stats.notableMentions);
+    existing.sources.push(...stats.sources);
+    existing.avgDraftPosition =
+      existing.avgDraftPosition === null
+        ? stats.avgDraftPosition
+        : stats.avgDraftPosition === null
+          ? existing.avgDraftPosition
+          : (existing.avgDraftPosition + stats.avgDraftPosition) / 2;
+  }
+
+  return Array.from(merged.values());
+}
