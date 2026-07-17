@@ -32,7 +32,8 @@ export function extractFirstPickAnnotation(rawFileText: string): { firstPickRaw:
 const MAX_PARSE_ATTEMPTS = 2;
 
 export async function parseReportText(apiKey: string, threadText: string): Promise<RawExtraction> {
-  const prompt = buildExtractionPrompt(threadText);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const prompt = buildExtractionPrompt(threadText, todayIso);
 
   let lastMalformedResponse = "";
   for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
