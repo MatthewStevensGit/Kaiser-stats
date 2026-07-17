@@ -121,16 +121,31 @@ const NOTABLE_MENTION_COLUMNS = "game_id, canonical_id, quote";
  * Inverse of buildPersistenceRows() in src/lib/report-parser/persist.ts —
  * regroups the four flat per-game tables back into one GameRecord per game.
  */
+/** Groups rows by game_id once, up front — O(rows), instead of every game re-scanning the entire array (see buildGameRecords). */
+function groupByGameId<T extends { game_id: string }>(rows: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const forGame = grouped.get(row.game_id) ?? [];
+    forGame.push(row);
+    grouped.set(row.game_id, forGame);
+  }
+  return grouped;
+}
+
 export function buildGameRecords(
   gameRows: GameRecordDbRow[],
   rosterRows: RosterSpotDbRow[],
   goalRows: GoalEventDbRow[],
   mentionRows: NotableMentionDbRow[],
 ): GameRecord[] {
+  const rosterByGame = groupByGameId(rosterRows);
+  const goalsByGame = groupByGameId(goalRows);
+  const mentionsByGame = groupByGameId(mentionRows);
+
   return gameRows.map((row) => {
-    const roster = rosterRows.filter((r) => r.game_id === row.game_id);
-    const goals = goalRows.filter((g) => g.game_id === row.game_id);
-    const mentions = mentionRows.filter((m) => m.game_id === row.game_id);
+    const roster = rosterByGame.get(row.game_id) ?? [];
+    const goals = goalsByGame.get(row.game_id) ?? [];
+    const mentions = mentionsByGame.get(row.game_id) ?? [];
 
     return {
       gameId: row.game_id,

@@ -55,47 +55,58 @@ export async function saveResolvedGame(
     if (error) return rollbackAndFail("Could not save the new players from this report.");
   }
 
-  if (rosterSpotRows.length > 0) {
-    const { error } = await client.from("roster_spots").insert(rosterSpotRows);
-    if (error) return rollbackAndFail("Could not save the rosters from this report.");
-  }
+  // These three don't reference each other (only game_records/players, both
+  // already settled above), so they run concurrently instead of as three
+  // sequential round-trips — this was the biggest chunk of "Save" feeling
+  // slow, since Supabase round-trip latency was being paid 3x in a row for
+  // no reason.
+  const [rosterResult, goalResult, mentionResult] = await Promise.all([
+    rosterSpotRows.length > 0 ? client.from("roster_spots").insert(rosterSpotRows) : { error: null },
+    goalEventRows.length > 0 ? client.from("goal_events").insert(goalEventRows) : { error: null },
+    notableMentionRows.length > 0 ? client.from("notable_mentions").insert(notableMentionRows) : { error: null },
+  ]);
+  if (rosterResult.error) return rollbackAndFail("Could not save the rosters from this report.");
+  if (goalResult.error) return rollbackAndFail("Could not save the goals from this report.");
+  if (mentionResult.error) return rollbackAndFail("Could not save the notable mentions from this report.");
 
-  if (goalEventRows.length > 0) {
-    const { error } = await client.from("goal_events").insert(goalEventRows);
-    if (error) return rollbackAndFail("Could not save the goals from this report.");
-  }
-
-  if (notableMentionRows.length > 0) {
-    const { error } = await client.from("notable_mentions").insert(notableMentionRows);
-    if (error) return rollbackAndFail("Could not save the notable mentions from this report.");
-  }
-
-  // Best-effort only: a flagged name is a durable "needs a human" log entry,
-  // not core game data — losing one to a transient error shouldn't roll back
-  // an otherwise-successful save.
-  for (const flag of params.flaggedNames) {
-    const { data: existing } = await client
-      .from("unresolved_names_log")
-      .select("id")
-      .eq("raw_name", flag.raw)
-      .eq("source", gameRecord.source)
-      .is("resolved_at", null)
-      .limit(1);
-
-    if (!existing || existing.length === 0) {
-      const best = flag.candidates[0];
-      const { error } = await client.from("unresolved_names_log").insert({
-        raw_name: flag.raw,
-        status: flag.status,
-        candidate_canonical_id: best?.canonicalId ?? null,
-        candidate_distance: best?.distance ?? null,
-        source: gameRecord.source,
-      });
-      if (error) console.error("Failed to log flagged name", flag.raw, error);
-    }
-  }
+  await logFlaggedNames(client, params.flaggedNames, gameRecord.source);
 
   return { ok: true };
+}
+
+/**
+ * Best-effort only: a flagged name is a durable "needs a human" log entry,
+ * not core game data — losing one to a transient error shouldn't roll back
+ * an otherwise-successful save. Each flag is independent of the others (no
+ * shared state, and parse-report.ts already dedupes raw names within one
+ * game), so they run concurrently rather than one full round-trip pair at a
+ * time — the other big chunk of "Save" feeling slow on a report with
+ * several flagged names.
+ */
+async function logFlaggedNames(client: SupabaseClient, flaggedNames: NameResolution[], source: string): Promise<void> {
+  await Promise.all(
+    flaggedNames.map(async (flag) => {
+      const { data: existing } = await client
+        .from("unresolved_names_log")
+        .select("id")
+        .eq("raw_name", flag.raw)
+        .eq("source", source)
+        .is("resolved_at", null)
+        .limit(1);
+
+      if (!existing || existing.length === 0) {
+        const best = flag.candidates[0];
+        const { error } = await client.from("unresolved_names_log").insert({
+          raw_name: flag.raw,
+          status: flag.status,
+          candidate_canonical_id: best?.canonicalId ?? null,
+          candidate_distance: best?.distance ?? null,
+          source,
+        });
+        if (error) console.error("Failed to log flagged name", flag.raw, error);
+      }
+    }),
+  );
 }
 
 /** The game_records id a completed live draft creates for this date/league — see draft-actions.ts's finalizeDraft. */
@@ -167,50 +178,33 @@ export async function mergeReportIntoDraftGame(
     if (error) return { ok: false, error: "Could not save the new players from this report." };
   }
 
-  if (gameRecord.goals.length > 0) {
-    const { error } = await client.from("goal_events").insert(
-      gameRecord.goals.map((goal) => ({
-        game_id: gameId,
-        scorer_canonical_id: goal.scorerCanonicalId,
-        assist_canonical_id: goal.assistCanonicalId,
-        team: goal.team,
-      })),
-    );
-    if (error) return { ok: false, error: "Could not save the goals from this report." };
-  }
+  // Independent of each other (only game_records/players, already settled
+  // above) — run concurrently rather than as two sequential round-trips.
+  const [goalResult, mentionResult] = await Promise.all([
+    gameRecord.goals.length > 0
+      ? client.from("goal_events").insert(
+          gameRecord.goals.map((goal) => ({
+            game_id: gameId,
+            scorer_canonical_id: goal.scorerCanonicalId,
+            assist_canonical_id: goal.assistCanonicalId,
+            team: goal.team,
+          })),
+        )
+      : { error: null },
+    gameRecord.notableMentions.length > 0
+      ? client.from("notable_mentions").insert(
+          gameRecord.notableMentions.map((mention) => ({
+            game_id: gameId,
+            canonical_id: mention.canonicalId,
+            quote: mention.quote,
+          })),
+        )
+      : { error: null },
+  ]);
+  if (goalResult.error) return { ok: false, error: "Could not save the goals from this report." };
+  if (mentionResult.error) return { ok: false, error: "Could not save the notable mentions from this report." };
 
-  if (gameRecord.notableMentions.length > 0) {
-    const { error } = await client.from("notable_mentions").insert(
-      gameRecord.notableMentions.map((mention) => ({
-        game_id: gameId,
-        canonical_id: mention.canonicalId,
-        quote: mention.quote,
-      })),
-    );
-    if (error) return { ok: false, error: "Could not save the notable mentions from this report." };
-  }
-
-  for (const flag of flaggedNames) {
-    const { data: existing } = await client
-      .from("unresolved_names_log")
-      .select("id")
-      .eq("raw_name", flag.raw)
-      .eq("source", gameRecord.source)
-      .is("resolved_at", null)
-      .limit(1);
-
-    if (!existing || existing.length === 0) {
-      const best = flag.candidates[0];
-      const { error } = await client.from("unresolved_names_log").insert({
-        raw_name: flag.raw,
-        status: flag.status,
-        candidate_canonical_id: best?.canonicalId ?? null,
-        candidate_distance: best?.distance ?? null,
-        source: gameRecord.source,
-      });
-      if (error) console.error("Failed to log flagged name", flag.raw, error);
-    }
-  }
+  await logFlaggedNames(client, flaggedNames, gameRecord.source);
 
   return { ok: true };
 }
