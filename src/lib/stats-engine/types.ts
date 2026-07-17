@@ -130,8 +130,12 @@ export interface RosterSpot {
    * a confirmed league convention (each roster's first-listed player is
    * that team's captain, the rest of the list is already in draft order),
    * refined further when a report narrates the real order or a human
-   * supplies a "First pick" annotation. Only left null when something about
-   * that game's data is inconsistent enough not to trust (see
+   * supplies a "First pick" annotation. A captain (roster[0]) always keeps
+   * this null — they choose, they aren't chosen, so they're never part of
+   * the numbered sequence at all (confirmed 2026-07-16: an earlier version
+   * reserved pick 1/2 for the two captains, which inflated every real pick's
+   * number). Otherwise only left null when something about that game's data
+   * is inconsistent enough not to trust (see
    * firstPickWarning/pickOrderWarning). Historical spreadsheet-backfilled
    * games (which predate any of this) still leave it null; rollupGameRecords()
    * simply skips null values when averaging avgDraftPosition.

@@ -82,13 +82,17 @@ export interface ResolvedReport {
  * path uses (resolvePlayerName / createProvisionalIdentity), never the LLM's
  * own judgment about who a name "really" is.
  *
- * Pick numbers, in priority order:
+ * Pick numbers, in priority order. In every case, roster[0] of each side is
+ * that team's captain (see prompt.ts rule 10) — captains choose, they
+ * aren't chosen, so they always keep pickNumber: null and are never part of
+ * the numbered sequence at all; numbering starts at 1 with the first player
+ * actually drafted (confirmed 2026-07-16 — an earlier version of this
+ * reserved pick 1/2 for the two captains, which inflated every real pick's
+ * number and skewed avgDraftPosition for anyone who frequently captains).
  * 1. Default (every game): the team listed first (home) is assumed to have
- *    picked first, alternating strict snake order (2*i+1 / 2*i+2) by each
- *    roster's own listed order — this is a confirmed league convention
- *    (first-listed player on each side is that team's captain, the rest of
- *    that side's list is already in the order they were drafted), not a
- *    guess. Overrides a `docs/data-contract.md` note from before this
+ *    picked first, alternating strict snake order by each roster's own
+ *    listed order (excluding roster[0]) — a confirmed league convention,
+ *    not a guess. Overrides a `docs/data-contract.md` note from before this
  *    convention was confirmed with the league organizer.
  * 2. `firstPickRaw` (optional, human-supplied — see docs/report-parsing.md):
  *    the name of whoever actually picked first, when a specific game
@@ -97,8 +101,8 @@ export interface ResolvedReport {
  *    than guessed.
  * 3. `extraction.pickOrderRaw` (optional, model-extracted — see prompt.ts
  *    rule 10): when a report narrates the real pick-by-pick order in prose,
- *    that ground truth overrides the default for every pick after the two
- *    captains (who keep pick 1/2 from the default/firstPickRaw step above).
+ *    that ground truth overrides the default for every pick (captains are
+ *    never in this list either — see prompt.ts rule 10).
  */
 export function resolveExtractionToGameRecord(
   extraction: RawExtraction,
@@ -167,12 +171,15 @@ export function resolveExtractionToGameRecord(
   if (!firstPickWarning) {
     const firstRoster = homePicksFirst ? homeRoster : awayRoster;
     const secondRoster = homePicksFirst ? awayRoster : homeRoster;
-    firstRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
-    secondRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+    // roster[0] of each side is that team's captain — never actually
+    // picked, so it's skipped here and keeps its default pickNumber: null
+    // rather than reserving 1/2 for it.
+    firstRoster.slice(1).forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
+    secondRoster.slice(1).forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
 
     if (extraction.pickOrderRaw && extraction.pickOrderRaw.length > 0) {
       const allSpots = [...homeRoster, ...awayRoster];
-      let nextPick = 3; // 1 and 2 already went to the two captains above
+      let nextPick = 1; // captains are never numbered at all, so the narrated sequence starts at 1
       for (const turn of extraction.pickOrderRaw) {
         const namesRaw = Array.isArray(turn) ? turn : [turn];
         for (const raw of namesRaw) {
