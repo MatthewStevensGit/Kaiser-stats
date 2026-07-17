@@ -89,20 +89,29 @@ export interface ResolvedReport {
  * actually drafted (confirmed 2026-07-16 — an earlier version of this
  * reserved pick 1/2 for the two captains, which inflated every real pick's
  * number and skewed avgDraftPosition for anyone who frequently captains).
- * 1. Default (every game): the team listed first (home) is assumed to have
- *    picked first, alternating strict snake order by each roster's own
- *    listed order (excluding roster[0]) — a confirmed league convention,
- *    not a guess. Overrides a `docs/data-contract.md` note from before this
- *    convention was confirmed with the league organizer.
+ * 1. Default — only when the report's roster listing is actually confirmed
+ *    draft order (`rosterOrderIsDraftOrder`: neither side's team label was
+ *    explicitly stated — see rule 5/10 in prompt.ts). A report that instead
+ *    names both sides up front (e.g. "Team Orange:"/"Team Blue:") is
+ *    confirmed (2026-07-17, the real June 27 game) to just be listing who
+ *    played, NOT draft order — every pick number stays null for that game
+ *    unless step 3 below applies. When it does apply: the team listed
+ *    first (home) is assumed to have picked first, alternating strict
+ *    snake order by each roster's own listed order (excluding roster[0]) —
+ *    a confirmed league convention, not a guess. Overrides a
+ *    `docs/data-contract.md` note from before this convention was
+ *    confirmed with the league organizer.
  * 2. `firstPickRaw` (optional, human-supplied — see docs/report-parsing.md):
  *    the name of whoever actually picked first, when a specific game
  *    contradicts the default. Must match one roster's first-listed player,
  *    else `firstPickWarning` is set and pick numbers are left null rather
- *    than guessed.
+ *    than guessed. Only meaningful when step 1 would otherwise apply.
  * 3. `extraction.pickOrderRaw` (optional, model-extracted — see prompt.ts
  *    rule 10): when a report narrates the real pick-by-pick order in prose,
  *    that ground truth overrides the default for every pick (captains are
- *    never in this list either — see prompt.ts rule 10).
+ *    never in this list either — see prompt.ts rule 10) — applies
+ *    regardless of rosterOrderIsDraftOrder, since narrated prose is a real
+ *    stated fact, not an assumption about listing order.
  */
 export function resolveExtractionToGameRecord(
   extraction: RawExtraction,
@@ -167,8 +176,16 @@ export function resolveExtractionToGameRecord(
     }
   }
 
+  // A report that explicitly names both sides (e.g. "Team Orange:"/"Team
+  // Blue:") is just listing who's playing — confirmed 2026-07-17 this is
+  // NOT the same as the "N people" blank-line-separated convention, whose
+  // listed order IS real draft order. Only the latter format gets the
+  // default alternating assumption; a team-labeled game's pick numbers stay
+  // null unless a narrated pickOrderRaw (real, explicit prose) says otherwise.
+  const rosterOrderIsDraftOrder = !extraction.homeTeamLabelRaw && !extraction.awayTeamLabelRaw;
+
   let pickOrderWarning: string | null = null;
-  if (!firstPickWarning) {
+  if (!firstPickWarning && rosterOrderIsDraftOrder) {
     const firstRoster = homePicksFirst ? homeRoster : awayRoster;
     const secondRoster = homePicksFirst ? awayRoster : homeRoster;
     // roster[0] of each side is that team's captain — never actually
@@ -176,22 +193,26 @@ export function resolveExtractionToGameRecord(
     // rather than reserving 1/2 for it.
     firstRoster.slice(1).forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
     secondRoster.slice(1).forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+  }
 
-    if (extraction.pickOrderRaw && extraction.pickOrderRaw.length > 0) {
-      const allSpots = [...homeRoster, ...awayRoster];
-      let nextPick = 1; // captains are never numbered at all, so the narrated sequence starts at 1
-      for (const turn of extraction.pickOrderRaw) {
-        const namesRaw = Array.isArray(turn) ? turn : [turn];
-        for (const raw of namesRaw) {
-          const canonicalId = resolve(raw);
-          const spot = canonicalId ? allSpots.find((s) => s.canonicalId === canonicalId) : undefined;
-          if (spot) {
-            spot.pickNumber = nextPick;
-          } else if (!pickOrderWarning) {
-            pickOrderWarning = `"${raw}" from the narrated pick order wasn't found on either roster — some pick numbers may be incomplete for this game.`;
-          }
-          nextPick += 1;
+  // Independent of rosterOrderIsDraftOrder — a narrated pick order is real,
+  // explicit prose naming the actual sequence, not an assumption about
+  // roster listing order, so it applies (and overrides any default numbers
+  // above) regardless of which listing format this report used.
+  if (extraction.pickOrderRaw && extraction.pickOrderRaw.length > 0) {
+    const allSpots = [...homeRoster, ...awayRoster];
+    let nextPick = 1; // captains are never numbered at all, so the narrated sequence starts at 1
+    for (const turn of extraction.pickOrderRaw) {
+      const namesRaw = Array.isArray(turn) ? turn : [turn];
+      for (const raw of namesRaw) {
+        const canonicalId = resolve(raw);
+        const spot = canonicalId ? allSpots.find((s) => s.canonicalId === canonicalId) : undefined;
+        if (spot) {
+          spot.pickNumber = nextPick;
+        } else if (!pickOrderWarning) {
+          pickOrderWarning = `"${raw}" from the narrated pick order wasn't found on either roster — some pick numbers may be incomplete for this game.`;
         }
+        nextPick += 1;
       }
     }
   }

@@ -76,6 +76,27 @@ describe("resolveExtractionToGameRecord", () => {
     expect(result.gameRecord.awayTeamLabel).toBe("Blue");
   });
 
+  it("leaves every pick number null (not just captains') for a report that names both sides — that listing isn't confirmed draft order (real June 27 game)", () => {
+    const extraction: RawExtraction = {
+      date: "2026-06-27",
+      league: "saturday",
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka"],
+      awayRosterRaw: ["Cy Okafor", "Dana Petrov"],
+      homeTeamLabelRaw: "Orange",
+      awayTeamLabelRaw: "Blue",
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: null,
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, players, meta);
+    expect(result.gameRecord.homeRoster.every((s) => s.pickNumber === null)).toBe(true);
+    expect(result.gameRecord.awayRoster.every((s) => s.pickNumber === null)).toBe(true);
+  });
+
   it("flags goal-sum mismatches instead of silently trusting the parse", () => {
     const extraction: RawExtraction = {
       date: "2026-07-05",
