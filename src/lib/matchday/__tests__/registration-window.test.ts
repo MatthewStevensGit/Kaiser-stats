@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  getCheckinExpiryUtc,
+  getGameStartUtc,
   getRegistrationOpenUtc,
   getRegistrationCutoffUtc,
   getRegistrationStatus,
@@ -155,5 +157,25 @@ describe("getTodayIsoInEastern", () => {
     // 2026-11-01T23:30:00Z: at that instant it's already EST (transition at
     // 2026-11-01 06:00 UTC), so 23:30 UTC - 5h = 18:30 ET, still Nov 1.
     expect(getTodayIsoInEastern(new Date("2026-11-01T23:30:00.000Z"))).toBe("2026-11-01");
+  });
+});
+
+describe("getGameStartUtc", () => {
+  it("computes 7:00 AM ET kickoff for a Saturday game (EDT)", () => {
+    expect(getGameStartUtc("2026-07-18", "saturday").toISOString()).toBe("2026-07-18T11:00:00.000Z");
+  });
+
+  it("computes 7:30 AM ET kickoff for a Sunday game (EDT)", () => {
+    expect(getGameStartUtc("2026-07-19", "sunday").toISOString()).toBe("2026-07-19T11:30:00.000Z");
+  });
+});
+
+describe("getCheckinExpiryUtc", () => {
+  it("is one hour after Saturday's 7:00 AM ET kickoff", () => {
+    expect(getCheckinExpiryUtc("2026-07-18", "saturday").toISOString()).toBe("2026-07-18T12:00:00.000Z");
+  });
+
+  it("is one hour after Sunday's 7:30 AM ET kickoff", () => {
+    expect(getCheckinExpiryUtc("2026-07-19", "sunday").toISOString()).toBe("2026-07-19T12:30:00.000Z");
   });
 });

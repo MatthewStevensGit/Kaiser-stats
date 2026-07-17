@@ -1,4 +1,4 @@
-import { REGISTRATION_CUTOFF_BY_LEAGUE, REGISTRATION_OPEN_BY_LEAGUE } from "./constants";
+import { GAME_START_BY_LEAGUE, REGISTRATION_CUTOFF_BY_LEAGUE, REGISTRATION_OPEN_BY_LEAGUE } from "./constants";
 import type { ScheduledLeague } from "./types";
 
 const EASTERN_TIME_ZONE = "America/New_York";
@@ -99,6 +99,28 @@ export function getRegistrationOpenUtc(gameDateIso: string, league: ScheduledLea
   const openDateIso = addDaysToIsoDate(gameDateIso, open.dayOffset);
   const { year, month, day } = parseIsoDateParts(openDateIso);
   return zonedWallTimeToUtc(year, month, day, open.hour, open.minute, EASTERN_TIME_ZONE);
+}
+
+/** The exact UTC instant a scheduled game kicks off (league default — see GAME_START_BY_LEAGUE). */
+export function getGameStartUtc(gameDateIso: string, league: ScheduledLeague): Date {
+  const start = GAME_START_BY_LEAGUE[league];
+  const startDateIso = addDaysToIsoDate(gameDateIso, start.dayOffset);
+  const { year, month, day } = parseIsoDateParts(startDateIso);
+  return zonedWallTimeToUtc(year, month, day, start.hour, start.minute, EASTERN_TIME_ZONE);
+}
+
+const CHECKIN_EXPIRY_MINUTES_AFTER_KICKOFF = 60;
+
+/**
+ * One hour after kickoff — past this instant, a game's check-in list (that
+ * morning's headcount) has served its purpose and should be cleared out (see
+ * src/app/api/matchday/clear-expired-checkins/route.ts). Distinct from
+ * registration closing (which happens well before kickoff, see
+ * getRegistrationCutoffUtc) — this is about the check-in list outliving the
+ * game itself, not about registration.
+ */
+export function getCheckinExpiryUtc(gameDateIso: string, league: ScheduledLeague): Date {
+  return new Date(getGameStartUtc(gameDateIso, league).getTime() + CHECKIN_EXPIRY_MINUTES_AFTER_KICKOFF * 60_000);
 }
 
 export function getRegistrationWindowUtc(

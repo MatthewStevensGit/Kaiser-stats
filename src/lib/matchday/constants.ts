@@ -20,6 +20,25 @@ export const KICKOFF_LABEL_BY_LEAGUE: Record<ScheduledLeague, string> = {
   sunday: "7:30 AM ET",
 };
 
+/**
+ * Structured kickoff time matching KICKOFF_LABEL_BY_LEAGUE above (dayOffset
+ * always 0 — a game starts on its own date) — same {dayOffset, hour, minute}
+ * shape as the registration-window constants below, for reuse in
+ * registration-window.ts's date math (see getGameStartUtc). Only covers the
+ * league-wide default; a one-off game's custom kickoffLabel override is a
+ * free-form display string with no structured time, so the check-in-expiry
+ * cron (see clear-expired-checkins/route.ts) uses this default for every
+ * game regardless — a rare custom-time one-off game may expire its
+ * check-ins at the wrong instant, a known, accepted gap.
+ */
+export const GAME_START_BY_LEAGUE: Record<
+  ScheduledLeague,
+  { dayOffset: number; hour: number; minute: number }
+> = {
+  saturday: { dayOffset: 0, hour: 7, minute: 0 },
+  sunday: { dayOffset: 0, hour: 7, minute: 30 },
+};
+
 /** Day-before registration close times. dayOffset is relative to the game's own ISO date. */
 export const REGISTRATION_CUTOFF_BY_LEAGUE: Record<
   ScheduledLeague,
