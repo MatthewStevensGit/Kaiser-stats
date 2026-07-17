@@ -21,10 +21,12 @@ import { TabSelect } from "./_components/TabSelect";
 
 const GOLDEN_BOOT_MIN_GAMES = 3;
 
-type TableTab = "plus-minus" | "golden-boot" | "mvp";
+type TableTab = "plus-minus" | "golden-boot" | "mvp" | "draft-position" | "assists";
 type PlusMinusSort = "games" | "wins" | "plusminus";
 type GoldenBootSort = "goals" | "rate";
 type MvpSort = "mvp";
+type DraftPositionSort = "draftposition";
+type AssistsSort = "assists";
 
 // Same real seasons this league has data for as the Past Matches page's
 // YEARS list — "all" is an extra tab (not a real year) showing every
@@ -37,7 +39,13 @@ const YEARS = ["2026", "2025", "2024", "2023", "2022", ALL_YEARS_ID];
 const DEFAULT_YEAR = "2026";
 
 function isTableTab(value: string | undefined): value is TableTab {
-  return value === "plus-minus" || value === "golden-boot" || value === "mvp";
+  return (
+    value === "plus-minus" ||
+    value === "golden-boot" ||
+    value === "mvp" ||
+    value === "draft-position" ||
+    value === "assists"
+  );
 }
 
 function isYear(value: string | undefined): value is string {
@@ -63,6 +71,8 @@ function sortHref(tab: string, year: string, sortKey: string, currentSort: strin
 const PLUS_MINUS_DEFAULT_SORT: PlusMinusSort = "plusminus";
 const GOLDEN_BOOT_DEFAULT_SORT: GoldenBootSort = "goals";
 const MVP_DEFAULT_SORT: MvpSort = "mvp";
+const DRAFT_POSITION_DEFAULT_SORT: DraftPositionSort = "draftposition";
+const ASSISTS_DEFAULT_SORT: AssistsSort = "assists";
 
 function isPlusMinusSort(value: string | undefined): value is PlusMinusSort {
   return value === "games" || value === "wins" || value === "plusminus";
@@ -70,6 +80,13 @@ function isPlusMinusSort(value: string | undefined): value is PlusMinusSort {
 
 function isGoldenBootSort(value: string | undefined): value is GoldenBootSort {
   return value === "goals" || value === "rate";
+}
+
+// Draft position is the one stat where a LOW number is notable (an early
+// pick) rather than a high one, so unlike every other tab it defaults to
+// ascending — same convention the old standalone Other Stats page used.
+function defaultDirFor(tab: TableTab): SortDir {
+  return tab === "draft-position" ? "asc" : "desc";
 }
 
 export default async function Home({
@@ -80,10 +97,12 @@ export default async function Home({
   const { tab: rawTab, year: rawYear, sort: rawSort, dir: rawDir } = await searchParams;
   const tab: TableTab = isTableTab(rawTab) ? rawTab : "plus-minus";
   const year = isYear(rawYear) ? rawYear : DEFAULT_YEAR;
-  const dir: SortDir = isSortDir(rawDir) ? rawDir : "desc";
+  const dir: SortDir = isSortDir(rawDir) ? rawDir : defaultDirFor(tab);
   const plusMinusSort: PlusMinusSort = isPlusMinusSort(rawSort) ? rawSort : PLUS_MINUS_DEFAULT_SORT;
   const goldenBootSort: GoldenBootSort = isGoldenBootSort(rawSort) ? rawSort : GOLDEN_BOOT_DEFAULT_SORT;
   const mvpSort: MvpSort = MVP_DEFAULT_SORT;
+  const draftPositionSort: DraftPositionSort = DRAFT_POSITION_DEFAULT_SORT;
+  const assistsSort: AssistsSort = ASSISTS_DEFAULT_SORT;
 
   // Merged (saturday+sunday) only, for now — league split may return in a later slice.
   const [players, allRows, allGames, cutoffs] = await Promise.all([
@@ -124,6 +143,14 @@ export default async function Home({
   const mvpRanked = mvpTotals
     .filter((p) => p.mvpCount > 0)
     .sort((a, b) => sign * (a.mvpCount - b.mvpCount) || a.displayName.localeCompare(b.displayName));
+  const assistsRanked = mvpTotals
+    .filter((p) => p.assists > 0)
+    .sort((a, b) => sign * (a.assists - b.assists) || a.displayName.localeCompare(b.displayName));
+  const draftPositionRanked = mvpTotals
+    .filter((p): p is typeof p & { avgDraftPosition: number } => p.avgDraftPosition !== null)
+    .sort(
+      (a, b) => sign * (a.avgDraftPosition - b.avgDraftPosition) || a.displayName.localeCompare(b.displayName),
+    );
 
   // League-title/Golden-Boot trophy case, shown only on the All Years view
   // (see LeagueTitleChip/GoldenBootChip below) — only ever computed for a
@@ -139,12 +166,6 @@ export default async function Home({
 
   return (
     <main>
-      <header className="screen-header-row">
-        <a href="/other-stats" className="rulebook-link" style={{ marginLeft: "auto" }}>
-          Other Stats
-        </a>
-      </header>
-
       <div className="tab-select-row">
         <TabSelect
           value={year}
@@ -162,6 +183,8 @@ export default async function Home({
             { id: "plus-minus", label: "Plus-Minus", href: `/?tab=plus-minus&year=${year}` },
             { id: "golden-boot", label: "Golden Boot", href: `/?tab=golden-boot&year=${year}` },
             { id: "mvp", label: "MVP", href: `/?tab=mvp&year=${year}` },
+            { id: "draft-position", label: "Draft Position", href: `/?tab=draft-position&year=${year}` },
+            { id: "assists", label: "Assists", href: `/?tab=assists&year=${year}` },
           ]}
         />
       </div>
@@ -298,6 +321,89 @@ export default async function Home({
                       </a>
                     </td>
                     <td className="num">{p.mvpCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+      {tab === "draft-position" &&
+        (draftPositionRanked.length === 0 ? (
+          <div className="empty-state">
+            No draft order known yet — this only ever comes from imported match reports, never
+            the season spreadsheets.
+          </div>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th className="num">#</th>
+                  <th>Player</th>
+                  <SortableHeader
+                    label="Avg. Pick"
+                    href={sortHref(tab, year, "draftposition", draftPositionSort, dir)}
+                    isActive
+                    dir={dir}
+                  />
+                </tr>
+              </thead>
+              <tbody>
+                {draftPositionRanked.map((p, i) => (
+                  <tr key={p.canonicalId}>
+                    <td className="num">{i + 1}</td>
+                    <td>
+                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
+                        {p.displayName}
+                      </a>
+                    </td>
+                    <td className="num">{p.avgDraftPosition.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+      {tab === "assists" && (
+        <p className="note">
+          * Assists aren&rsquo;t officially tracked during games — these are a best estimate
+          from the match reports, not a verified stat.
+        </p>
+      )}
+
+      {tab === "assists" &&
+        (assistsRanked.length === 0 ? (
+          <div className="empty-state">
+            No assists recorded yet — this only ever comes from imported match reports, never
+            the season spreadsheets.
+          </div>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th className="num">#</th>
+                  <th>Player</th>
+                  <SortableHeader
+                    label="Assists"
+                    href={sortHref(tab, year, "assists", assistsSort, dir)}
+                    isActive
+                    dir={dir}
+                  />
+                </tr>
+              </thead>
+              <tbody>
+                {assistsRanked.map((p, i) => (
+                  <tr key={p.canonicalId}>
+                    <td className="num">{i + 1}</td>
+                    <td>
+                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
+                        {p.displayName}
+                      </a>
+                    </td>
+                    <td className="num">{p.assists}</td>
                   </tr>
                 ))}
               </tbody>
