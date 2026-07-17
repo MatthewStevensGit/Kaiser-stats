@@ -105,18 +105,20 @@ export default async function Home({
         <TabSelect
           value={year}
           ariaLabel="Year"
-          options={YEARS.map((y) => ({ id: y, label: y === ALL_YEARS_ID ? "All Years" : y }))}
-          hrefFor={(y) => `/?tab=${tab}&year=${y}`}
+          options={YEARS.map((y) => ({
+            id: y,
+            label: y === ALL_YEARS_ID ? "All Years" : y,
+            href: `/?tab=${tab}&year=${y}`,
+          }))}
         />
         <TabSelect
           value={tab}
           ariaLabel="View"
           options={[
-            { id: "plus-minus", label: "Plus-Minus" },
-            { id: "golden-boot", label: "Golden Boot" },
-            { id: "mvp", label: "MVP" },
+            { id: "plus-minus", label: "Plus-Minus", href: `/?tab=plus-minus&year=${year}` },
+            { id: "golden-boot", label: "Golden Boot", href: `/?tab=golden-boot&year=${year}` },
+            { id: "mvp", label: "MVP", href: `/?tab=mvp&year=${year}` },
           ]}
-          hrefFor={(t) => `/?tab=${t}&year=${year}`}
         />
       </div>
 

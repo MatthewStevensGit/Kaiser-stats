@@ -48,17 +48,19 @@ export default async function OtherStatsPage({
         <TabSelect
           value={year}
           ariaLabel="Year"
-          options={YEARS.map((y) => ({ id: y, label: y === ALL_YEARS_ID ? "All Years" : y }))}
-          hrefFor={(y) => `/other-stats?tab=${tab}&year=${y}`}
+          options={YEARS.map((y) => ({
+            id: y,
+            label: y === ALL_YEARS_ID ? "All Years" : y,
+            href: `/other-stats?tab=${tab}&year=${y}`,
+          }))}
         />
         <TabSelect
           value={tab}
           ariaLabel="View"
           options={[
-            { id: "assists", label: "Assists" },
-            { id: "draft-position", label: "Draft Position" },
+            { id: "assists", label: "Assists", href: `/other-stats?tab=assists&year=${year}` },
+            { id: "draft-position", label: "Draft Position", href: `/other-stats?tab=draft-position&year=${year}` },
           ]}
-          hrefFor={(t) => `/other-stats?tab=${t}&year=${year}`}
         />
       </div>
 
