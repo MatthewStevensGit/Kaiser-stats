@@ -8,6 +8,7 @@ import { getRegistrationStatus, getRegistrationWindowUtc } from "@/lib/matchday/
 import { CapacityRing } from "../../_components/CapacityRing";
 import { RegistrationStatusBar } from "../../_components/RegistrationStatusBar";
 import { ScheduledGameStatusLine } from "../../_components/ScheduledGameStatusLine";
+import { SelfCheckInButton } from "../../_components/SelfCheckInButton";
 
 // Real Supabase-backed data, and getRegistrationStatus depends on the real
 // wall-clock "now" — this page must never be cached or prerendered at build
@@ -53,6 +54,13 @@ export default async function CheckInPortalPage({
             status={getRegistrationStatus(new Date(), game.date, game.league)}
             {...getRegistrationWindowUtc(game.date, game.league)}
           />
+          {user && (
+            <SelfCheckInButton
+              gameId={gameId}
+              isCheckedIn={game.checkedInCanonicalIds.includes(user.canonicalId)}
+              registrationOpen={getRegistrationStatus(new Date(), game.date, game.league) === "open"}
+            />
+          )}
         </>
       )}
     </main>

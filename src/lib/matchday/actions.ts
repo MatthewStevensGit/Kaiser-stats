@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth/session";
 import { createProvisionalIdentity } from "@/lib/stats-engine/identity";
 import { createServiceRoleClient } from "@/lib/supabase/client";
+import { getRegistrationStatus } from "./registration-window";
 import type { MatchdayActionResult, ScheduledLeague } from "./types";
 
 const UNIQUE_VIOLATION = "23505";
@@ -55,6 +56,67 @@ export async function checkInExistingPlayer(
     if (error.code === UNIQUE_VIOLATION) return { ok: false, error: "Already checked in." };
     return { ok: false, error: "Could not check in that player." };
   }
+
+  revalidateGamePaths(gameId);
+  return { ok: true };
+}
+
+/**
+ * Self-service check-in — any logged-in player checking THEMSELVES in, not
+ * an admin action. Re-derives who's asking from their own auth session
+ * (never a client-passed canonicalId) and independently re-verifies
+ * registration is actually open server-side (never trusts the button
+ * merely being rendered, in case of a stale page).
+ */
+export async function checkInSelf(gameId: string): Promise<MatchdayActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const client = createServiceRoleClient();
+
+  const { data: game } = await client
+    .from("scheduled_games")
+    .select("date, league, cancelled_at")
+    .eq("game_id", gameId)
+    .maybeSingle();
+  if (!game) return { ok: false, error: "Game not found." };
+  if (game.cancelled_at) return { ok: false, error: "This game has been cancelled." };
+
+  const status = getRegistrationStatus(new Date(), game.date, game.league as ScheduledLeague);
+  if (status !== "open") return { ok: false, error: "Registration isn't open for this game." };
+
+  const { error } = await client.from("game_checkins").insert({
+    game_id: gameId,
+    canonical_id: user.canonicalId,
+    checked_in_by: user.canonicalId,
+  });
+
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) return { ok: false, error: "Already checked in." };
+    return { ok: false, error: "Could not check you in." };
+  }
+
+  revalidateGamePaths(gameId);
+  return { ok: true };
+}
+
+/** Self-service cancel — a player removing their own check-in, same re-derivation as checkInSelf(). */
+export async function cancelSelfCheckIn(gameId: string): Promise<MatchdayActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const client = createServiceRoleClient();
+
+  const { data, error } = await client
+    .from("game_checkins")
+    .update({ removed_at: new Date().toISOString(), removed_by: user.canonicalId })
+    .eq("game_id", gameId)
+    .eq("canonical_id", user.canonicalId)
+    .is("removed_at", null)
+    .select("id");
+
+  if (error) return { ok: false, error: "Could not cancel your check-in." };
+  if (!data || data.length === 0) return { ok: false, error: "Not currently checked in." };
 
   revalidateGamePaths(gameId);
   return { ok: true };

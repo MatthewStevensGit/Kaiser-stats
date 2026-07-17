@@ -974,6 +974,30 @@ th.num {
 }
 
 /* Cancelled-game banner on the check-in portal page */
+.self-checkin {
+  margin-top: 1.25rem;
+}
+
+.self-checkin-button {
+  display: block;
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  color: var(--surface-1);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+
+.self-checkin-button-cancel {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
 .game-cancelled-banner {
   background: var(--status-critical-bg);
   color: var(--status-critical-fg);
