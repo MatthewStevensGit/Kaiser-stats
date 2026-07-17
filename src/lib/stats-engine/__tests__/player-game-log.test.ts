@@ -10,6 +10,8 @@ const games: GameRecord[] = [
     league: "sunday",
     homeRoster: [{ canonicalId: "p1", pickNumber: 1 }],
     awayRoster: [{ canonicalId: "p2", pickNumber: 2 }],
+    homeTeamLabel: "Orange",
+    awayTeamLabel: "Blue",
     homeScore: 3,
     awayScore: 1,
     goals: [
@@ -27,6 +29,8 @@ const games: GameRecord[] = [
     league: "sunday",
     homeRoster: [{ canonicalId: "p2", pickNumber: 1 }],
     awayRoster: [{ canonicalId: "p1", pickNumber: 2 }],
+    homeTeamLabel: "Orange",
+    awayTeamLabel: "Blue",
     homeScore: 2,
     awayScore: 2,
     goals: [{ scorerCanonicalId: "p1", assistCanonicalId: null, team: "away" }],

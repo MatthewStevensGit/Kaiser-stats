@@ -69,6 +69,11 @@ async function main() {
     console.log(resolved.firstPickWarning);
   }
 
+  if (resolved.pickOrderWarning) {
+    console.log(`\n=== Narrated pick-order warning ===`);
+    console.log(resolved.pickOrderWarning);
+  }
+
   console.log(`\n=== Goal-sum check ===`);
   console.log(
     resolved.goalSumMismatch

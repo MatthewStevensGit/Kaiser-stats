@@ -1,3 +1,4 @@
+import { computeMvp } from "../stats-engine/goal-summary";
 import { createProvisionalIdentity, resolvePlayerName } from "../stats-engine/identity";
 import type { GameRecord, GoalEvent, NameResolution, NotableMention, PlayerIdentity, RosterSpot } from "../stats-engine/types";
 import { callGemini } from "./gemini-client";
@@ -21,17 +22,33 @@ export function extractFirstPickAnnotation(rawFileText: string): { firstPickRaw:
   };
 }
 
+// A real response has been observed to come back HTTP 200, finishReason
+// "STOP" (Gemini considers itself done), but with the JSON body truncated
+// anyway — confirmed via usageMetadata showing thousands of tokens spent on
+// invisible "thinking" before a short visible completion, nowhere near the
+// maxOutputTokens cap. This is an intermittent model-side quirk, not a
+// truncation we can fix by raising the cap further, so one retry (a fresh
+// API call, not a re-parse of the same bad text) is the practical fix.
+const MAX_PARSE_ATTEMPTS = 2;
+
 export async function parseReportText(apiKey: string, threadText: string): Promise<RawExtraction> {
   const prompt = buildExtractionPrompt(threadText);
-  const responseText = await callGemini(apiKey, prompt);
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(responseText);
-  } catch {
-    throw new Error(`Gemini did not return valid JSON: ${responseText}`);
+  let lastMalformedResponse = "";
+  for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
+    // Network/HTTP errors (quota exhaustion, high-demand 503s) propagate
+    // immediately, never retried here — retrying those just burns more of a
+    // daily quota that may already be exhausted, for no chance of success.
+    const responseText = await callGemini(apiKey, prompt);
+    try {
+      return JSON.parse(responseText) as RawExtraction;
+    } catch {
+      lastMalformedResponse = responseText;
+    }
   }
-  return parsed as RawExtraction;
+  throw new Error(
+    `Gemini did not return valid JSON after ${MAX_PARSE_ATTEMPTS} attempts: ${lastMalformedResponse}`,
+  );
 }
 
 export interface ResolvedReport {
@@ -45,10 +62,17 @@ export interface ResolvedReport {
   /**
    * Set only if a "First pick" annotation was supplied but didn't match the
    * first-listed player of either roster — a real inconsistency worth a
-   * human's attention, never silently ignored. Pick numbers stay null in
-   * this case, same as when no annotation is given at all.
+   * human's attention, never silently ignored. Pick numbers stay null for
+   * this game in that case (the default alternating assumption is skipped
+   * too, since something about the annotation is already wrong).
    */
   firstPickWarning: string | null;
+  /**
+   * Set only if extraction.pickOrderRaw named someone who couldn't be
+   * resolved to either roster — the rest of the narrated order is still
+   * applied, but this game's pick numbers may be incomplete.
+   */
+  pickOrderWarning: string | null;
 }
 
 /**
@@ -58,13 +82,23 @@ export interface ResolvedReport {
  * path uses (resolvePlayerName / createProvisionalIdentity), never the LLM's
  * own judgment about who a name "really" is.
  *
- * `firstPickRaw` is an optional, human-supplied fact (never LLM-guessed —
- * see docs/report-parsing.md): the name of whoever was picked first in this
- * specific game's draft. When given and it matches the first-listed player
- * of one roster, pick numbers are computed by interleaving both rosters in
- * their listed order (which, per league convention, is pick order) — real
- * data for that one confirmed game, not a pattern applied to every game.
- * Every other game simply keeps pickNumber: null, exactly as before.
+ * Pick numbers, in priority order:
+ * 1. Default (every game): the team listed first (home) is assumed to have
+ *    picked first, alternating strict snake order (2*i+1 / 2*i+2) by each
+ *    roster's own listed order — this is a confirmed league convention
+ *    (first-listed player on each side is that team's captain, the rest of
+ *    that side's list is already in the order they were drafted), not a
+ *    guess. Overrides a `docs/data-contract.md` note from before this
+ *    convention was confirmed with the league organizer.
+ * 2. `firstPickRaw` (optional, human-supplied — see docs/report-parsing.md):
+ *    the name of whoever actually picked first, when a specific game
+ *    contradicts the default. Must match one roster's first-listed player,
+ *    else `firstPickWarning` is set and pick numbers are left null rather
+ *    than guessed.
+ * 3. `extraction.pickOrderRaw` (optional, model-extracted — see prompt.ts
+ *    rule 10): when a report narrates the real pick-by-pick order in prose,
+ *    that ground truth overrides the default for every pick after the two
+ *    captains (who keep pick 1/2 from the default/firstPickRaw step above).
  */
 export function resolveExtractionToGameRecord(
   extraction: RawExtraction,
@@ -114,19 +148,44 @@ export function resolveExtractionToGameRecord(
   const awayRoster = resolveRoster(extraction.awayRosterRaw ?? []);
 
   let firstPickWarning: string | null = null;
+  let homePicksFirst = true; // default: the team listed first (home) picked first — see resolveExtractionToGameRecord's doc comment
   if (firstPickRaw) {
     const firstPickCanonicalId = resolve(firstPickRaw);
     const homeFirst = homeRoster[0]?.canonicalId;
     const awayFirst = awayRoster[0]?.canonicalId;
 
     if (firstPickCanonicalId && firstPickCanonicalId === homeFirst) {
-      homeRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
-      awayRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+      homePicksFirst = true;
     } else if (firstPickCanonicalId && firstPickCanonicalId === awayFirst) {
-      awayRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
-      homeRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+      homePicksFirst = false;
     } else {
       firstPickWarning = `"First pick: ${firstPickRaw}" didn't match the first-listed player of either roster — pick numbers left null for this game rather than guessed.`;
+    }
+  }
+
+  let pickOrderWarning: string | null = null;
+  if (!firstPickWarning) {
+    const firstRoster = homePicksFirst ? homeRoster : awayRoster;
+    const secondRoster = homePicksFirst ? awayRoster : homeRoster;
+    firstRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
+    secondRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+
+    if (extraction.pickOrderRaw && extraction.pickOrderRaw.length > 0) {
+      const allSpots = [...homeRoster, ...awayRoster];
+      let nextPick = 3; // 1 and 2 already went to the two captains above
+      for (const turn of extraction.pickOrderRaw) {
+        const namesRaw = Array.isArray(turn) ? turn : [turn];
+        for (const raw of namesRaw) {
+          const canonicalId = resolve(raw);
+          const spot = canonicalId ? allSpots.find((s) => s.canonicalId === canonicalId) : undefined;
+          if (spot) {
+            spot.pickNumber = nextPick;
+          } else if (!pickOrderWarning) {
+            pickOrderWarning = `"${raw}" from the narrated pick order wasn't found on either roster — some pick numbers may be incomplete for this game.`;
+          }
+          nextPick += 1;
+        }
+      }
     }
   }
 
@@ -142,7 +201,7 @@ export function resolveExtractionToGameRecord(
     });
   }
 
-  const mvpCanonicalId = extraction.mvpRaw ? resolve(extraction.mvpRaw) : null;
+  const narrativeMvpCanonicalId = extraction.mvpRaw ? resolve(extraction.mvpRaw) : null;
 
   const notableMentions: NotableMention[] = [];
   for (const m of extraction.notableMentions ?? []) {
@@ -152,6 +211,7 @@ export function resolveExtractionToGameRecord(
 
   const homeScore = extraction.homeScore ?? 0;
   const awayScore = extraction.awayScore ?? 0;
+  const mvpCanonicalId = computeMvp(goals, homeScore, awayScore, narrativeMvpCanonicalId);
   const homeGoalCount = goals.filter((g) => g.team === "home").length;
   const awayGoalCount = goals.filter((g) => g.team === "away").length;
   const goalSumMismatch =
@@ -165,6 +225,12 @@ export function resolveExtractionToGameRecord(
     league: extraction.league === "saturday" || extraction.league === "sunday" ? extraction.league : meta.fallbackLeague,
     homeRoster,
     awayRoster,
+    // Only ever populated by the model when the report itself names sides
+    // (see RawExtraction's doc comment) — otherwise this plain default
+    // applies. Unlike a player identity, a wrong guess here can't
+    // misattribute anyone's stats, it's just a label.
+    homeTeamLabel: extraction.homeTeamLabelRaw?.trim() || "Orange",
+    awayTeamLabel: extraction.awayTeamLabelRaw?.trim() || "Blue",
     homeScore,
     awayScore,
     goals,
@@ -179,5 +245,6 @@ export function resolveExtractionToGameRecord(
     flaggedNames,
     goalSumMismatch,
     firstPickWarning,
+    pickOrderWarning,
   };
 }

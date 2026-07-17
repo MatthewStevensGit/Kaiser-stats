@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { id: "table", label: "Table", href: "/" },
   { id: "matches", label: "Matches", href: "/matches" },
   { id: "matchday", label: "Matchday", href: "/matchday" },
+  { id: "other-stats", label: "Other Stats", href: "/other-stats" },
 ];
 
 function isActive(pathname: string, href: string): boolean {

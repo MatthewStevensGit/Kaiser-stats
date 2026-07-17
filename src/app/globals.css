@@ -68,26 +68,6 @@ main {
   margin-inline: auto;
 }
 
-/* Demo-data disclaimer banner — always visible, never just a muted footnote */
-.demo-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  background: var(--status-warning-bg);
-  color: var(--status-warning-fg);
-  border-radius: 0;
-  padding: 0.6rem 1.25rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  max-width: 640px;
-  margin-inline: auto;
-}
-
-.demo-banner a {
-  color: inherit;
-  text-decoration: underline;
-}
-
 /* Screen headers — bold, all-caps, matches the mockups */
 .screen-header-row {
   display: flex;
@@ -263,6 +243,16 @@ main {
   max-width: 640px;
 }
 
+.report-import-date-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.report-import-date-row input {
+  width: 4rem;
+  text-align: center;
+}
+
 .report-import-textarea {
   min-height: 220px;
   font-family: inherit;
@@ -281,6 +271,13 @@ main {
   font-size: 0.85rem;
   font-weight: 600;
   margin-top: 0.5rem;
+}
+
+.report-import-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
 .report-import-flag-list {
@@ -566,10 +563,17 @@ th.num {
 }
 
 .match-detail-scorer-name {
-  color: var(--text-primary);
   text-decoration: none;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+.match-detail-scorer-name-home {
+  color: var(--home-team-color);
+}
+
+.match-detail-scorer-name-away {
+  color: var(--away-team-color);
 }
 
 .match-detail-scorer-name:hover {

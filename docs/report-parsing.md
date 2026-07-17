@@ -44,26 +44,44 @@ Output: the extracted `GameRecord` as JSON, the goal-sum check result, and
 lists of auto-tracked new players / flagged names needing a decision — same
 shape and same philosophy as `npm run backfill:preview`.
 
-## Draft position (optional, per game)
+## Draft position (computed by default, per game)
 
-Report emails never state which captain picked first, so `pickNumber` is
-`null` for every player by default — see `docs/data-contract.md`. If you
-happen to know who was picked first for a *specific* game (never a general
-rule — see the reasoning in `docs/data-contract.md`'s draft-position section),
-add one line anywhere in that game's `.txt` file before running the parser:
+Confirmed league convention (2026-07-16): the first-listed player in each
+team's roster is that team's captain, and the rest of that side's list is
+already in the order they were drafted. By default, `resolveExtractionToGameRecord()`
+assumes the team listed first (home) picked first, alternating strict snake
+order (`2*i+1`/`2*i+2`) from both rosters' listed order — this runs
+automatically for every report-parsed game, no annotation needed. See
+`docs/data-contract.md`'s draft-position section and the doc comment on
+`resolveExtractionToGameRecord` in `src/lib/report-parser/parse-report.ts`
+for the full reasoning (this supersedes an earlier, more conservative
+"never guess draft order" stance from before this convention was confirmed).
 
-```
-First pick: Ari Fox
-```
+Two ways to override the default for a specific game:
 
-This is read directly by our own code before the text ever reaches Gemini —
-never inferred by the model. The parser confirms that name matches the
-first-listed player of one of the two rosters, then computes real pick
-numbers for both rosters by interleaving them in listed order (which, per
-league convention, is pick order). If the name doesn't match either roster's
-first player, you'll get a `firstPickWarning` instead — pick numbers stay
-null rather than guessed. Leave the line out entirely for any game where you
-don't know/remember who picked first.
+- **A human-supplied fact**: if you know the away team's captain actually
+  picked first (contradicting the default), add one line anywhere in that
+  game's `.txt` file before running the parser:
+
+  ```
+  First pick: Ari Fox
+  ```
+
+  This is read directly by our own code before the text ever reaches
+  Gemini — never inferred by the model. If the name doesn't match either
+  roster's first-listed player, you'll get a `firstPickWarning` instead and
+  pick numbers are left null entirely for that game (something's
+  inconsistent enough not to trust).
+
+- **A narrated pick order in the report itself**: some reports describe the
+  actual pick-by-pick order in prose (e.g. "Vadim and Alik are captains,
+  Nick Brazil selected first, then Alan, then Josh, then Emre and Matthew,
+  then Oleg"). When Gemini recognizes this pattern (see `prompt.ts` rule 10),
+  it extracts an ordered `pickOrderRaw` list — including simultaneous
+  ties (two names picked in the same turn) — which overrides the default
+  for every pick after the two captains. If a named player can't be matched
+  to either roster, you get a `pickOrderWarning` and the rest of the order
+  is still applied.
 
 ## Admin web UI (the real write path)
 
@@ -78,11 +96,25 @@ pure `GameRecord` → Supabase row mapper, unit-tested in `persist.test.ts`). Sa
 `game_id` that already exists (same date + league) returns a friendly error rather than
 overwriting — there's no edit/delete path yet, same as the CLI script below.
 
+## Bulk historical backfill
+
+```
+npm run backfill-reports -- [directory]
+```
+
+Defaults to `private/sample-reports/` if no directory is given. Parses every `.txt` file
+there through the same parser/resolution/write path as `/matches/import` (via
+`src/lib/report-parser/save.ts`'s `saveResolvedGame()`, shared by both), instead of
+pasting each report into the browser by hand — for getting a backlog of old Vadim emails
+in all at once. Each file's `game_id`/`source` comes from its filename (same convention
+as `npm run parse-report`), and known players (including ones auto-tracked earlier in the
+same run) accumulate across files so a name seen in file 3 that's already been
+auto-tracked from file 1 doesn't get logged as newly-tracked all over again. Safe to
+re-run: a file whose game already exists is skipped, not duplicated.
+
 ## Not yet automated
 
-This CLI script remains useful for a quick local preview (no browser, no admin login
-needed) without touching Supabase at all — handy for sanity-checking extraction quality
-against a batch of old report files before deciding which ones to actually paste into
-`/matches/import`. There's still no automatic pipeline that watches for new report
-emails and runs this on its own — that's a reasonable next step once the extraction
-quality itself has been checked against more real reports.
+`npm run parse-report` (the single-file version above) remains useful for a quick local
+preview without touching Supabase at all — handy for sanity-checking extraction quality
+against one report before trusting a whole batch to `backfill-reports`. There's still no
+automatic pipeline that watches for new report emails and runs this on its own.

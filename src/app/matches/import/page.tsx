@@ -4,7 +4,7 @@ import { ReportImportForm } from "../../_components/ReportImportForm";
 export const dynamic = "force-dynamic";
 
 export default async function ImportReportPage() {
-  await requireAdmin("/matches");
+  const admin = await requireAdmin("/matches");
 
   return (
     <main>
@@ -20,7 +20,7 @@ export default async function ImportReportPage() {
       </p>
 
       <section className="card">
-        <ReportImportForm />
+        <ReportImportForm currentUserCanonicalId={admin.canonicalId} />
       </section>
     </main>
   );

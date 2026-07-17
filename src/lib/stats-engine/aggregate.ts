@@ -39,6 +39,24 @@ function rowMatchesView(row: SeasonStandingRow, view: StatsView): boolean {
   return row.league === view;
 }
 
+const SOURCE_YEAR = /\d{4}/;
+
+/**
+ * Every season-standings source string embeds its year (e.g.
+ * "soccer_2023_2.xlsx#Sheet1" -> "2023") — there's no separate year column
+ * on SeasonStandingRow, so this is the only way to scope the Table page to
+ * one season instead of the all-time total every row sums into today.
+ * `year: "all"` (or anything that matches no row) is the existing
+ * all-time-cumulative behavior, unchanged.
+ */
+export function filterSeasonStandingRowsByYear(
+  rows: SeasonStandingRow[],
+  year: string,
+): SeasonStandingRow[] {
+  if (year === "all") return rows;
+  return rows.filter((row) => row.source.match(SOURCE_YEAR)?.[0] === year);
+}
+
 export interface AggregateResult {
   players: PlayerSeasonStats[];
   /** Names close to an existing, different identity — genuinely ambiguous, still need a human. */
@@ -149,4 +167,61 @@ export function rankByRate(
     .filter((p) => p.games >= minGames)
     .map((p) => ({ ...p, rate: p[statKey] / p.games }))
     .sort((a, b) => b.rate - a.rate);
+}
+
+export interface SeasonAwardWinners {
+  year: number;
+  /** Every player tied for that season's top plus/minus — ties share the title rather than picking one arbitrarily (no tiebreaker data exists to break it correctly). */
+  leagueWinnerIds: string[];
+  /** Every player tied for that season's Golden Boot, by the same raw-goals-first ranking the Golden Boot tab itself displays (see rankByRate + src/app/page.tsx's sort). */
+  goldenBootWinnerIds: string[];
+}
+
+/**
+ * One closed season's awards — only ever meaningful for a season that's
+ * actually over (see season_stats_cutoff's doc comment in
+ * supabase/schema.sql: a year with no cutoff row is a fully closed season;
+ * an in-progress one's current "leader" isn't a real title yet, so callers
+ * should never pass an in-progress year's rows here).
+ */
+export function computeSeasonAwards(
+  yearRows: SeasonStandingRow[],
+  knownPlayers: PlayerIdentity[],
+  year: number,
+  goldenBootMinGames: number,
+): SeasonAwardWinners {
+  const { players: totals } = aggregateStandings(yearRows, knownPlayers, "merged");
+  if (totals.length === 0) return { year, leagueWinnerIds: [], goldenBootWinnerIds: [] };
+
+  const maxPlusMinus = Math.max(...totals.map((p) => p.plusMinus));
+  const leagueWinnerIds = totals.filter((p) => p.plusMinus === maxPlusMinus).map((p) => p.canonicalId);
+
+  const eligible = rankByRate(totals, "goals", goldenBootMinGames);
+  let goldenBootWinnerIds: string[] = [];
+  if (eligible.length > 0) {
+    const maxGoals = Math.max(...eligible.map((p) => p.goals));
+    goldenBootWinnerIds = eligible.filter((p) => p.goals === maxGoals).map((p) => p.canonicalId);
+  }
+
+  return { year, leagueWinnerIds, goldenBootWinnerIds };
+}
+
+export interface AwardTally {
+  leagueTitles: number;
+  goldenBoots: number;
+}
+
+/** Tallies league titles and Golden Boots per player across every closed season's awards. */
+export function tallyAwardCounts(awards: SeasonAwardWinners[]): Map<string, AwardTally> {
+  const tally = new Map<string, AwardTally>();
+  function bump(canonicalId: string, key: keyof AwardTally) {
+    const existing = tally.get(canonicalId) ?? { leagueTitles: 0, goldenBoots: 0 };
+    existing[key] += 1;
+    tally.set(canonicalId, existing);
+  }
+  for (const award of awards) {
+    for (const id of award.leagueWinnerIds) bump(id, "leagueTitles");
+    for (const id of award.goldenBootWinnerIds) bump(id, "goldenBoots");
+  }
+  return tally;
 }

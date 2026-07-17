@@ -1,38 +1,98 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
 import { previewReportImport, saveReportImport, type ReportPreview } from "@/lib/report-parser/actions";
 import { formatScoreLine, getMultiGoalNickname } from "@/lib/format";
-import { summarizeGoalsByScorer } from "@/lib/stats-engine/goal-summary";
+import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
 import type { League } from "@/lib/stats-engine/types";
+import { AssistChip } from "./AssistChip";
 import { GoalChip } from "./GoalChip";
 
-export function ReportImportForm() {
-  const [date, setDate] = useState("");
+export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanonicalId: string }) {
+  const router = useRouter();
+  const [month, setMonth] = useState("");
+  const [day, setDay] = useState("");
+  const [year2, setYear2] = useState("");
   const [league, setLeague] = useState<League>("saturday");
-  const [firstPickRaw, setFirstPickRaw] = useState("");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isParsing, startParsing] = useTransition();
   const [isSaving, startSaving] = useTransition();
+  const dayInputRef = useRef<HTMLInputElement>(null);
+  const yearInputRef = useRef<HTMLInputElement>(null);
+
+  /** Auto-advances to the next date field once this one has 2 digits — same feel as a native date picker. */
+  function handleDatePartChange(value: string, setValue: (v: string) => void, next: React.RefObject<HTMLInputElement | null> | null) {
+    setValue(value);
+    if (value.length >= 2) next?.current?.focus();
+  }
 
   function nameFor(canonicalId: string): string {
     return preview?.displayNames[canonicalId] ?? canonicalId;
   }
 
+  /**
+   * Bolds whoever is logged in, wherever a name renders — instead of baking
+   * a "(you)" marker into stored data. Optionally also colors the name by
+   * team (Stats list only) so it's visually clear who played on which side.
+   * Also tags the determined MVP with the same ribbon icon MvpBadge uses,
+   * inline next to their name wherever it renders (roster or Stats list) —
+   * simpler than a separate "MVP" section, and guarantees it's visible even
+   * for the rare MVP with no stats line of their own (a 0-goal/assist game).
+   */
+  function renderName(canonicalId: string, team?: "home" | "away") {
+    const name = nameFor(canonicalId);
+    const isYou = canonicalId === currentUserCanonicalId;
+    const isMvp = canonicalId === preview?.gameRecord.mvpCanonicalId;
+    const mvpIcon = isMvp && (
+      <span aria-label="MVP Pick" title="MVP Pick">
+        {" "}
+        🎖️
+      </span>
+    );
+    if (!team) return isYou ? <strong>{name}{mvpIcon}</strong> : <>{name}{mvpIcon}</>;
+    const className = `match-detail-scorer-name-${team}`;
+    return isYou ? (
+      <strong className={className}>{name}{mvpIcon}</strong>
+    ) : (
+      <span className={className}>{name}{mvpIcon}</span>
+    );
+  }
+
+  function renderNameList(canonicalIds: string[]) {
+    if (canonicalIds.length === 0) return "—";
+    return canonicalIds.map((id, i) => (
+      <span key={id}>
+        {i > 0 && ", "}
+        {renderName(id)}
+      </span>
+    ));
+  }
+
   function handleParse(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSuccessMessage(null);
     setPreview(null);
+
+    if (!/^\d{1,2}$/.test(month) || !/^\d{1,2}$/.test(day) || !/^\d{2}$/.test(year2)) {
+      setError("Enter a valid date (2-digit year).");
+      return;
+    }
+    const date = `20${year2}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+
     startParsing(async () => {
       const result = await previewReportImport({
         text,
         date,
         league,
-        firstPickRaw: firstPickRaw.trim() || null,
+        // The default snake-order/team-listed-first-picks-first convention
+        // (see parse-report.ts's resolveExtractionToGameRecord) now covers
+        // the common case automatically — this manual override still exists
+        // server-side for the rare game where it's wrong, just not exposed
+        // in this form anymore.
+        firstPickRaw: null,
       });
       if (!result.ok) {
         setError(result.error);
@@ -51,30 +111,59 @@ export function ReportImportForm() {
         setError(result.error);
         return;
       }
-      setSuccessMessage(`Saved ${preview.gameRecord.gameId}.`);
-      setPreview(null);
-      setText("");
+      router.push("/matches");
+      router.refresh();
     });
   }
 
   const isPending = isParsing || isSaving;
-  const scorers = preview ? summarizeGoalsByScorer(preview.gameRecord.goals) : [];
+  const stats = preview ? summarizePlayerGameStats(preview.gameRecord.goals) : [];
 
   return (
     <>
+      {!preview && (
       <form onSubmit={handleParse} className="report-import-form">
-        <label htmlFor="report-date" className="login-form-label">
-          Date
+        <label htmlFor="report-month" className="login-form-label">
+          Date (MM / DD / YY)
         </label>
-        <input
-          id="report-date"
-          type="date"
-          required
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="login-form-input"
-          disabled={isPending}
-        />
+        <div className="report-import-date-row">
+          <input
+            id="report-month"
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            placeholder="MM"
+            required
+            value={month}
+            onChange={(e) => handleDatePartChange(e.target.value, setMonth, dayInputRef)}
+            className="login-form-input"
+            disabled={isPending}
+          />
+          <input
+            ref={dayInputRef}
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            placeholder="DD"
+            required
+            value={day}
+            onChange={(e) => handleDatePartChange(e.target.value, setDay, yearInputRef)}
+            className="login-form-input"
+            disabled={isPending}
+          />
+          <input
+            ref={yearInputRef}
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            placeholder="YY"
+            required
+            value={year2}
+            onChange={(e) => handleDatePartChange(e.target.value, setYear2, null)}
+            className="login-form-input"
+            disabled={isPending}
+          />
+        </div>
 
         <label htmlFor="report-league" className="login-form-label">
           League
@@ -89,19 +178,6 @@ export function ReportImportForm() {
           <option value="saturday">Saturday</option>
           <option value="sunday">Sunday</option>
         </select>
-
-        <label htmlFor="report-first-pick" className="login-form-label">
-          First pick (optional)
-        </label>
-        <input
-          id="report-first-pick"
-          type="text"
-          placeholder="Only if you know who picked first"
-          value={firstPickRaw}
-          onChange={(e) => setFirstPickRaw(e.target.value)}
-          className="login-form-input"
-          disabled={isPending}
-        />
 
         <label htmlFor="report-text" className="login-form-label">
           Report text
@@ -118,12 +194,12 @@ export function ReportImportForm() {
         />
 
         {error && <p className="note login-form-error">{error}</p>}
-        {successMessage && <p className="note">{successMessage}</p>}
 
         <button type="submit" className="login-form-submit" disabled={isPending}>
-          {isParsing ? "Parsing..." : "Parse"}
+          {isParsing ? "Confirming..." : "Confirm"}
         </button>
       </form>
+      )}
 
       {preview && (
         <section className="card report-import-preview">
@@ -139,47 +215,29 @@ export function ReportImportForm() {
             </p>
           )}
           {preview.firstPickWarning && <p className="report-import-warning">{preview.firstPickWarning}</p>}
+          {preview.pickOrderWarning && <p className="report-import-warning">{preview.pickOrderWarning}</p>}
 
-          <h3>Home roster</h3>
-          <p>{preview.gameRecord.homeRoster.map((s) => nameFor(s.canonicalId)).join(", ") || "—"}</p>
+          <h3>{preview.gameRecord.homeTeamLabel} roster</h3>
+          <p>{renderNameList(preview.gameRecord.homeRoster.map((s) => s.canonicalId))}</p>
 
-          <h3>Away roster</h3>
-          <p>{preview.gameRecord.awayRoster.map((s) => nameFor(s.canonicalId)).join(", ") || "—"}</p>
+          <h3>{preview.gameRecord.awayTeamLabel} roster</h3>
+          <p>{renderNameList(preview.gameRecord.awayRoster.map((s) => s.canonicalId))}</p>
 
-          {scorers.length > 0 && (
+          {stats.length > 0 && (
             <>
-              <h3>Goals</h3>
+              <h3>Stats</h3>
               <ul className="match-detail-goal-list">
-                {scorers.map((scorer) => {
-                  const nickname = getMultiGoalNickname(scorer.goals);
+                {stats.map((stat) => {
+                  const nickname = getMultiGoalNickname(stat.goals);
                   return (
-                    <li key={scorer.scorerCanonicalId} className={`match-detail-goal-${scorer.team}`}>
-                      <span className="match-detail-scorer-name">{nameFor(scorer.scorerCanonicalId)}</span>
-                      <GoalChip count={scorer.goals} />
+                    <li key={stat.canonicalId} className={`match-detail-goal-${stat.team}`}>
+                      <span className="match-detail-scorer-name">{renderName(stat.canonicalId, stat.team)}</span>
+                      <GoalChip count={stat.goals} />
+                      <AssistChip count={stat.assists} />
                       {nickname && <span className="match-detail-goal-nickname">{nickname}</span>}
                     </li>
                   );
                 })}
-              </ul>
-            </>
-          )}
-
-          {preview.gameRecord.mvpCanonicalId && (
-            <>
-              <h3>MVP</h3>
-              <p>{nameFor(preview.gameRecord.mvpCanonicalId)}</p>
-            </>
-          )}
-
-          {preview.gameRecord.notableMentions.length > 0 && (
-            <>
-              <h3>Notable mentions</h3>
-              <ul>
-                {preview.gameRecord.notableMentions.map((m, i) => (
-                  <li key={i}>
-                    <strong>{nameFor(m.canonicalId)}</strong>: &ldquo;{m.quote}&rdquo;
-                  </li>
-                ))}
               </ul>
             </>
           )}
@@ -206,9 +264,19 @@ export function ReportImportForm() {
             </div>
           )}
 
-          <button type="button" onClick={handleSave} className="login-form-submit" disabled={isPending}>
-            {isSaving ? "Saving..." : "Save to database"}
-          </button>
+          <div className="report-import-preview-actions">
+            <button
+              type="button"
+              onClick={() => setPreview(null)}
+              className="login-form-resend"
+              disabled={isPending}
+            >
+              ← Edit
+            </button>
+            <button type="button" onClick={handleSave} className="login-form-submit" disabled={isPending}>
+              {isSaving ? "Saving..." : "Save to database"}
+            </button>
+          </div>
         </section>
       )}
     </>

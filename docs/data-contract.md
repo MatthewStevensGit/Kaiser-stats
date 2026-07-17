@@ -52,7 +52,7 @@ The output contract. Whatever ingests new data, this is what it must produce.
 | `displayName` | Human-readable name to render. |
 | `games` / `wins` / `losses` / `ties` | Self-explanatory. |
 | `goals` | Ground truth once validated (see `findPlusMinusMismatches` / the scorer-sum check in `season-standings-parser.ts` for the spreadsheet path's version of this validation). |
-| `assists` | Counting stat only, never an input to `mvpCount` or the power ranking (see `kaiser_BUILD_SPEC.md` for why). **Always `0` from the spreadsheet-backfill path** — the historical spreadsheets never tracked assists, in any of the 5 years on file (confirmed in `kaiser_stats_engine_notes.md`). Only `rollupGameRecords()` can populate a nonzero value. |
+| `assists` | Counting stat only, never an input to the power ranking/golden boot (see `kaiser_BUILD_SPEC.md` for why — coverage bias). **Does now factor into per-game MVP as a minor tiebreaker** (updated 2026-07-16, overriding the original MVP exclusion — see `kaiser_BUILD_SPEC.md`'s MVP section), which is the only way it reaches `mvpCount`. **Always `0` from the spreadsheet-backfill path** — the historical spreadsheets never tracked assists, in any of the 5 years on file (confirmed in `kaiser_stats_engine_notes.md`). Only `rollupGameRecords()` can populate a nonzero value. |
 | `plusMinus` | `wins − losses`. A derived stat, not an independent measure — see `findPlusMinusMismatches`. |
 | `mvpCount` | Number of games this player was the app-derived MVP. **Always `0` from the spreadsheet-backfill path**, same reasoning as `assists` — MVP is computed from per-game report narrative, which the season spreadsheets never had. |
 | `avgDraftPosition` | Average snake-draft pick number across every game this player was drafted in (1 = picked first that game), or `null` if never drafted / unknown. **Always `null` from the spreadsheet-backfill path** — draft order doesn't exist at season-aggregate granularity. Display-only: shown next to the power ranking as a performance-vs-draft-slot comparison (like fantasy sports' value-over-ADP), computed *after* ranking and never fed back into the sort — see `computePowerRankings()` in `rankings.ts` and `kaiser_BUILD_SPEC.md` on why draft order must never be a ranking input. |
@@ -85,7 +85,7 @@ considered valid, not after.
 | `homeRoster` / `awayRoster` | Arrays of `RosterSpot` = `{ canonicalId, pickNumber }`. `pickNumber` is the 1-indexed *overall* snake-draft pick for that game (not per-team) — this is what `rollupGameRecords()` averages into `avgDraftPosition`. |
 | `homeScore` / `awayScore` | Final score. |
 | `goals` | Array of `{ scorerCanonicalId, assistCanonicalId, team }`. `assistCanonicalId` is `null` when the report didn't narrate one — never guessed. |
-| `mvpCanonicalId` | The app's own derived MVP call, or `null`. Never a fact Vadim stated, never another player's stated opinion (see `kaiser_BUILD_SPEC.md`). |
+| `mvpCanonicalId` | The app's own derived MVP call, or `null`. Never a fact Vadim stated, never another player's stated opinion (see `kaiser_BUILD_SPEC.md`). Computed deterministically by `computeMvp()` (`goal-summary.ts`) from goals+assists — the model's own narrative read (`mvpRaw`) is only a tiebreaker between stats-tied players, or the fallback when a game has no extracted goals/assists at all (updated 2026-07-16, after real games showed narrative-first picked a vague "good goalkeeping" performance over a player who scored both of his team's goals in a draw). |
 | `notableMentions` | Array of `{ canonicalId, quote }` — report-narrative snippets naming a player, kept separate from `mvpCanonicalId`. Rolls up into `PlayerSeasonStats.notableMentions`. |
 | `source` | Provenance, e.g. `"email:<gmailThreadId>"`. |
 
@@ -95,8 +95,10 @@ input. `src/lib/stats-engine/__tests__/game-records.test.ts` is the executable
 proof the two paths agree on the contract.
 
 **Now built:** `src/lib/report-parser/` turns a report email's text into a
-`GameRecord`, via the Gemini API (`gemini-2.5-flash`, chosen over the
-Claude API originally named in `kaiser_BUILD_SPEC.md` for cost reasons —
+`GameRecord`, via the Gemini API (Google's Flash tier — see
+`src/lib/report-parser/gemini-client.ts` for why the model name is the
+`gemini-flash-latest` alias rather than a hard-pinned dated model name — chosen
+over the Claude API originally named in `kaiser_BUILD_SPEC.md` for cost reasons,
 Gemini's free tier comfortably covers this project's actual usage), and an
 admin-only web UI (`/matches/import`, see `docs/report-parsing.md`) now writes its
 resolved output into the real `game_records`/`roster_spots`/`goal_events`/
@@ -108,13 +110,34 @@ Supabase but aren't shown on the site yet (see "Going live with real data" below
 
 - **New historical spreadsheets** (more years, corrections, etc.): drop the raw
   `.xlsx`/`.pdf` file in **`private/incoming/`**. That folder — and all of
-  `private/` — is gitignored; nothing placed there ever gets committed. Use the
-  same naming convention the existing files already follow:
-  `soccer_<year>.xlsx` for a full-year file, `soccer_<year>_<part>.xlsx` for a
-  mid-season/partial snapshot (e.g. `soccer_2026_2.xlsx`). Whatever parses it
-  should call `parsePrimaryStandingsSheet()` (or `parseAllStandingsSheets()` to
-  inspect every sheet first) — don't assume the column layout matches last
-  year's file, the schema drifts (see `kaiser_stats_engine_notes.md`).
+  `private/` — is gitignored; nothing placed there ever gets committed.
+  **Critical, confirmed 2026-07-16**: every `soccer_<year>*.xlsx` export is a
+  running **cumulative** season total, not an independent slice — a later
+  export (e.g. Vadim's 3rd 2026 export) already includes every game the
+  earlier ones did, plus more. `aggregateStandings()` sums whatever rows it's
+  given with no de-duplication, so keeping more than one export for the same
+  year in `private/` (or backfilled into `season_standing_rows`) silently
+  multiplies every stat for that year (a real bug this exact mistake caused —
+  five stacked 2025 exports inflated every player's 2025 game count by 5x
+  before this was caught). **Keep exactly one file per year** — whichever
+  export is the most complete/most recent (compare a well-known player's game
+  count across candidates; higher is newer) — and delete the superseded ones
+  from `private/` entirely before running `npm run backfill`, rather than
+  archiving them alongside it. Name it `soccer_<year>.xlsx` (drop any
+  `_<part>` suffix now that only one file per year is ever kept). Whatever
+  parses it should call `parsePrimaryStandingsSheet()` (or
+  `parseAllStandingsSheets()` to inspect every sheet first) — don't assume the
+  column layout matches last year's file, the schema drifts (see
+  `kaiser_stats_engine_notes.md`).
+- **Re-running `npm run backfill`**: safe and idempotent — `scripts/backfill-to-supabase.ts`
+  deletes each file's existing `season_standing_rows` (matched by the same
+  `"<file>#<sheetName>"` source string `parsePrimaryStandingsSheet()` stamps on
+  every row, not the bare filename — an earlier version of this script matched
+  on the bare filename, which never matched anything and silently tripled
+  every row across repeated runs; fixed 2026-07-16) before inserting the fresh
+  parse. Removing a file from `private/` does **not** by itself clear its old
+  rows from Supabase — delete those manually (`.delete().eq("source", ...)`)
+  before or instead of removing the file.
 - **New real identity/email data**: goes in `private/`, following the existing
   `kaiser_player_identity.csv` / `kaiser_email_index.csv` shape. Never at the
   repo root — see `kaiser_BUILD_SPEC.md`'s GitHub/repo-handling section for why.
@@ -181,14 +204,18 @@ changes at all, because it was built against this contract rather than
 against whatever shape the spreadsheets happened to have. See
 `docs/report-parsing.md` for how to run it.
 
-Draft position (`pickNumber`) defaults to `null` for report-parsed games —
-report emails narrate who played and the score, never which captain picked
-first, so there's no way to reconstruct true overall pick order from the
-text alone by default. `rollupGameRecords()` already treats a null pick
-number as "no data" and excludes it from `avgDraftPosition` rather than
-treating it as 0. If a human happens to know who picked first for one
-specific game, `docs/report-parsing.md`'s `First pick:` annotation computes
-real pick numbers for that one confirmed game — never a rule applied to
-every game, since that would fabricate the exact stat this field exists to
-be honest about (see `kaiser_BUILD_SPEC.md` on why draft order must never be
-guessed).
+Draft position (`pickNumber`) is computed by default for report-parsed games
+(updated 2026-07-16, confirmed with the league organizer): the first-listed
+player on each team's roster is that team's captain, and the rest of that
+side's roster list is already in the order they were drafted, so the raw
+roster order itself carries real per-team pick order. `resolveExtractionToGameRecord()`
+assumes the team listed first picked first and alternates strict snake order
+by default, refined further by a report's own narrated pick order (see
+`prompt.ts` rule 10 / `pickOrderRaw`) or an explicit `First pick:` annotation
+when either contradicts the default for a specific game (see
+`docs/report-parsing.md`). Pick numbers are only left `null` when something
+about a game's data is inconsistent enough not to trust (`firstPickWarning`).
+`rollupGameRecords()` still treats a null pick number as "no data" and
+excludes it from `avgDraftPosition` rather than treating it as 0 — this
+still applies to spreadsheet-backfilled historical games, which predate any
+of this and have no roster-order information to lean on at all.

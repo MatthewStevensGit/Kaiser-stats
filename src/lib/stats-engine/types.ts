@@ -74,12 +74,21 @@ export interface PlayerSeasonStats {
   mvpCount: number;
   /**
    * Average snake-draft pick number across every game this player was
-   * drafted in (1 = picked first that game), or null if never drafted /
-   * unknown. Display-only — see kaiser_BUILD_SPEC.md on why draft position
-   * must never be a ranking *input* (it encodes the captains' priors, not
-   * performance): it's shown alongside the performance rank as a value-over-
-   * draft-position comparison, the same way fantasy sports compares
-   * performance to ADP, never folded into the rank itself.
+   * actually drafted in (1 = picked first that game), or null if never
+   * drafted / unknown. A game where this player was that team's captain
+   * (roster[0] — see prompt.ts rule 10) never contributes here, even though
+   * they still played: the captain's own "pick number" is always a
+   * structural stand-in (home captain always 1, away captain always 2 —
+   * see resolveExtractionToGameRecord in parse-report.ts), never a real
+   * draft decision, so it would silently drag this average toward 1-2 for
+   * anyone who frequently captains, with no bearing on how early they're
+   * actually valued as a pick (confirmed as a real, visible distortion —
+   * see rollupGameRecords in game-records.ts). Display-only regardless — see
+   * kaiser_BUILD_SPEC.md on why draft position must never be a ranking
+   * *input* (it encodes the captains' priors, not performance): it's shown
+   * alongside the performance rank as a value-over-draft-position
+   * comparison, the same way fantasy sports compares performance to ADP,
+   * never folded into the rank itself.
    */
   avgDraftPosition: number | null;
   /**
@@ -115,10 +124,16 @@ export interface RosterSpot {
   canonicalId: string;
   /**
    * 1-indexed overall pick number for this game's draft (not per-team), or
-   * null when it isn't known. Report emails narrate who played and the
-   * final score, never the draft order — that only gets captured by the
-   * future live check-in app's draft feature (Phase 2). Historical/report-
-   * parsed games are expected to leave this null; rollupGameRecords()
+   * null when it isn't known. Report-parsed games compute this by default
+   * (see resolveExtractionToGameRecord in parse-report.ts): the team listed
+   * first is assumed to have picked first, alternating strict snake order —
+   * a confirmed league convention (each roster's first-listed player is
+   * that team's captain, the rest of the list is already in draft order),
+   * refined further when a report narrates the real order or a human
+   * supplies a "First pick" annotation. Only left null when something about
+   * that game's data is inconsistent enough not to trust (see
+   * firstPickWarning/pickOrderWarning). Historical spreadsheet-backfilled
+   * games (which predate any of this) still leave it null; rollupGameRecords()
    * simply skips null values when averaging avgDraftPosition.
    */
   pickNumber: number | null;
@@ -143,6 +158,18 @@ export interface GameRecord {
   league: League;
   homeRoster: RosterSpot[];
   awayRoster: RosterSpot[];
+  /**
+   * "Home"/"away" has no real meaning for this pickup league — these are
+   * the actual team names to show (e.g. "Orange"/"Blue"). Populated from
+   * the report when it names sides, from RawExtraction's
+   * homeTeamLabelRaw/awayTeamLabelRaw; when the report doesn't name sides,
+   * resolveExtractionToGameRecord() applies a plain default ("Orange"/
+   * "Blue") rather than leaving this null — unlike a player identity, a
+   * wrong guess here can't misattribute anyone's stats, it's just a label,
+   * so a default is fine where a guess elsewhere in this file wouldn't be.
+   */
+  homeTeamLabel: string;
+  awayTeamLabel: string;
   homeScore: number;
   awayScore: number;
   goals: GoalEvent[];

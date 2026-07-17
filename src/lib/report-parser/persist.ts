@@ -4,6 +4,8 @@ export interface GameRecordRow {
   game_id: string;
   date: string;
   league: string;
+  home_team_label: string;
+  away_team_label: string;
   home_score: number;
   away_score: number;
   mvp_canonical_id: string | null;
@@ -47,6 +49,8 @@ export function buildPersistenceRows(gameRecord: GameRecord): {
     game_id: gameRecord.gameId,
     date: gameRecord.date,
     league: gameRecord.league,
+    home_team_label: gameRecord.homeTeamLabel,
+    away_team_label: gameRecord.awayTeamLabel,
     home_score: gameRecord.homeScore,
     away_score: gameRecord.awayScore,
     mvp_canonical_id: gameRecord.mvpCanonicalId,

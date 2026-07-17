@@ -250,3 +250,37 @@ alter table scheduled_games add column if not exists created_by text references 
 -- comment in src/lib/stats-engine/types.ts); the original NOT NULL constraint
 -- predates any real write path and was never exercised until now.
 alter table roster_spots alter column pick_number drop not null;
+
+-- Migration (2026-07-16): "home"/"away" team display labels. Not null — the
+-- app always resolves a value before writing (the report's own stated team
+-- names when given, else a plain "Orange"/"Blue" default — see GameRecord's
+-- homeTeamLabel/awayTeamLabel doc comment in src/lib/stats-engine/types.ts).
+alter table game_records add column if not exists home_team_label text not null default 'Orange';
+alter table game_records add column if not exists away_team_label text not null default 'Blue';
+
+-- Migration (2026-07-16): game_records.description existed in this file's base
+-- "create table if not exists" since before the live table was first created,
+-- but that clause is a no-op against an already-existing table — the column
+-- was never actually added to the real database (confirmed by a real
+-- PGRST204 "Could not find the 'description' column" error on the first
+-- attempt to save a real report). Needed for the report-import write path
+-- (src/lib/report-parser/save.ts) to store the raw report text.
+alter table game_records add column if not exists description text;
+
+-- Migration (2026-07-16): per-year stats cutoff. season_standing_rows is a
+-- cumulative spreadsheet snapshot as of some date; a report-imported
+-- game_records row only adds to the Table's totals (see
+-- src/lib/stats-engine/game-records.ts's mergePlayerSeasonStats and
+-- selectStatsEligibleGames, wired in from src/app/page.tsx) when its date is
+-- strictly after that year's cutoff_date here -- otherwise it's presumed
+-- already counted in the spreadsheet. A year with no row here is a fully
+-- closed season (spreadsheet already covers the whole year), so nothing
+-- ever auto-counts for it. Only the current in-progress season needs a row;
+-- update cutoff_date each time a newer spreadsheet gets backfilled
+-- (see docs/data-contract.md).
+create table if not exists season_stats_cutoff (
+  year integer primary key,
+  cutoff_date date not null
+);
+
+alter table season_stats_cutoff enable row level security;

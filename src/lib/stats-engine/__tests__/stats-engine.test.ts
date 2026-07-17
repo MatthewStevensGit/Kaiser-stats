@@ -3,11 +3,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { aggregateStandings, findPlusMinusMismatches, rankByRate } from "../aggregate";
+import {
+  aggregateStandings,
+  computeSeasonAwards,
+  filterSeasonStandingRowsByYear,
+  findPlusMinusMismatches,
+  rankByRate,
+  tallyAwardCounts,
+} from "../aggregate";
 import { resolvePlayerName } from "../identity";
 import { computePowerRankings } from "../rankings";
 import { parseAllStandingsSheets, parsePrimaryStandingsSheet } from "../season-standings-parser";
-import type { PlayerIdentity } from "../types";
+import type { PlayerIdentity, SeasonStandingRow } from "../types";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -111,6 +118,84 @@ describe("aggregateStandings", () => {
     const rows = parsePrimaryStandingsSheet(wb, "sample", "saturday");
     const { players } = aggregateStandings(rows, samplePlayers, "sunday");
     expect(players).toHaveLength(0);
+  });
+});
+
+describe("filterSeasonStandingRowsByYear", () => {
+  const rowFor = (source: string): SeasonStandingRow => ({
+    source,
+    league: "sunday",
+    playerNameRaw: "Someone",
+    games: 1,
+    wins: 1,
+    losses: 0,
+    ties: 0,
+    goals: null,
+    plusMinus: null,
+    percent: null,
+    points: null,
+  });
+
+  it("keeps only rows whose source embeds the requested year", () => {
+    const rows = [rowFor("soccer_2023.xlsx#Sheet1"), rowFor("soccer_2025_1.xlsx#Sheet1")];
+    expect(filterSeasonStandingRowsByYear(rows, "2023")).toEqual([rows[0]]);
+  });
+
+  it("'all' returns every row unfiltered — today's existing all-time behavior", () => {
+    const rows = [rowFor("soccer_2023.xlsx#Sheet1"), rowFor("soccer_2025_1.xlsx#Sheet1")];
+    expect(filterSeasonStandingRowsByYear(rows, "all")).toEqual(rows);
+  });
+});
+
+describe("computeSeasonAwards / tallyAwardCounts", () => {
+  const seasonPlayers: PlayerIdentity[] = [
+    { canonicalId: "p1", displayName: "Ari Fox", aliases: [], knownEmails: [], leagues: ["sunday"], status: "regular" },
+    { canonicalId: "p2", displayName: "Bex Tanaka", aliases: [], knownEmails: [], leagues: ["sunday"], status: "regular" },
+  ];
+
+  function rowFor(playerNameRaw: string, wins: number, losses: number, goals: number, games = 5): SeasonStandingRow {
+    return {
+      source: "soccer_2023.xlsx#Sheet1",
+      league: "sunday",
+      playerNameRaw,
+      games,
+      wins,
+      losses,
+      ties: 0,
+      goals,
+      plusMinus: wins - losses,
+      percent: null,
+      points: null,
+    };
+  }
+
+  it("awards the league title (top +/-) and Golden Boot (most goals, min-games floor) to the right player", () => {
+    const rows = [rowFor("Ari Fox", 4, 1, 10), rowFor("Bex Tanaka", 2, 3, 3)];
+    const award = computeSeasonAwards(rows, seasonPlayers, 2023, 3);
+    expect(award).toEqual({ year: 2023, leagueWinnerIds: ["p1"], goldenBootWinnerIds: ["p1"] });
+  });
+
+  it("splits the award between tied players rather than picking one arbitrarily", () => {
+    const rows = [rowFor("Ari Fox", 3, 2, 5), rowFor("Bex Tanaka", 3, 2, 5)];
+    const award = computeSeasonAwards(rows, seasonPlayers, 2023, 3);
+    expect(award.leagueWinnerIds.sort()).toEqual(["p1", "p2"]);
+    expect(award.goldenBootWinnerIds.sort()).toEqual(["p1", "p2"]);
+  });
+
+  it("excludes a player under the Golden Boot's minimum-games floor from winning it", () => {
+    const rows = [rowFor("Ari Fox", 4, 1, 10, 2), rowFor("Bex Tanaka", 2, 3, 3, 5)];
+    const award = computeSeasonAwards(rows, seasonPlayers, 2023, 3);
+    expect(award.goldenBootWinnerIds).toEqual(["p2"]);
+  });
+
+  it("tallies league titles and Golden Boots per player across multiple seasons", () => {
+    const awards = [
+      { year: 2022, leagueWinnerIds: ["p1"], goldenBootWinnerIds: ["p2"] },
+      { year: 2023, leagueWinnerIds: ["p1"], goldenBootWinnerIds: ["p1"] },
+    ];
+    const tally = tallyAwardCounts(awards);
+    expect(tally.get("p1")).toEqual({ leagueTitles: 2, goldenBoots: 1 });
+    expect(tally.get("p2")).toEqual({ leagueTitles: 0, goldenBoots: 1 });
   });
 });
 

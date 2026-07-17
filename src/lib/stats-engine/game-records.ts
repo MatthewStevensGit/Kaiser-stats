@@ -63,7 +63,7 @@ export function rollupGameRecords(
       ["home", game.homeRoster],
       ["away", game.awayRoster],
     ] as const) {
-      for (const spot of roster) {
+      roster.forEach((spot, index) => {
         const stats = statsFor(spot.canonicalId);
         stats.games += 1;
         stats.sources.push(game.source);
@@ -78,11 +78,19 @@ export function rollupGameRecords(
           stats.plusMinus -= 1;
         }
 
-        if (spot.pickNumber !== null) {
+        // roster[0] is that team's captain (see prompt.ts rule 10) — their
+        // pickNumber is always a structural stand-in (home captain always 1,
+        // away captain always 2, by the default snake-order convention in
+        // parse-report.ts), never a real draft decision, so a captain never
+        // contributes to avgDraftPosition. Whoever captains varies game to
+        // game (e.g. Sandrik captains one game, is a real drafted pick in
+        // another) — this excludes only that specific game's appearance,
+        // not the player generally.
+        if (index > 0 && spot.pickNumber !== null) {
           draftPickSums.set(spot.canonicalId, (draftPickSums.get(spot.canonicalId) ?? 0) + spot.pickNumber);
           draftPickCounts.set(spot.canonicalId, (draftPickCounts.get(spot.canonicalId) ?? 0) + 1);
         }
-      }
+      });
     }
 
     for (const goal of game.goals) {
@@ -108,4 +116,92 @@ export function rollupGameRecords(
   }
 
   return Array.from(totals.values());
+}
+
+/**
+ * Picks which report-imported games (see rollupGameRecords above) should
+ * additionally count toward the Table's totals, on top of the spreadsheet
+ * backfill (aggregateStandings()) — see season_stats_cutoff's doc comment in
+ * supabase/schema.sql. A game only counts when its year has a cutoff row AND
+ * its date is strictly after that cutoff; a year with no cutoff row is
+ * treated as a fully closed season (its spreadsheet is already complete),
+ * so nothing for it ever auto-counts here, no matter how many game_records
+ * exist for that year (e.g. from a later historical report backfill).
+ * `year: "all"` matches every year that has a cutoff, same "all" convention
+ * as filterSeasonStandingRowsByYear.
+ */
+export function selectStatsEligibleGames(
+  games: GameRecord[],
+  cutoffsByYear: Map<number, string>,
+  year: string,
+): GameRecord[] {
+  return games.filter((game) => {
+    const gameYear = Number(game.date.slice(0, 4));
+    if (year !== "all" && String(gameYear) !== year) return false;
+    const cutoff = cutoffsByYear.get(gameYear);
+    return cutoff !== undefined && game.date > cutoff;
+  });
+}
+
+/**
+ * Year-filters game_records with NO cutoff check, unlike
+ * selectStatsEligibleGames above — for stats that never existed in the
+ * spreadsheet backfill at all (MVP count, see PlayerSeasonStats.mvpCount's
+ * doc comment: always 0 from that path), there's no double-counting risk,
+ * so every report-imported game counts the moment it's saved — whether it's
+ * a brand-new game (a "frontfill") or an old historical report being
+ * imported later (a "backfill") makes no difference for this one stat.
+ * `year: "all"` matches every game regardless of year, same convention as
+ * filterSeasonStandingRowsByYear / selectStatsEligibleGames.
+ */
+export function filterGameRecordsByYear(games: GameRecord[], year: string): GameRecord[] {
+  if (year === "all") return games;
+  return games.filter((game) => game.date.startsWith(year));
+}
+
+/**
+ * Combines a spreadsheet-derived PlayerSeasonStats[] (aggregateStandings())
+ * with a report-derived one (rollupGameRecords(), already narrowed to
+ * stats-eligible games via selectStatsEligibleGames) into one per-player
+ * total — the "going live with real data" query layer's last step, so a
+ * player who appears in both sources gets one combined row instead of two.
+ * avgDraftPosition only ever comes from the report side in practice (the
+ * spreadsheet path always reports it null — see PlayerSeasonStats' doc
+ * comment); this simple averages both sides' non-null values, which is only
+ * an approximation (not weighted by game count) in the generic case.
+ */
+export function mergePlayerSeasonStats(
+  spreadsheetStats: PlayerSeasonStats[],
+  reportStats: PlayerSeasonStats[],
+): PlayerSeasonStats[] {
+  const merged = new Map<string, PlayerSeasonStats>();
+  for (const stats of spreadsheetStats) {
+    merged.set(stats.canonicalId, { ...stats, notableMentions: [...stats.notableMentions], sources: [...stats.sources] });
+  }
+
+  for (const stats of reportStats) {
+    const existing = merged.get(stats.canonicalId);
+    if (!existing) {
+      merged.set(stats.canonicalId, { ...stats, notableMentions: [...stats.notableMentions], sources: [...stats.sources] });
+      continue;
+    }
+    existing.games += stats.games;
+    existing.wins += stats.wins;
+    existing.losses += stats.losses;
+    existing.ties += stats.ties;
+    existing.goals += stats.goals;
+    existing.assists += stats.assists;
+    existing.mvpCount += stats.mvpCount;
+    existing.plusMinus += stats.plusMinus;
+    existing.notableMentions.push(...stats.notableMentions);
+    existing.sources.push(...stats.sources);
+    existing.avgDraftPosition =
+      existing.avgDraftPosition === null
+        ? stats.avgDraftPosition
+        : stats.avgDraftPosition === null
+          ? existing.avgDraftPosition
+          : (existing.avgDraftPosition + stats.avgDraftPosition) / 2;
+  }
+
+  return Array.from(merged.values());
 }
