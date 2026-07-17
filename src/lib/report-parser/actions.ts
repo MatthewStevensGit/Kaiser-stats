@@ -2,7 +2,7 @@
 
 import { getCurrentUser } from "../auth/session";
 import { createServiceRoleClient } from "../supabase/client";
-import type { GameRecord, League, NameResolution, PlayerIdentity } from "../stats-engine/types";
+import type { GameRecord, NameResolution, PlayerIdentity } from "../stats-engine/types";
 import { parseReportText, resolveExtractionToGameRecord } from "./parse-report";
 import { saveResolvedGame, type SaveResult } from "./save";
 
@@ -55,8 +55,6 @@ function buildDisplayNames(known: PlayerIdentity[], provisioned: PlayerIdentity[
 
 export async function previewReportImport(input: {
   text: string;
-  date: string;
-  league: League;
   firstPickRaw: string | null;
 }): Promise<PreviewResult> {
   const admin = await requireAdminResult();
@@ -64,10 +62,6 @@ export async function previewReportImport(input: {
 
   const text = input.text.trim();
   if (!text) return { ok: false, error: "Paste the report text first." };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { ok: false, error: "Enter a valid date." };
-  if (input.league !== "saturday" && input.league !== "sunday") {
-    return { ok: false, error: "Choose a league." };
-  }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { ok: false, error: "GEMINI_API_KEY is not configured on the server." };
@@ -81,13 +75,33 @@ export async function previewReportImport(input: {
     return { ok: false, error: err instanceof Error ? err.message : "Report parsing failed." };
   }
 
-  const gameId = `report-${input.date}-${input.league}`;
-  const source = `manual:${input.date}-${input.league}`;
+  // Date/league used to be typed in separately by the admin, but the pasted
+  // thread always already states them (the original email's date line/subject,
+  // e.g. "Saturday, June 27" or "Vadim ..., 2026-06-27:") — so Gemini's own
+  // extraction (see prompt.ts's date/league fields) is now the only source.
+  // No silent fallback to "today"/"unknown": a wrong guess here would produce
+  // a wrong gameId and a mislabeled game record, so this is a hard error
+  // instead, telling the admin to make sure that line is in the pasted text.
+  if (!extraction.date) {
+    return {
+      ok: false,
+      error: "Couldn't find a date in that text — make sure the pasted thread includes the original date/subject line.",
+    };
+  }
+  if (extraction.league !== "saturday" && extraction.league !== "sunday") {
+    return {
+      ok: false,
+      error: "Couldn't tell whether this was the Saturday or Sunday league from that text — make sure the pasted thread includes the original subject line.",
+    };
+  }
+
+  const gameId = `report-${extraction.date}-${extraction.league}`;
+  const source = `manual:${extraction.date}-${extraction.league}`;
 
   const resolved = resolveExtractionToGameRecord(
     extraction,
     knownPlayers,
-    { gameId, source, fallbackDate: input.date, fallbackLeague: input.league },
+    { gameId, source, fallbackDate: extraction.date, fallbackLeague: extraction.league },
     input.firstPickRaw,
   );
 

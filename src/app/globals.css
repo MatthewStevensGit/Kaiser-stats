@@ -328,16 +328,6 @@ main {
   max-width: 640px;
 }
 
-.report-import-date-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.report-import-date-row input {
-  width: 4rem;
-  text-align: center;
-}
-
 .report-import-textarea {
   min-height: 220px;
   font-family: inherit;
