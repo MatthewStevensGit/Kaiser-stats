@@ -17,9 +17,6 @@ export default function RulesPage() {
   return (
     <main>
       <header className="page-header">
-        <a href="/" className="back-link">
-          ← Back to stats
-        </a>
         <h1>Kaiser Rulebook</h1>
         <p className="subtitle">
           How games are organized and how the stats on this site get computed. Where we

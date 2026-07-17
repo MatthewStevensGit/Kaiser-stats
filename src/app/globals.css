@@ -937,10 +937,16 @@ th.num {
   color: var(--nav-fg-active);
 }
 
+/* A person's own name, not a section label like "Table" — cancels
+   .bottom-nav-item's all-caps treatment for it. */
+.bottom-nav-item-name-case {
+  text-transform: none;
+}
+
 .bottom-nav-logout {
   background: none;
   border: none;
-  font: inherit;
+  font-family: inherit;
   cursor: pointer;
 }
 

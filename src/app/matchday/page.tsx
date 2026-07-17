@@ -14,7 +14,6 @@ export default async function MatchdayPage() {
   return (
     <main>
       <header className="screen-header-row">
-        <h1 className="screen-header">Matchday</h1>
         <div className="matchday-header-links">
           {user?.isAdmin && (
             <a href="/matchday/new" className="rulebook-link">

@@ -33,7 +33,6 @@ export default async function MatchesPage({
   return (
     <main>
       <header className="screen-header-row">
-        <h1 className="screen-header">Past Matches</h1>
         {user?.isAdmin && (
           <a href="/matches/import" className="rulebook-link">
             + Import match report

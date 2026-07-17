@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { id: "matches", label: "Matches", href: "/matches" },
   { id: "matchday", label: "Matchday", href: "/matchday" },
   { id: "other-stats", label: "Other Stats", href: "/other-stats" },
+  { id: "rules", label: "Rules", href: "/rules" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -44,7 +45,7 @@ export function BottomNav({ displayName }: { displayName?: string }) {
 
       {displayName ? (
         <>
-          <a href="/" className="bottom-nav-item">
+          <a href="/" className="bottom-nav-item bottom-nav-item-name-case">
             {displayName.split(" ")[0] ?? displayName}
           </a>
           <button type="button" onClick={handleLogOut} className="bottom-nav-item bottom-nav-logout">

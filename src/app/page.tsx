@@ -101,13 +101,6 @@ export default async function Home({
 
   return (
     <main>
-      <header className="screen-header-row">
-        <h1 className="screen-header">Table</h1>
-        <a href="/rules" className="rulebook-link">
-          📖 Rulebook
-        </a>
-      </header>
-
       <PillTabs
         activeId={tab}
         tabs={[

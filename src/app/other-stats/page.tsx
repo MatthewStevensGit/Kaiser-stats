@@ -44,10 +44,6 @@ export default async function OtherStatsPage({
 
   return (
     <main>
-      <header className="screen-header-row">
-        <h1 className="screen-header">Other Stats</h1>
-      </header>
-
       <PillTabs
         activeId={tab}
         tabs={[
