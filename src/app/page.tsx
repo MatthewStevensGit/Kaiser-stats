@@ -102,21 +102,21 @@ export default async function Home({
   return (
     <main>
       <PillTabs
-        activeId={tab}
-        tabs={[
-          { id: "plus-minus", label: "Plus-Minus", href: `/?tab=plus-minus&year=${year}` },
-          { id: "golden-boot", label: "Golden Boot", href: `/?tab=golden-boot&year=${year}` },
-          { id: "mvp", label: "MVP", href: `/?tab=mvp&year=${year}` },
-        ]}
-      />
-
-      <PillTabs
         activeId={year}
         tabs={YEARS.map((y) => ({
           id: y,
           label: y === ALL_YEARS_ID ? "All Years" : y,
           href: `/?tab=${tab}&year=${y}`,
         }))}
+      />
+
+      <PillTabs
+        activeId={tab}
+        tabs={[
+          { id: "plus-minus", label: "Plus-Minus", href: `/?tab=plus-minus&year=${year}` },
+          { id: "golden-boot", label: "Golden Boot", href: `/?tab=golden-boot&year=${year}` },
+          { id: "mvp", label: "MVP", href: `/?tab=mvp&year=${year}` },
+        ]}
       />
 
       {tab === "plus-minus" &&

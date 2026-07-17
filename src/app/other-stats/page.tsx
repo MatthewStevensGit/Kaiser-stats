@@ -45,20 +45,20 @@ export default async function OtherStatsPage({
   return (
     <main>
       <PillTabs
-        activeId={tab}
-        tabs={[
-          { id: "assists", label: "Assists", href: `/other-stats?tab=assists&year=${year}` },
-          { id: "draft-position", label: "Draft Position", href: `/other-stats?tab=draft-position&year=${year}` },
-        ]}
-      />
-
-      <PillTabs
         activeId={year}
         tabs={YEARS.map((y) => ({
           id: y,
           label: y === ALL_YEARS_ID ? "All Years" : y,
           href: `/other-stats?tab=${tab}&year=${y}`,
         }))}
+      />
+
+      <PillTabs
+        activeId={tab}
+        tabs={[
+          { id: "assists", label: "Assists", href: `/other-stats?tab=assists&year=${year}` },
+          { id: "draft-position", label: "Draft Position", href: `/other-stats?tab=draft-position&year=${year}` },
+        ]}
       />
 
       {tab === "assists" &&

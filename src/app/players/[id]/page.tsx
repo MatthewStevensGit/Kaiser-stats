@@ -42,7 +42,7 @@ export default async function PlayerDetailPage({
   return (
     <main>
       <a href="/" className="back-link">
-        ← Back to table
+        ← Back to stats
       </a>
       <header className="player-header">
         <h1 className="screen-header screen-header-name-case">{player.displayName}</h1>
