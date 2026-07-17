@@ -74,12 +74,21 @@ export interface PlayerSeasonStats {
   mvpCount: number;
   /**
    * Average snake-draft pick number across every game this player was
-   * drafted in (1 = picked first that game), or null if never drafted /
-   * unknown. Display-only — see kaiser_BUILD_SPEC.md on why draft position
-   * must never be a ranking *input* (it encodes the captains' priors, not
-   * performance): it's shown alongside the performance rank as a value-over-
-   * draft-position comparison, the same way fantasy sports compares
-   * performance to ADP, never folded into the rank itself.
+   * actually drafted in (1 = picked first that game), or null if never
+   * drafted / unknown. A game where this player was that team's captain
+   * (roster[0] — see prompt.ts rule 10) never contributes here, even though
+   * they still played: the captain's own "pick number" is always a
+   * structural stand-in (home captain always 1, away captain always 2 —
+   * see resolveExtractionToGameRecord in parse-report.ts), never a real
+   * draft decision, so it would silently drag this average toward 1-2 for
+   * anyone who frequently captains, with no bearing on how early they're
+   * actually valued as a pick (confirmed as a real, visible distortion —
+   * see rollupGameRecords in game-records.ts). Display-only regardless — see
+   * kaiser_BUILD_SPEC.md on why draft position must never be a ranking
+   * *input* (it encodes the captains' priors, not performance): it's shown
+   * alongside the performance rank as a value-over-draft-position
+   * comparison, the same way fantasy sports compares performance to ADP,
+   * never folded into the rank itself.
    */
   avgDraftPosition: number | null;
   /**

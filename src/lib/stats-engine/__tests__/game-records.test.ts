@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "../game-records";
+import { filterGameRecordsByYear, mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "../game-records";
 import type { GameRecord, PlayerIdentity, PlayerSeasonStats } from "../types";
 
 const players: PlayerIdentity[] = [
@@ -82,12 +82,61 @@ describe("rollupGameRecords", () => {
     expect(cy).toMatchObject({ games: 2, wins: 0, losses: 1, ties: 1, plusMinus: -1 });
   });
 
-  it("averages a player's draft pick number across every game they were drafted in", () => {
-    const stats = rollupGameRecords(games, players);
-    // p1: pick 1 in g1, pick 2 in g2 -> avg 1.5
-    expect(stats.find((s) => s.canonicalId === "p1")?.avgDraftPosition).toBe(1.5);
-    // p3 only appears once per game but with different picks: g1 pick 2, g2 pick 4 -> avg 3
-    expect(stats.find((s) => s.canonicalId === "p3")?.avgDraftPosition).toBe(3);
+  it("averages a player's draft pick number across every game they were drafted in, excluding their captain appearances", () => {
+    const draftGames: GameRecord[] = [
+      {
+        gameId: "d1",
+        date: "2026-07-05",
+        league: "sunday",
+        homeRoster: [
+          { canonicalId: "captain-h", pickNumber: 1 },
+          { canonicalId: "p1", pickNumber: 3 },
+        ],
+        awayRoster: [
+          { canonicalId: "captain-a", pickNumber: 2 },
+          { canonicalId: "p3", pickNumber: 4 },
+        ],
+        homeTeamLabel: "Orange",
+        awayTeamLabel: "Blue",
+        homeScore: 0,
+        awayScore: 0,
+        goals: [],
+        mvpCanonicalId: null,
+        notableMentions: [],
+        source: "draft-game-1",
+      },
+      {
+        gameId: "d2",
+        date: "2026-07-06",
+        league: "sunday",
+        // p1 captains this one -- roster[0] is always a structural stand-in
+        // pick, never a real draft decision, so this appearance shouldn't
+        // move p1's average at all.
+        homeRoster: [
+          { canonicalId: "p1", pickNumber: 1 },
+          { canonicalId: "captain-h2", pickNumber: 3 },
+        ],
+        awayRoster: [
+          { canonicalId: "captain-a2", pickNumber: 2 },
+          { canonicalId: "p3", pickNumber: 6 },
+        ],
+        homeTeamLabel: "Orange",
+        awayTeamLabel: "Blue",
+        homeScore: 0,
+        awayScore: 0,
+        goals: [],
+        mvpCanonicalId: null,
+        notableMentions: [],
+        source: "draft-game-2",
+      },
+    ];
+    const stats = rollupGameRecords(draftGames, players);
+    // p1: real pick 3 in d1; d2's captain appearance (pick 1) is excluded entirely -> avg 3, not 2.
+    expect(stats.find((s) => s.canonicalId === "p1")?.avgDraftPosition).toBe(3);
+    // p3: real pick 4 in d1, real pick 6 in d2 -> avg 5.
+    expect(stats.find((s) => s.canonicalId === "p3")?.avgDraftPosition).toBe(5);
+    // A player who only ever captains never accumulates a real draft position.
+    expect(stats.find((s) => s.canonicalId === "captain-a")?.avgDraftPosition).toBeNull();
   });
 
   it("returns null draft position for a player never drafted", () => {
@@ -170,6 +219,19 @@ describe("selectStatsEligibleGames", () => {
     ];
     expect(selectStatsEligibleGames(mixedYearGames, cutoffs, "2026").map((g) => g.gameId)).toEqual(["g1", "g2"]);
     expect(selectStatsEligibleGames(mixedYearGames, cutoffs, "2025").map((g) => g.gameId)).toEqual(["g-2025"]);
+  });
+});
+
+describe("filterGameRecordsByYear", () => {
+  it("keeps only games in the requested year, no cutoff involved", () => {
+    const mixedYearGames: GameRecord[] = [...games, { ...games[0]!, gameId: "g-2025", date: "2025-06-01" }];
+    expect(filterGameRecordsByYear(mixedYearGames, "2026").map((g) => g.gameId)).toEqual(["g1", "g2"]);
+    expect(filterGameRecordsByYear(mixedYearGames, "2025").map((g) => g.gameId)).toEqual(["g-2025"]);
+  });
+
+  it("'all' returns every game regardless of year", () => {
+    const mixedYearGames: GameRecord[] = [...games, { ...games[0]!, gameId: "g-2025", date: "2025-06-01" }];
+    expect(filterGameRecordsByYear(mixedYearGames, "all")).toEqual(mixedYearGames);
   });
 });
 

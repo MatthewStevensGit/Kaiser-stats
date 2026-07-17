@@ -63,7 +63,7 @@ export function rollupGameRecords(
       ["home", game.homeRoster],
       ["away", game.awayRoster],
     ] as const) {
-      for (const spot of roster) {
+      roster.forEach((spot, index) => {
         const stats = statsFor(spot.canonicalId);
         stats.games += 1;
         stats.sources.push(game.source);
@@ -78,11 +78,19 @@ export function rollupGameRecords(
           stats.plusMinus -= 1;
         }
 
-        if (spot.pickNumber !== null) {
+        // roster[0] is that team's captain (see prompt.ts rule 10) — their
+        // pickNumber is always a structural stand-in (home captain always 1,
+        // away captain always 2, by the default snake-order convention in
+        // parse-report.ts), never a real draft decision, so a captain never
+        // contributes to avgDraftPosition. Whoever captains varies game to
+        // game (e.g. Sandrik captains one game, is a real drafted pick in
+        // another) — this excludes only that specific game's appearance,
+        // not the player generally.
+        if (index > 0 && spot.pickNumber !== null) {
           draftPickSums.set(spot.canonicalId, (draftPickSums.get(spot.canonicalId) ?? 0) + spot.pickNumber);
           draftPickCounts.set(spot.canonicalId, (draftPickCounts.get(spot.canonicalId) ?? 0) + 1);
         }
-      }
+      });
     }
 
     for (const goal of game.goals) {
@@ -133,6 +141,22 @@ export function selectStatsEligibleGames(
     const cutoff = cutoffsByYear.get(gameYear);
     return cutoff !== undefined && game.date > cutoff;
   });
+}
+
+/**
+ * Year-filters game_records with NO cutoff check, unlike
+ * selectStatsEligibleGames above — for stats that never existed in the
+ * spreadsheet backfill at all (MVP count, see PlayerSeasonStats.mvpCount's
+ * doc comment: always 0 from that path), there's no double-counting risk,
+ * so every report-imported game counts the moment it's saved — whether it's
+ * a brand-new game (a "frontfill") or an old historical report being
+ * imported later (a "backfill") makes no difference for this one stat.
+ * `year: "all"` matches every game regardless of year, same convention as
+ * filterSeasonStandingRowsByYear / selectStatsEligibleGames.
+ */
+export function filterGameRecordsByYear(games: GameRecord[], year: string): GameRecord[] {
+  if (year === "all") return games;
+  return games.filter((game) => game.date.startsWith(year));
 }
 
 /**
