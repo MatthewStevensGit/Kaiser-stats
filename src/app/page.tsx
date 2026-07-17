@@ -147,7 +147,7 @@ export default async function Home({
                     <td className="num">{i + 1}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName.toUpperCase()}
+                        {p.displayName}
                       </a>
                       {year === ALL_YEARS_ID && (
                         <>
@@ -190,7 +190,7 @@ export default async function Home({
                     <td className="num">{i + 1}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName.toUpperCase()}
+                        {p.displayName}
                       </a>
                     </td>
                     <td className="num">{p.goals}</td>
@@ -224,7 +224,7 @@ export default async function Home({
                     <td className="num">{i + 1}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName.toUpperCase()}
+                        {p.displayName}
                       </a>
                     </td>
                     <td className="num">{p.mvpCount}</td>

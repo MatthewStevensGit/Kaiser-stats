@@ -45,7 +45,7 @@ export default async function PlayerDetailPage({
         ← Back to table
       </a>
       <header className="player-header">
-        <h1 className="screen-header">{player.displayName.toUpperCase()}</h1>
+        <h1 className="screen-header screen-header-name-case">{player.displayName}</h1>
         <p className="player-summary-line">{summary}</p>
       </header>
 
