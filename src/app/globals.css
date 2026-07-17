@@ -979,8 +979,8 @@ th.num {
 }
 
 .registration-status-bar-closed {
-  background: var(--status-warning-bg);
-  color: var(--status-warning-fg);
+  background: var(--status-critical-bg);
+  color: var(--status-critical-fg);
 }
 
 .registration-status-bar-not-open {

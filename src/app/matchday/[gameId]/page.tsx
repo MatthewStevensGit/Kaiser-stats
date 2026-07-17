@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { formatMatchDateLabel } from "@/lib/format";
-import { LEAGUE_CAPACITY, LEAGUE_MINIMUM } from "@/lib/matchday/constants";
+import { LEAGUE_CAPACITY_BY_LEAGUE, LEAGUE_MINIMUM } from "@/lib/matchday/constants";
 import { getScheduledGameById } from "@/lib/matchday/data";
 import { getRegistrationStatus, getRegistrationWindowUtc } from "@/lib/matchday/registration-window";
 import { CapacityRing } from "../../_components/CapacityRing";
@@ -47,7 +47,7 @@ export default async function CheckInPortalPage({
         <>
           <CapacityRing
             checkedIn={game.checkedInCanonicalIds.length}
-            capacity={LEAGUE_CAPACITY}
+            capacity={LEAGUE_CAPACITY_BY_LEAGUE[game.league]}
             minimum={LEAGUE_MINIMUM}
           />
           <RegistrationStatusBar

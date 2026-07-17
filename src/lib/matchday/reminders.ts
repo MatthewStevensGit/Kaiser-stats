@@ -1,4 +1,4 @@
-import { LEAGUE_CAPACITY } from "./constants";
+import { LEAGUE_CAPACITY_BY_LEAGUE } from "./constants";
 import { getRegistrationWindowUtc } from "./registration-window";
 import type { ScheduledLeague } from "./types";
 
@@ -65,7 +65,8 @@ export function buildReminderEmailContent(
   checkedInCount: number,
 ): { subject: string; body: string } {
   const leagueLabel = game.league === "saturday" ? "Saturday" : "Sunday";
-  const spotsLeft = Math.max(0, LEAGUE_CAPACITY - checkedInCount);
+  const capacity = LEAGUE_CAPACITY_BY_LEAGUE[game.league];
+  const spotsLeft = Math.max(0, capacity - checkedInCount);
 
   if (emailType === "registration_open") {
     return {
@@ -76,7 +77,7 @@ export function buildReminderEmailContent(
 
   return {
     subject: `Kaiser ${leagueLabel} league — 1 hour left to register`,
-    body: `Registration for this week's ${leagueLabel} game closes in about 1 hour. ${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left (${checkedInCount}/${LEAGUE_CAPACITY} checked in) — check in now if you're playing.`,
+    body: `Registration for this week's ${leagueLabel} game closes in about 1 hour. ${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left (${checkedInCount}/${capacity} checked in) — check in now if you're playing.`,
   };
 }
 

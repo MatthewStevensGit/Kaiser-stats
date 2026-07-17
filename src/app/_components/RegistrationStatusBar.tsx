@@ -15,7 +15,7 @@ export function RegistrationStatusBar({
       ? `Registration is open — closes ${formatCutoffLabel(closesAt)}.`
       : status === "not-open"
         ? `Registration opens ${formatCutoffLabel(opensAt)}.`
-        : "Registration isn't open for this game.";
+        : "Registration Closed";
 
   return <div className={`registration-status-bar registration-status-bar-${status}`}>{message}</div>;
 }
