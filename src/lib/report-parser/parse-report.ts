@@ -1,3 +1,4 @@
+import { computeMvp } from "../stats-engine/goal-summary";
 import { createProvisionalIdentity, resolvePlayerName } from "../stats-engine/identity";
 import type { GameRecord, GoalEvent, NameResolution, NotableMention, PlayerIdentity, RosterSpot } from "../stats-engine/types";
 import { callGemini } from "./gemini-client";
@@ -200,7 +201,7 @@ export function resolveExtractionToGameRecord(
     });
   }
 
-  const mvpCanonicalId = extraction.mvpRaw ? resolve(extraction.mvpRaw) : null;
+  const narrativeMvpCanonicalId = extraction.mvpRaw ? resolve(extraction.mvpRaw) : null;
 
   const notableMentions: NotableMention[] = [];
   for (const m of extraction.notableMentions ?? []) {
@@ -210,6 +211,7 @@ export function resolveExtractionToGameRecord(
 
   const homeScore = extraction.homeScore ?? 0;
   const awayScore = extraction.awayScore ?? 0;
+  const mvpCanonicalId = computeMvp(goals, homeScore, awayScore, narrativeMvpCanonicalId);
   const homeGoalCount = goals.filter((g) => g.team === "home").length;
   const awayGoalCount = goals.filter((g) => g.team === "away").length;
   const goalSumMismatch =

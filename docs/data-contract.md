@@ -85,7 +85,7 @@ considered valid, not after.
 | `homeRoster` / `awayRoster` | Arrays of `RosterSpot` = `{ canonicalId, pickNumber }`. `pickNumber` is the 1-indexed *overall* snake-draft pick for that game (not per-team) — this is what `rollupGameRecords()` averages into `avgDraftPosition`. |
 | `homeScore` / `awayScore` | Final score. |
 | `goals` | Array of `{ scorerCanonicalId, assistCanonicalId, team }`. `assistCanonicalId` is `null` when the report didn't narrate one — never guessed. |
-| `mvpCanonicalId` | The app's own derived MVP call, or `null`. Never a fact Vadim stated, never another player's stated opinion (see `kaiser_BUILD_SPEC.md`). |
+| `mvpCanonicalId` | The app's own derived MVP call, or `null`. Never a fact Vadim stated, never another player's stated opinion (see `kaiser_BUILD_SPEC.md`). Computed deterministically by `computeMvp()` (`goal-summary.ts`) from goals+assists — the model's own narrative read (`mvpRaw`) is only a tiebreaker between stats-tied players, or the fallback when a game has no extracted goals/assists at all (updated 2026-07-16, after real games showed narrative-first picked a vague "good goalkeeping" performance over a player who scored both of his team's goals in a draw). |
 | `notableMentions` | Array of `{ canonicalId, quote }` — report-narrative snippets naming a player, kept separate from `mvpCanonicalId`. Rolls up into `PlayerSeasonStats.notableMentions`. |
 | `source` | Provenance, e.g. `"email:<gmailThreadId>"`. |
 
