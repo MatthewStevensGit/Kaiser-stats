@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import { buildReminderEmailContent, selectPendingReminders, sendReminderEmail } from "@/lib/matchday/reminders";
 import { createServiceRoleClient } from "@/lib/supabase/client";
 
-// Triggered by Vercel Cron (see vercel.json) — must never be cached or
-// statically optimized. Same CRON_SECRET auth pattern as generate-week.
+// Triggered by a GitHub Actions scheduled workflow
+// (.github/workflows/send-reminders-cron.yml), not Vercel's own native Cron —
+// confirmed the hard way that Vercel's Hobby plan only allows once-per-day
+// cron schedules, too coarse for "1 hour before close" reminders, and a
+// more-frequent vercel.json entry fails the whole deployment. Same
+// CRON_SECRET auth pattern as generate-week either way. Must never be cached
+// or statically optimized.
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {

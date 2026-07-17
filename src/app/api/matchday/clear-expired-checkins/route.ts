@@ -3,9 +3,13 @@ import { getCheckinExpiryUtc } from "@/lib/matchday/registration-window";
 import type { ScheduledLeague } from "@/lib/matchday/types";
 import { createServiceRoleClient } from "@/lib/supabase/client";
 
-// Triggered by Vercel Cron (see vercel.json) — must never be cached or
-// statically optimized. Same CRON_SECRET auth pattern as generate-week /
-// send-reminders.
+// Triggered by a GitHub Actions scheduled workflow
+// (.github/workflows/clear-expired-checkins-cron.yml), not Vercel's own
+// native Cron — Vercel's Hobby plan only allows once-per-day cron schedules,
+// too coarse for clearing check-ins within an hour of kickoff, and a
+// more-frequent vercel.json entry fails the whole deployment. Same
+// CRON_SECRET auth pattern as generate-week/send-reminders either way. Must
+// never be cached or statically optimized.
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
