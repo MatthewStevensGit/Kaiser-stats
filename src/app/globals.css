@@ -68,26 +68,6 @@ main {
   margin-inline: auto;
 }
 
-/* Demo-data disclaimer banner — always visible, never just a muted footnote */
-.demo-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  background: var(--status-warning-bg);
-  color: var(--status-warning-fg);
-  border-radius: 0;
-  padding: 0.6rem 1.25rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  max-width: 640px;
-  margin-inline: auto;
-}
-
-.demo-banner a {
-  color: inherit;
-  text-decoration: underline;
-}
-
 /* Screen headers — bold, all-caps, matches the mockups */
 .screen-header-row {
   display: flex;
