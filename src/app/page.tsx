@@ -139,6 +139,12 @@ export default async function Home({
 
   return (
     <main>
+      <header className="screen-header-row">
+        <a href="/other-stats" className="rulebook-link" style={{ marginLeft: "auto" }}>
+          Other Stats
+        </a>
+      </header>
+
       <div className="tab-select-row">
         <TabSelect
           value={year}
