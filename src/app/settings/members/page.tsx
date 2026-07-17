@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listMembers } from "@/lib/auth/members-data";
+import { BackLink } from "../../_components/BackLink";
 import { MembersTable } from "../../_components/MembersTable";
 
 // Real Supabase-backed data — must never be cached or prerendered at build time.
@@ -11,9 +12,7 @@ export default async function MembersPage() {
 
   return (
     <main>
-      <a href="/settings" className="back-link">
-        ← Back to settings
-      </a>
+      <BackLink fallbackHref="/settings" />
       <header className="screen-header-row">
         <h1 className="screen-header">Members</h1>
       </header>

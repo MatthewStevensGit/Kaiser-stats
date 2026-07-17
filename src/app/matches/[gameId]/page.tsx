@@ -3,6 +3,7 @@ import { formatMatchDateLabel, formatScoreLine, getMultiGoalNickname } from "@/l
 import { listGameRecords, listPlayers } from "@/lib/stats-engine/data";
 import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
 import { AssistChip } from "../../_components/AssistChip";
+import { BackLink } from "../../_components/BackLink";
 import { GoalChip } from "../../_components/GoalChip";
 import { MvpBadge } from "../../_components/MvpBadge";
 
@@ -24,9 +25,7 @@ export default async function MatchDetailPage({
 
   return (
     <main>
-      <a href="/matches" className="back-link">
-        ← Back to past matches
-      </a>
+      <BackLink fallbackHref="/matches" />
       <header className="player-header">
         <h1 className="screen-header">{formatMatchDateLabel(game.date)}</h1>
         <p className="player-summary-line">{formatScoreLine(game.homeScore, game.awayScore)}</p>

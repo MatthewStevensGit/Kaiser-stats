@@ -5,6 +5,7 @@ import { formatMatchDateLabel } from "@/lib/format";
 import { LEAGUE_CAPACITY_BY_LEAGUE, LEAGUE_MINIMUM } from "@/lib/matchday/constants";
 import { getScheduledGameById } from "@/lib/matchday/data";
 import { getRegistrationStatus, getRegistrationWindowUtc } from "@/lib/matchday/registration-window";
+import { BackLink } from "../../_components/BackLink";
 import { CapacityRing } from "../../_components/CapacityRing";
 import { RegistrationStatusBar } from "../../_components/RegistrationStatusBar";
 import { ScheduledGameStatusLine } from "../../_components/ScheduledGameStatusLine";
@@ -28,9 +29,7 @@ export default async function CheckInPortalPage({
 
   return (
     <main>
-      <a href="/matchday" className="back-link">
-        ← Back to matchday
-      </a>
+      <BackLink fallbackHref="/matchday" />
       <header className="player-header">
         <h1 className="screen-header">{formatMatchDateLabel(game.date)}</h1>
         <ScheduledGameStatusLine kickoffLabel={game.kickoffLabel} venue={game.venue} />

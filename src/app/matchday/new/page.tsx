@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/session";
+import { BackLink } from "../../_components/BackLink";
 import { OneOffGameForm } from "../../_components/OneOffGameForm";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +9,7 @@ export default async function NewGamePage() {
 
   return (
     <main>
-      <a href="/matchday" className="back-link">
-        ← Back to matchday
-      </a>
+      <BackLink fallbackHref="/matchday" />
       <header className="screen-header-row">
         <h1 className="screen-header">Add Game</h1>
       </header>

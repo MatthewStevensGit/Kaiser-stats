@@ -4,6 +4,7 @@ import { listGameRecords, listPlayers, listSeasonStandingRows, listSeasonStatsCu
 import { mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "@/lib/stats-engine/game-records";
 import { formatPlusMinus, formatWDL } from "@/lib/format";
 import { getPlayerGameLog } from "@/lib/stats-engine/player-game-log";
+import { BackLink } from "../../_components/BackLink";
 import { PlayerMatchRow } from "../../_components/PlayerMatchRow";
 import { TabSelect } from "../../_components/TabSelect";
 
@@ -55,9 +56,7 @@ export default async function PlayerDetailPage({
 
   return (
     <main>
-      <a href="/" className="back-link">
-        ← Back to stats
-      </a>
+      <BackLink fallbackHref="/" />
       <header className="player-header">
         <h1 className="screen-header screen-header-name-case">{player.displayName}</h1>
         <p className="player-summary-line">{summary}</p>

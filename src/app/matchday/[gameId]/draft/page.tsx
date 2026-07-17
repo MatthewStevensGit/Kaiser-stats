@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/session";
-import { formatMatchDateLabel } from "@/lib/format";
 import { getScheduledGameById } from "@/lib/matchday/data";
 import { getLiveDraftState } from "@/lib/matchday/draft-actions";
 import { getRegistrationStatus } from "@/lib/matchday/registration-window";
 import { listPlayers } from "@/lib/stats-engine/data";
+import { BackLink } from "../../../_components/BackLink";
 import { DraftPanel } from "../../../_components/DraftPanel";
 
 // Real Supabase-backed data — must never be cached or prerendered at build time.
@@ -25,9 +25,7 @@ export default async function DraftPage({
 
   return (
     <main>
-      <a href={`/matchday/${gameId}`} className="back-link">
-        ← Back to {formatMatchDateLabel(game.date)}
-      </a>
+      <BackLink fallbackHref={`/matchday/${gameId}`} />
       <header className="screen-header-row">
         <h1 className="screen-header">Draft</h1>
       </header>
