@@ -68,6 +68,29 @@ function sortHref(tab: string, year: string, sortKey: string, currentSort: strin
   return `/?tab=${tab}&year=${year}&sort=${sortKey}&dir=${nextDir}`;
 }
 
+/**
+ * Standard "competition ranking" (1224): rows tied on whatever value is
+ * being ranked by share the same, lower place number, and the next distinct
+ * value skips ahead by however many rows tied for it (two players tied for
+ * 24th -> the next distinct player is 26th, not 25th). "Tied" is always
+ * judged against the value the table is CURRENTLY sorted by (see each tab's
+ * valueOf below) — switching which column you sort by can change who's
+ * considered tied with whom, confirmed as the intended behavior.
+ */
+function computeRanks<T>(sorted: T[], valueOf: (item: T) => number): number[] {
+  const ranks: number[] = [];
+  let previousValue: number | null = null;
+  let previousRank = 0;
+  sorted.forEach((item, i) => {
+    const value = valueOf(item);
+    const rank = previousValue !== null && value === previousValue ? previousRank : i + 1;
+    ranks.push(rank);
+    previousValue = value;
+    previousRank = rank;
+  });
+  return ranks;
+}
+
 const PLUS_MINUS_DEFAULT_SORT: PlusMinusSort = "plusminus";
 const GOLDEN_BOOT_DEFAULT_SORT: GoldenBootSort = "goals";
 const MVP_DEFAULT_SORT: MvpSort = "mvp";
@@ -130,6 +153,15 @@ export default async function Home({
     if (goldenBootSort === "rate") return sign * (a.rate - b.rate) || b.goals - a.goals;
     return sign * (a.goals - b.goals) || b.rate - a.rate;
   });
+  const plusMinusRanks = computeRanks(plusMinusRanked, (p) =>
+    plusMinusSort === "games" ? p.games : plusMinusSort === "wins" ? p.wins : p.plusMinus,
+  );
+  // Golden Boot's "Per game" column ties on the ROUNDED value shown in the table
+  // (two players both displaying "1.50" should tie even if their raw floats
+  // differ in an invisible decimal place) — same reasoning for avgDraftPosition below.
+  const goldenBootRanks = computeRanks(goldenBoot, (p) =>
+    goldenBootSort === "rate" ? Number(p.rate.toFixed(2)) : p.goals,
+  );
 
   // MVP never existed in the spreadsheet backfill at all (see
   // PlayerSeasonStats.mvpCount's doc comment) — no double-counting risk, so
@@ -151,6 +183,9 @@ export default async function Home({
     .sort(
       (a, b) => sign * (a.avgDraftPosition - b.avgDraftPosition) || a.displayName.localeCompare(b.displayName),
     );
+  const mvpRanks = computeRanks(mvpRanked, (p) => p.mvpCount);
+  const assistsRanks = computeRanks(assistsRanked, (p) => p.assists);
+  const draftPositionRanks = computeRanks(draftPositionRanked, (p) => Number(p.avgDraftPosition.toFixed(1)));
 
   // League-title/Golden-Boot trophy case, shown only on the All Years view
   // (see LeagueTitleChip/GoldenBootChip below) — only ever computed for a
@@ -222,7 +257,7 @@ export default async function Home({
               <tbody>
                 {plusMinusRanked.map((p, i) => (
                   <tr key={p.canonicalId}>
-                    <td className="num">{i + 1}</td>
+                    <td className="num">{plusMinusRanks[i]}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
                         {p.displayName}
@@ -272,7 +307,7 @@ export default async function Home({
               <tbody>
                 {goldenBoot.map((p, i) => (
                   <tr key={p.canonicalId}>
-                    <td className="num">{i + 1}</td>
+                    <td className="num">{goldenBootRanks[i]}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
                         {p.displayName}
@@ -321,7 +356,7 @@ export default async function Home({
               <tbody>
                 {mvpRanked.map((p, i) => (
                   <tr key={p.canonicalId}>
-                    <td className="num">{i + 1}</td>
+                    <td className="num">{mvpRanks[i]}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
                         {p.displayName}
@@ -359,7 +394,7 @@ export default async function Home({
               <tbody>
                 {draftPositionRanked.map((p, i) => (
                   <tr key={p.canonicalId}>
-                    <td className="num">{i + 1}</td>
+                    <td className="num">{draftPositionRanks[i]}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
                         {p.displayName}
@@ -404,7 +439,7 @@ export default async function Home({
               <tbody>
                 {assistsRanked.map((p, i) => (
                   <tr key={p.canonicalId}>
-                    <td className="num">{i + 1}</td>
+                    <td className="num">{assistsRanks[i]}</td>
                     <td>
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
                         {p.displayName}
