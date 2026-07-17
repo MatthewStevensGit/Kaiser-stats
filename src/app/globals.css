@@ -902,35 +902,38 @@ th.num {
   cursor: pointer;
 }
 
-/* Capacity ring */
-.capacity-ring {
+/* Capacity gauge — semicircle speedometer style, replacing the old
+   full-circle tick-mark dial */
+.capacity-gauge {
   position: relative;
-  width: 220px;
-  height: 220px;
-  margin: 1.75rem auto 0.5rem;
+  width: 260px;
+  max-width: 100%;
+  margin: 1.75rem auto 0;
 }
 
-.capacity-ring-svg {
+.capacity-gauge-svg {
+  display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 
-.capacity-ring-center {
+.capacity-gauge-center {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0.1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
 }
 
-.capacity-ring-count {
+.capacity-gauge-count {
   font-size: 1.8rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.capacity-ring-spots-left {
+.capacity-gauge-spots-left {
   color: var(--accent);
   font-size: 0.8rem;
   font-weight: 700;
@@ -944,7 +947,7 @@ th.num {
   color: var(--status-warning-bg);
   font-size: 0.85rem;
   font-weight: 600;
-  margin: 0;
+  margin: 0.5rem 0 0;
 }
 
 /* Registration status bar */
