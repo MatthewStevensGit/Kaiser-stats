@@ -15,7 +15,6 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
   const [day, setDay] = useState("");
   const [year2, setYear2] = useState("");
   const [league, setLeague] = useState<League>("saturday");
-  const [firstPickRaw, setFirstPickRaw] = useState("");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,13 +37,28 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
    * Bolds whoever is logged in, wherever a name renders — instead of baking
    * a "(you)" marker into stored data. Optionally also colors the name by
    * team (Stats list only) so it's visually clear who played on which side.
+   * Also tags the determined MVP with the same ribbon icon MvpBadge uses,
+   * inline next to their name wherever it renders (roster or Stats list) —
+   * simpler than a separate "MVP" section, and guarantees it's visible even
+   * for the rare MVP with no stats line of their own (a 0-goal/assist game).
    */
   function renderName(canonicalId: string, team?: "home" | "away") {
     const name = nameFor(canonicalId);
     const isYou = canonicalId === currentUserCanonicalId;
-    if (!team) return isYou ? <strong>{name}</strong> : name;
+    const isMvp = canonicalId === preview?.gameRecord.mvpCanonicalId;
+    const mvpIcon = isMvp && (
+      <span aria-label="MVP Pick" title="MVP Pick">
+        {" "}
+        🎖️
+      </span>
+    );
+    if (!team) return isYou ? <strong>{name}{mvpIcon}</strong> : <>{name}{mvpIcon}</>;
     const className = `match-detail-scorer-name-${team}`;
-    return isYou ? <strong className={className}>{name}</strong> : <span className={className}>{name}</span>;
+    return isYou ? (
+      <strong className={className}>{name}{mvpIcon}</strong>
+    ) : (
+      <span className={className}>{name}{mvpIcon}</span>
+    );
   }
 
   function renderNameList(canonicalIds: string[]) {
@@ -73,7 +87,12 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
         text,
         date,
         league,
-        firstPickRaw: firstPickRaw.trim() || null,
+        // The default snake-order/team-listed-first-picks-first convention
+        // (see parse-report.ts's resolveExtractionToGameRecord) now covers
+        // the common case automatically — this manual override still exists
+        // server-side for the rare game where it's wrong, just not exposed
+        // in this form anymore.
+        firstPickRaw: null,
       });
       if (!result.ok) {
         setError(result.error);
@@ -160,19 +179,6 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
           <option value="sunday">Sunday</option>
         </select>
 
-        <label htmlFor="report-first-pick" className="login-form-label">
-          First pick (optional)
-        </label>
-        <input
-          id="report-first-pick"
-          type="text"
-          placeholder="Only if you know who picked first"
-          value={firstPickRaw}
-          onChange={(e) => setFirstPickRaw(e.target.value)}
-          className="login-form-input"
-          disabled={isPending}
-        />
-
         <label htmlFor="report-text" className="login-form-label">
           Report text
         </label>
@@ -232,26 +238,6 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
                     </li>
                   );
                 })}
-              </ul>
-            </>
-          )}
-
-          {preview.gameRecord.mvpCanonicalId && (
-            <>
-              <h3>MVP</h3>
-              <p>{renderName(preview.gameRecord.mvpCanonicalId)}</p>
-            </>
-          )}
-
-          {preview.gameRecord.notableMentions.length > 0 && (
-            <>
-              <h3>Notable mentions</h3>
-              <ul>
-                {preview.gameRecord.notableMentions.map((m, i) => (
-                  <li key={i}>
-                    <strong>{nameFor(m.canonicalId)}</strong>: &ldquo;{m.quote}&rdquo;
-                  </li>
-                ))}
               </ul>
             </>
           )}
