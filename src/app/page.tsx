@@ -150,10 +150,7 @@ export default async function Home({
                         {p.displayName}
                       </a>
                       {year === ALL_YEARS_ID && (
-                        <>
-                          <LeagueTitleChip count={awardTally.get(p.canonicalId)?.leagueTitles ?? 0} />
-                          <GoldenBootChip count={awardTally.get(p.canonicalId)?.goldenBoots ?? 0} />
-                        </>
+                        <LeagueTitleChip count={awardTally.get(p.canonicalId)?.leagueTitles ?? 0} />
                       )}
                     </td>
                     <td className="num">{p.games}</td>
@@ -192,6 +189,9 @@ export default async function Home({
                       <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
                         {p.displayName}
                       </a>
+                      {year === ALL_YEARS_ID && (
+                        <GoldenBootChip count={awardTally.get(p.canonicalId)?.goldenBoots ?? 0} />
+                      )}
                     </td>
                     <td className="num">{p.goals}</td>
                     <td className="num">{p.rate.toFixed(2)}</td>
