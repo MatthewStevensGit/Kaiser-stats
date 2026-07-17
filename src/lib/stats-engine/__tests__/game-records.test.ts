@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterGameRecordsByYear, mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "../game-records";
+import { computeRecentForm, filterGameRecordsByYear, mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "../game-records";
 import type { GameRecord, PlayerIdentity, PlayerSeasonStats } from "../types";
 
 const players: PlayerIdentity[] = [
@@ -288,5 +288,52 @@ describe("mergePlayerSeasonStats", () => {
     const spreadsheet = [stat({ avgDraftPosition: null })];
     const report = [stat({ avgDraftPosition: 2.5 })];
     expect(mergePlayerSeasonStats(spreadsheet, report)[0]?.avgDraftPosition).toBe(2.5);
+  });
+});
+
+describe("computeRecentForm", () => {
+  function game(overrides: Partial<GameRecord> & { gameId: string; date: string }): GameRecord {
+    return {
+      league: "sunday",
+      homeRoster: [],
+      awayRoster: [],
+      homeTeamLabel: "Orange",
+      awayTeamLabel: "Blue",
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpCanonicalId: null,
+      notableMentions: [],
+      source: overrides.gameId,
+      ...overrides,
+    };
+  }
+
+  it("only counts a player's own most recent games, not stale ones — a player who skipped weeks still gets their own last N", () => {
+    // p1 plays every game (7 of them); p2 only plays the oldest 2, long before p1's most recent 5.
+    const games: GameRecord[] = [
+      game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }, { canonicalId: "p2", pickNumber: null }], goals: [{ scorerCanonicalId: "p2", assistCanonicalId: null, team: "home" }] }),
+      game({ gameId: "g2", date: "2026-01-08", homeRoster: [{ canonicalId: "p1", pickNumber: null }, { canonicalId: "p2", pickNumber: null }] }),
+      game({ gameId: "g3", date: "2026-01-15", homeRoster: [{ canonicalId: "p1", pickNumber: null }] }),
+      game({ gameId: "g4", date: "2026-01-22", homeRoster: [{ canonicalId: "p1", pickNumber: null }], goals: [{ scorerCanonicalId: "p1", assistCanonicalId: null, team: "home" }] }),
+      game({ gameId: "g5", date: "2026-01-29", homeRoster: [{ canonicalId: "p1", pickNumber: null }], mvpCanonicalId: "p1" }),
+      game({ gameId: "g6", date: "2026-02-05", homeRoster: [{ canonicalId: "p1", pickNumber: null }] }),
+      game({ gameId: "g7", date: "2026-02-12", homeRoster: [{ canonicalId: "p1", pickNumber: null }], goals: [{ scorerCanonicalId: "p1", assistCanonicalId: null, team: "home" }] }),
+    ];
+
+    const stats = computeRecentForm(games, [], 5);
+    const p1 = stats.find((s) => s.canonicalId === "p1");
+    const p2 = stats.find((s) => s.canonicalId === "p2");
+
+    // p1's last 5 (of 7 total) are g3-g7: 2 goals, 1 MVP.
+    expect(p1).toMatchObject({ gamesPlayed: 5, goals: 2, mvpCount: 1 });
+    // p2 only ever played g1/g2 — both count, even though they're outside p1's window.
+    expect(p2).toMatchObject({ gamesPlayed: 2, goals: 1, mvpCount: 0 });
+  });
+
+  it("omits a player entirely if they don't appear in any given game", () => {
+    const games: GameRecord[] = [game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }] })];
+    const stats = computeRecentForm(games, []);
+    expect(stats.find((s) => s.canonicalId === "p2")).toBeUndefined();
   });
 });

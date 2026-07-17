@@ -7,6 +7,7 @@ import {
 } from "@/lib/stats-engine/aggregate";
 import { listGameRecords, listPlayers, listSeasonStandingRows, listSeasonStatsCutoffs } from "@/lib/stats-engine/data";
 import {
+  computeRecentForm,
   filterGameRecordsByYear,
   mergePlayerSeasonStats,
   rollupGameRecords,
@@ -21,12 +22,15 @@ import { TabSelect } from "./_components/TabSelect";
 
 const GOLDEN_BOOT_MIN_GAMES = 3;
 
-type TableTab = "plus-minus" | "golden-boot" | "mvp" | "draft-position" | "assists";
+type TableTab = "plus-minus" | "golden-boot" | "mvp" | "draft-position" | "assists" | "recent-form";
 type PlusMinusSort = "games" | "wins" | "plusminus";
 type GoldenBootSort = "goals" | "rate";
 type MvpSort = "mvp";
 type DraftPositionSort = "draftposition";
 type AssistsSort = "assists";
+type RecentFormSort = "goals" | "mvps";
+
+const RECENT_FORM_WINDOW = 5;
 
 // Same real seasons this league has data for as the Past Matches page's
 // YEARS list — "all" is an extra tab (not a real year) showing every
@@ -44,7 +48,8 @@ function isTableTab(value: string | undefined): value is TableTab {
     value === "golden-boot" ||
     value === "mvp" ||
     value === "draft-position" ||
-    value === "assists"
+    value === "assists" ||
+    value === "recent-form"
   );
 }
 
@@ -96,6 +101,11 @@ const GOLDEN_BOOT_DEFAULT_SORT: GoldenBootSort = "goals";
 const MVP_DEFAULT_SORT: MvpSort = "mvp";
 const DRAFT_POSITION_DEFAULT_SORT: DraftPositionSort = "draftposition";
 const ASSISTS_DEFAULT_SORT: AssistsSort = "assists";
+const RECENT_FORM_DEFAULT_SORT: RecentFormSort = "goals";
+
+function isRecentFormSort(value: string | undefined): value is RecentFormSort {
+  return value === "goals" || value === "mvps";
+}
 
 function isPlusMinusSort(value: string | undefined): value is PlusMinusSort {
   return value === "games" || value === "wins" || value === "plusminus";
@@ -126,6 +136,7 @@ export default async function Home({
   const mvpSort: MvpSort = MVP_DEFAULT_SORT;
   const draftPositionSort: DraftPositionSort = DRAFT_POSITION_DEFAULT_SORT;
   const assistsSort: AssistsSort = ASSISTS_DEFAULT_SORT;
+  const recentFormSort: RecentFormSort = isRecentFormSort(rawSort) ? rawSort : RECENT_FORM_DEFAULT_SORT;
 
   // Merged (saturday+sunday) only, for now — league split may return in a later slice.
   const [players, allRows, allGames, cutoffs] = await Promise.all([
@@ -187,6 +198,19 @@ export default async function Home({
   const assistsRanks = computeRanks(assistsRanked, (p) => p.assists);
   const draftPositionRanks = computeRanks(draftPositionRanked, (p) => Number(p.avgDraftPosition.toFixed(1)));
 
+  // Each player's own actual last RECENT_FORM_WINDOW games within the selected
+  // year — not the league's last N games as a whole (see computeRecentForm's
+  // doc comment). Uses the same year-filtered game set as MVP/Assists/Draft
+  // Position above, for the same reason: this stat never existed in the
+  // spreadsheet backfill, so there's no season_stats_cutoff to respect.
+  const recentFormRanked = computeRecentForm(mvpEligibleGames, players, RECENT_FORM_WINDOW).sort((a, b) => {
+    if (recentFormSort === "mvps") return sign * (a.mvpCount - b.mvpCount) || b.goals - a.goals;
+    return sign * (a.goals - b.goals) || b.mvpCount - a.mvpCount;
+  });
+  const recentFormRanks = computeRanks(recentFormRanked, (p) =>
+    recentFormSort === "mvps" ? p.mvpCount : p.goals,
+  );
+
   // League-title/Golden-Boot trophy case, shown only on the All Years view
   // (see LeagueTitleChip/GoldenBootChip below) — only ever computed for a
   // FULLY CLOSED season (no season_stats_cutoff row at all), since an
@@ -220,6 +244,7 @@ export default async function Home({
             { id: "mvp", label: "MVP", href: `/?tab=mvp&year=${year}` },
             { id: "draft-position", label: "Draft Position", href: `/?tab=draft-position&year=${year}` },
             { id: "assists", label: "Assists", href: `/?tab=assists&year=${year}` },
+            { id: "recent-form", label: "Recent Form", href: `/?tab=recent-form&year=${year}` },
           ]}
         />
       </div>
@@ -446,6 +471,61 @@ export default async function Home({
                       </a>
                     </td>
                     <td className="num">{p.assists}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+      {tab === "recent-form" && (
+        <p className="note">
+          * Each player&rsquo;s own last {RECENT_FORM_WINDOW} games played — not the
+          league&rsquo;s last {RECENT_FORM_WINDOW} games. MVP counts here carry the same
+          best-estimate caveat as the MVP tab.
+        </p>
+      )}
+
+      {tab === "recent-form" &&
+        (recentFormRanked.length === 0 ? (
+          <div className="empty-state">
+            No recent-form data yet — this only ever comes from imported match reports,
+            never the season spreadsheets.
+          </div>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th className="num">#</th>
+                  <th>Player</th>
+                  <th className="num">Games</th>
+                  <SortableHeader
+                    label="Goals"
+                    href={sortHref(tab, year, "goals", recentFormSort, dir)}
+                    isActive={recentFormSort === "goals"}
+                    dir={dir}
+                  />
+                  <SortableHeader
+                    label="MVPs"
+                    href={sortHref(tab, year, "mvps", recentFormSort, dir)}
+                    isActive={recentFormSort === "mvps"}
+                    dir={dir}
+                  />
+                </tr>
+              </thead>
+              <tbody>
+                {recentFormRanked.map((p, i) => (
+                  <tr key={p.canonicalId}>
+                    <td className="num">{recentFormRanks[i]}</td>
+                    <td>
+                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
+                        {p.displayName}
+                      </a>
+                    </td>
+                    <td className="num">{p.gamesPlayed}</td>
+                    <td className="num">{p.goals}</td>
+                    <td className="num">{p.mvpCount}</td>
                   </tr>
                 ))}
               </tbody>

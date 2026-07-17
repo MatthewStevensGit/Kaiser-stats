@@ -1,5 +1,14 @@
 import type { GameRecord, PlayerIdentity, PlayerSeasonStats } from "./types";
 
+export interface RecentFormStats {
+  canonicalId: string;
+  displayName: string;
+  /** How many of their actual last-`windowSize` games these totals cover — usually `windowSize`, fewer for a newer player. */
+  gamesPlayed: number;
+  goals: number;
+  mvpCount: number;
+}
+
 /** A game's outcome from one specific side's perspective. */
 export function resultForSide(
   homeScore: number,
@@ -116,6 +125,52 @@ export function rollupGameRecords(
   }
 
   return Array.from(totals.values());
+}
+
+/**
+ * Each player's goals/MVPs across their own actual last `windowSize` games
+ * (not the last `windowSize` games of the league as a whole — a player who
+ * skipped a few weeks still gets THEIR most recent games, not a stale mix).
+ * Only ever includes players who appear in at least one of the given games.
+ */
+export function computeRecentForm(
+  games: GameRecord[],
+  knownPlayers: PlayerIdentity[],
+  windowSize = 5,
+): RecentFormStats[] {
+  const playersById = new Map(knownPlayers.map((p) => [p.canonicalId, p]));
+  const gamesByDateDesc = [...games].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  const recentGamesByPlayer = new Map<string, GameRecord[]>();
+  for (const game of gamesByDateDesc) {
+    const participantIds = new Set([
+      ...game.homeRoster.map((spot) => spot.canonicalId),
+      ...game.awayRoster.map((spot) => spot.canonicalId),
+    ]);
+    for (const canonicalId of participantIds) {
+      const recentGames = recentGamesByPlayer.get(canonicalId) ?? [];
+      if (recentGames.length < windowSize) {
+        recentGames.push(game);
+        recentGamesByPlayer.set(canonicalId, recentGames);
+      }
+    }
+  }
+
+  return Array.from(recentGamesByPlayer.entries()).map(([canonicalId, recentGames]) => {
+    let goals = 0;
+    let mvpCount = 0;
+    for (const game of recentGames) {
+      goals += game.goals.filter((goal) => goal.scorerCanonicalId === canonicalId).length;
+      if (game.mvpCanonicalId === canonicalId) mvpCount += 1;
+    }
+    return {
+      canonicalId,
+      displayName: playersById.get(canonicalId)?.displayName ?? canonicalId,
+      gamesPlayed: recentGames.length,
+      goals,
+      mvpCount,
+    };
+  });
 }
 
 /**
