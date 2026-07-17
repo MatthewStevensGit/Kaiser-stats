@@ -7,11 +7,13 @@ import type { ScheduledLeague } from "./types";
  * constants rather than inlined literals. Same "display-only, not final"
  * spirit as avgDraftPosition's comment in stats-engine/types.ts.
  */
-// Confirmed 2026-07-17: the two leagues have different regular-roster caps —
-// this was a real bug before (one flat LEAGUE_CAPACITY of 22 applied to
-// Sunday too, which actually caps at 24).
+// Confirmed 2026-07-17: both leagues actually cap at 24 — an earlier fix
+// mistakenly gave Saturday 22 (from a stale Rules-page claim that turned out
+// to be wrong too, now corrected). Kept as a per-league record rather than
+// one flat constant since that's still the right shape if the two ever
+// genuinely diverge again.
 export const LEAGUE_CAPACITY_BY_LEAGUE: Record<ScheduledLeague, number> = {
-  saturday: 22,
+  saturday: 24,
   sunday: 24,
 };
 export const LEAGUE_MINIMUM = 12;

@@ -94,9 +94,8 @@ export default function RulesPage() {
         <h2>How a game day works</h2>
         <ul>
           <li>
-            Two leagues, run separately: Saturday (cap 22 regulars) and Sunday (cap 24
-            regulars), plus occasional Friday/Monday and holiday games that roll into the
-            Merged view.
+            Two leagues, run separately, both capped at 24 regulars, plus occasional
+            Friday/Monday and holiday games that roll into the Merged view.
           </li>
           <li>
             Two captains are picked fresh each week. A coin-toss/choice step decides who

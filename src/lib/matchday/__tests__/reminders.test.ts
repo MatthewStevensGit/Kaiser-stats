@@ -69,8 +69,8 @@ describe("buildReminderEmailContent", () => {
   it("includes spots left and the checked-in count for the closing_soon email", () => {
     const { subject, body } = buildReminderEmailContent("closing_soon", saturdayGame, 20);
     expect(subject).toContain("1 hour");
-    expect(body).toContain("2 spots left");
-    expect(body).toContain("20/22");
+    expect(body).toContain("4 spots left");
+    expect(body).toContain("20/24");
   });
 
   it("never reports negative spots left if somehow over capacity", () => {
