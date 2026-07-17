@@ -123,8 +123,15 @@ async function main() {
       );
     }
 
+    // parsePrimaryStandingsSheet stores each row's source as "<file>#<sheetName>"
+    // (see season-standings-parser.ts), not the bare filename used above — this
+    // must match that exact string, or the delete below silently matches zero
+    // rows and every re-run appends a full duplicate copy instead of replacing
+    // it (a real bug that shipped rows tripled for every file before this fix).
+    const rowSource = rows[0]?.source ?? source;
+
     // Re-runnable: replace this source's rows rather than accumulating duplicates.
-    const { error: deleteError } = await supabase.from("season_standing_rows").delete().eq("source", source);
+    const { error: deleteError } = await supabase.from("season_standing_rows").delete().eq("source", rowSource);
     if (deleteError) throw new Error(`Failed to clear old rows for ${source}: ${deleteError.message}`);
 
     const dbRows = [];

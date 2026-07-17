@@ -110,13 +110,34 @@ Supabase but aren't shown on the site yet (see "Going live with real data" below
 
 - **New historical spreadsheets** (more years, corrections, etc.): drop the raw
   `.xlsx`/`.pdf` file in **`private/incoming/`**. That folder — and all of
-  `private/` — is gitignored; nothing placed there ever gets committed. Use the
-  same naming convention the existing files already follow:
-  `soccer_<year>.xlsx` for a full-year file, `soccer_<year>_<part>.xlsx` for a
-  mid-season/partial snapshot (e.g. `soccer_2026_2.xlsx`). Whatever parses it
-  should call `parsePrimaryStandingsSheet()` (or `parseAllStandingsSheets()` to
-  inspect every sheet first) — don't assume the column layout matches last
-  year's file, the schema drifts (see `kaiser_stats_engine_notes.md`).
+  `private/` — is gitignored; nothing placed there ever gets committed.
+  **Critical, confirmed 2026-07-16**: every `soccer_<year>*.xlsx` export is a
+  running **cumulative** season total, not an independent slice — a later
+  export (e.g. Vadim's 3rd 2026 export) already includes every game the
+  earlier ones did, plus more. `aggregateStandings()` sums whatever rows it's
+  given with no de-duplication, so keeping more than one export for the same
+  year in `private/` (or backfilled into `season_standing_rows`) silently
+  multiplies every stat for that year (a real bug this exact mistake caused —
+  five stacked 2025 exports inflated every player's 2025 game count by 5x
+  before this was caught). **Keep exactly one file per year** — whichever
+  export is the most complete/most recent (compare a well-known player's game
+  count across candidates; higher is newer) — and delete the superseded ones
+  from `private/` entirely before running `npm run backfill`, rather than
+  archiving them alongside it. Name it `soccer_<year>.xlsx` (drop any
+  `_<part>` suffix now that only one file per year is ever kept). Whatever
+  parses it should call `parsePrimaryStandingsSheet()` (or
+  `parseAllStandingsSheets()` to inspect every sheet first) — don't assume the
+  column layout matches last year's file, the schema drifts (see
+  `kaiser_stats_engine_notes.md`).
+- **Re-running `npm run backfill`**: safe and idempotent — `scripts/backfill-to-supabase.ts`
+  deletes each file's existing `season_standing_rows` (matched by the same
+  `"<file>#<sheetName>"` source string `parsePrimaryStandingsSheet()` stamps on
+  every row, not the bare filename — an earlier version of this script matched
+  on the bare filename, which never matched anything and silently tripled
+  every row across repeated runs; fixed 2026-07-16) before inserting the fresh
+  parse. Removing a file from `private/` does **not** by itself clear its old
+  rows from Supabase — delete those manually (`.delete().eq("source", ...)`)
+  before or instead of removing the file.
 - **New real identity/email data**: goes in `private/`, following the existing
   `kaiser_player_identity.csv` / `kaiser_email_index.csv` shape. Never at the
   repo root — see `kaiser_BUILD_SPEC.md`'s GitHub/repo-handling section for why.
