@@ -458,6 +458,17 @@ th.num {
   white-space: nowrap;
 }
 
+.sortable-header {
+  display: inline-block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sortable-header:hover {
+  color: var(--accent);
+}
+
 .leaderboard-name {
   color: var(--text-primary);
   text-decoration: none;

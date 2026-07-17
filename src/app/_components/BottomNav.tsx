@@ -4,8 +4,8 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { id: "table", label: "Stats", href: "/" },
-  { id: "matches", label: "Matches", href: "/matches" },
-  { id: "matchday", label: "Matchday", href: "/matchday" },
+  { id: "matches", label: "Match History", href: "/matches" },
+  { id: "matchday", label: "Check-In", href: "/matchday" },
   { id: "other-stats", label: "Other Stats", href: "/other-stats" },
   { id: "rules", label: "Rules", href: "/rules" },
   { id: "chat", label: "💬", href: "/chat", ariaLabel: "Chat" },

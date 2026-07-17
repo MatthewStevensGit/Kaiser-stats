@@ -1,8 +1,17 @@
 import { listGameRecords, listPlayers } from "@/lib/stats-engine/data";
 import { filterGameRecordsByYear, rollupGameRecords } from "@/lib/stats-engine/game-records";
+import { SortableHeader } from "../_components/SortableHeader";
+import type { SortDir } from "../_components/SortableHeader";
 import { TabSelect } from "../_components/TabSelect";
 
 type OtherStatsTab = "assists" | "draft-position";
+
+// Each tab has exactly one sortable numeric column, so there's no separate sort-key
+// param here (unlike the Table page's multi-column tabs) — just a dir toggle.
+// Assists defaults high-to-low (more is better); draft position defaults low-to-high
+// (an early pick, i.e. a low average, is the notable end of that stat).
+const ASSISTS_DEFAULT_DIR: SortDir = "desc";
+const DRAFT_POSITION_DEFAULT_DIR: SortDir = "asc";
 
 // Same real seasons as the Table/Past Matches pages' YEARS lists — assists
 // and avgDraftPosition never existed in the spreadsheet backfill at all (see
@@ -22,25 +31,34 @@ function isYear(value: string | undefined): value is string {
   return value !== undefined && YEARS.includes(value);
 }
 
+function isSortDir(value: string | undefined): value is SortDir {
+  return value === "asc" || value === "desc";
+}
+
 export default async function OtherStatsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; year?: string }>;
+  searchParams: Promise<{ tab?: string; year?: string; dir?: string }>;
 }) {
-  const { tab: rawTab, year: rawYear } = await searchParams;
+  const { tab: rawTab, year: rawYear, dir: rawDir } = await searchParams;
   const tab: OtherStatsTab = isOtherStatsTab(rawTab) ? rawTab : "assists";
   const year = isYear(rawYear) ? rawYear : DEFAULT_YEAR;
+  const defaultDir = tab === "assists" ? ASSISTS_DEFAULT_DIR : DRAFT_POSITION_DEFAULT_DIR;
+  const dir: SortDir = isSortDir(rawDir) ? rawDir : defaultDir;
+  const sign = dir === "asc" ? 1 : -1;
 
   const [players, allGames] = await Promise.all([listPlayers(), listGameRecords()]);
   const totals = rollupGameRecords(filterGameRecordsByYear(allGames, year), players);
 
   const assistsRanked = totals
     .filter((p) => p.assists > 0)
-    .sort((a, b) => b.assists - a.assists || a.displayName.localeCompare(b.displayName));
+    .sort((a, b) => sign * (a.assists - b.assists) || a.displayName.localeCompare(b.displayName));
 
   const draftPositionRanked = totals
     .filter((p): p is typeof p & { avgDraftPosition: number } => p.avgDraftPosition !== null)
-    .sort((a, b) => a.avgDraftPosition - b.avgDraftPosition || a.displayName.localeCompare(b.displayName));
+    .sort(
+      (a, b) => sign * (a.avgDraftPosition - b.avgDraftPosition) || a.displayName.localeCompare(b.displayName),
+    );
 
   return (
     <main>
@@ -77,7 +95,12 @@ export default async function OtherStatsPage({
                 <tr>
                   <th className="num">#</th>
                   <th>Player</th>
-                  <th className="num">Assists</th>
+                  <SortableHeader
+                    label="Assists"
+                    href={`/other-stats?tab=${tab}&year=${year}&dir=${dir === "desc" ? "asc" : "desc"}`}
+                    isActive
+                    dir={dir}
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -110,7 +133,12 @@ export default async function OtherStatsPage({
                 <tr>
                   <th className="num">#</th>
                   <th>Player</th>
-                  <th className="num">Avg. Pick</th>
+                  <SortableHeader
+                    label="Avg. Pick"
+                    href={`/other-stats?tab=${tab}&year=${year}&dir=${dir === "desc" ? "asc" : "desc"}`}
+                    isActive
+                    dir={dir}
+                  />
                 </tr>
               </thead>
               <tbody>

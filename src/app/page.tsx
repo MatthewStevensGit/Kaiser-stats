@@ -15,11 +15,16 @@ import {
 import { formatPlusMinus, formatWDL } from "@/lib/format";
 import { GoldenBootChip } from "./_components/GoldenBootChip";
 import { LeagueTitleChip } from "./_components/LeagueTitleChip";
+import { SortableHeader } from "./_components/SortableHeader";
+import type { SortDir } from "./_components/SortableHeader";
 import { TabSelect } from "./_components/TabSelect";
 
 const GOLDEN_BOOT_MIN_GAMES = 3;
 
 type TableTab = "plus-minus" | "golden-boot" | "mvp";
+type PlusMinusSort = "games" | "wins" | "plusminus";
+type GoldenBootSort = "goals" | "rate";
+type MvpSort = "mvp";
 
 // Same real seasons this league has data for as the Past Matches page's
 // YEARS list — "all" is an extra tab (not a real year) showing every
@@ -39,20 +44,46 @@ function isYear(value: string | undefined): value is string {
   return value !== undefined && YEARS.includes(value);
 }
 
+function isSortDir(value: string | undefined): value is SortDir {
+  return value === "asc" || value === "desc";
+}
+
 function plusMinusClass(value: number): string {
   if (value > 0) return "value-positive";
   if (value < 0) return "value-negative";
   return "value-neutral";
 }
 
+/** href for a column header: clicking an already-active column flips direction, clicking a new one defaults to descending. */
+function sortHref(tab: string, year: string, sortKey: string, currentSort: string, currentDir: SortDir): string {
+  const nextDir: SortDir = currentSort === sortKey && currentDir === "desc" ? "asc" : "desc";
+  return `/?tab=${tab}&year=${year}&sort=${sortKey}&dir=${nextDir}`;
+}
+
+const PLUS_MINUS_DEFAULT_SORT: PlusMinusSort = "plusminus";
+const GOLDEN_BOOT_DEFAULT_SORT: GoldenBootSort = "goals";
+const MVP_DEFAULT_SORT: MvpSort = "mvp";
+
+function isPlusMinusSort(value: string | undefined): value is PlusMinusSort {
+  return value === "games" || value === "wins" || value === "plusminus";
+}
+
+function isGoldenBootSort(value: string | undefined): value is GoldenBootSort {
+  return value === "goals" || value === "rate";
+}
+
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; year?: string }>;
+  searchParams: Promise<{ tab?: string; year?: string; sort?: string; dir?: string }>;
 }) {
-  const { tab: rawTab, year: rawYear } = await searchParams;
+  const { tab: rawTab, year: rawYear, sort: rawSort, dir: rawDir } = await searchParams;
   const tab: TableTab = isTableTab(rawTab) ? rawTab : "plus-minus";
   const year = isYear(rawYear) ? rawYear : DEFAULT_YEAR;
+  const dir: SortDir = isSortDir(rawDir) ? rawDir : "desc";
+  const plusMinusSort: PlusMinusSort = isPlusMinusSort(rawSort) ? rawSort : PLUS_MINUS_DEFAULT_SORT;
+  const goldenBootSort: GoldenBootSort = isGoldenBootSort(rawSort) ? rawSort : GOLDEN_BOOT_DEFAULT_SORT;
+  const mvpSort: MvpSort = MVP_DEFAULT_SORT;
 
   // Merged (saturday+sunday) only, for now — league split may return in a later slice.
   const [players, allRows, allGames, cutoffs] = await Promise.all([
@@ -67,12 +98,19 @@ export default async function Home({
   const reportTotals = rollupGameRecords(eligibleGames, players);
   const totals = mergePlayerSeasonStats(spreadsheetTotals, reportTotals);
 
-  const plusMinusRanked = [...totals].sort(
-    (a, b) => b.plusMinus - a.plusMinus || b.games - a.games,
-  );
-  const goldenBoot = rankByRate(totals, "goals", GOLDEN_BOOT_MIN_GAMES).sort(
-    (a, b) => b.goals - a.goals || b.rate - a.rate,
-  );
+  // Sign flips the primary key for asc/desc; the tie-break stays in its original
+  // (descending) sense regardless of dir — it's just there to keep ties stable, not
+  // something a user is choosing to sort by.
+  const sign = dir === "asc" ? 1 : -1;
+  const plusMinusRanked = [...totals].sort((a, b) => {
+    if (plusMinusSort === "games") return sign * (a.games - b.games) || b.plusMinus - a.plusMinus;
+    if (plusMinusSort === "wins") return sign * (a.wins - b.wins) || b.plusMinus - a.plusMinus;
+    return sign * (a.plusMinus - b.plusMinus) || b.games - a.games;
+  });
+  const goldenBoot = rankByRate(totals, "goals", GOLDEN_BOOT_MIN_GAMES).sort((a, b) => {
+    if (goldenBootSort === "rate") return sign * (a.rate - b.rate) || b.goals - a.goals;
+    return sign * (a.goals - b.goals) || b.rate - a.rate;
+  });
 
   // MVP never existed in the spreadsheet backfill at all (see
   // PlayerSeasonStats.mvpCount's doc comment) — no double-counting risk, so
@@ -85,7 +123,7 @@ export default async function Home({
   const mvpTotals = rollupGameRecords(mvpEligibleGames, players);
   const mvpRanked = mvpTotals
     .filter((p) => p.mvpCount > 0)
-    .sort((a, b) => b.mvpCount - a.mvpCount || a.displayName.localeCompare(b.displayName));
+    .sort((a, b) => sign * (a.mvpCount - b.mvpCount) || a.displayName.localeCompare(b.displayName));
 
   // League-title/Golden-Boot trophy case, shown only on the All Years view
   // (see LeagueTitleChip/GoldenBootChip below) — only ever computed for a
@@ -132,9 +170,24 @@ export default async function Home({
                 <tr>
                   <th className="num">#</th>
                   <th>Player</th>
-                  <th className="num">P</th>
-                  <th className="num">W-D-L</th>
-                  <th className="num">+/-</th>
+                  <SortableHeader
+                    label="P"
+                    href={sortHref(tab, year, "games", plusMinusSort, dir)}
+                    isActive={plusMinusSort === "games"}
+                    dir={dir}
+                  />
+                  <SortableHeader
+                    label="W-D-L"
+                    href={sortHref(tab, year, "wins", plusMinusSort, dir)}
+                    isActive={plusMinusSort === "wins"}
+                    dir={dir}
+                  />
+                  <SortableHeader
+                    label="+/-"
+                    href={sortHref(tab, year, "plusminus", plusMinusSort, dir)}
+                    isActive={plusMinusSort === "plusminus"}
+                    dir={dir}
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -173,8 +226,18 @@ export default async function Home({
                 <tr>
                   <th className="num">#</th>
                   <th>Player</th>
-                  <th className="num">Goals</th>
-                  <th className="num">Per game</th>
+                  <SortableHeader
+                    label="Goals"
+                    href={sortHref(tab, year, "goals", goldenBootSort, dir)}
+                    isActive={goldenBootSort === "goals"}
+                    dir={dir}
+                  />
+                  <SortableHeader
+                    label="Per game"
+                    href={sortHref(tab, year, "rate", goldenBootSort, dir)}
+                    isActive={goldenBootSort === "rate"}
+                    dir={dir}
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -211,7 +274,12 @@ export default async function Home({
                 <tr>
                   <th className="num">#</th>
                   <th>Player</th>
-                  <th className="num">MVP</th>
+                  <SortableHeader
+                    label="MVP"
+                    href={sortHref(tab, year, "mvp", mvpSort, dir)}
+                    isActive
+                    dir={dir}
+                  />
                 </tr>
               </thead>
               <tbody>
