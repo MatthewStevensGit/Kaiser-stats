@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { LogOutButton } from "../_components/LogOutButton";
@@ -16,6 +17,14 @@ export default async function SettingsPage() {
       <div className="card">
         <SettingsForm displayName={user.displayName} email={user.email} />
       </div>
+
+      {user.isAdmin && (
+        <div className="card">
+          <Link href="/settings/members" className="rulebook-link">
+            Members →
+          </Link>
+        </div>
+      )}
 
       <div className="card">
         <LogOutButton />

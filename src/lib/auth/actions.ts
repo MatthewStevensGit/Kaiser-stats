@@ -1,9 +1,11 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createProvisionalIdentityFromEmail, findPlayerByEmail } from "../stats-engine/identity";
 import type { PlayerIdentity } from "../stats-engine/types";
 import { createServiceRoleClient } from "../supabase/client";
 import { createServerSupabaseClient } from "../supabase/server-client";
+import { getCurrentUser } from "./session";
 
 interface PlayerRow {
   canonical_id: string;
@@ -107,5 +109,73 @@ export async function updateDisplayName(
     .update({ display_name: trimmed })
     .eq("auth_user_id", user.id);
   if (error) return { ok: false, error: "Could not update your name." };
+  return { ok: true };
+}
+
+/**
+ * Every action below independently re-checks admin-ness — Server Actions are
+ * reachable regardless of which page's JSX references them, same reasoning
+ * as requireAdminResult() in src/lib/matchday/actions.ts (not shared across
+ * modules, matching that file's existing convention).
+ */
+async function requireAdminResult(): Promise<{ canonicalId: string } | { ok: false; error: string }> {
+  const admin = await getCurrentUser();
+  if (!admin?.isAdmin) return { ok: false, error: "Admin access required." };
+  return admin;
+}
+
+/**
+ * Toggles another member's admin flag. Blocks self-demotion (removing your
+ * OWN admin status) — this app has only a single is_admin boolean, no
+ * fuller role model, so an admin accidentally de-adminning themselves with
+ * no one else to fix it would be a real lockout risk.
+ */
+export async function setMemberAdmin(
+  canonicalId: string,
+  isAdmin: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+  if (canonicalId === admin.canonicalId && !isAdmin) {
+    return { ok: false, error: "You can't remove your own admin access." };
+  }
+
+  const client = createServiceRoleClient();
+  const { error } = await client.from("players").update({ is_admin: isAdmin }).eq("canonical_id", canonicalId);
+  if (error) return { ok: false, error: "Could not update that member's admin status." };
+
+  revalidatePath("/settings/members");
+  return { ok: true };
+}
+
+/**
+ * "Kicking someone out of the league" sets their status to 'deferred' — the
+ * same status getRosterForPicker() already excludes from check-in/draft
+ * pools (see src/lib/matchday/data.ts) — rather than deleting their row,
+ * which would orphan their historical stats (roster_spots/goal_events
+ * reference their canonical_id) and violate auth_user_id's foreign key.
+ * Reversible via restoreMember below.
+ */
+export async function removeMember(canonicalId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const client = createServiceRoleClient();
+  const { error } = await client.from("players").update({ status: "deferred" }).eq("canonical_id", canonicalId);
+  if (error) return { ok: false, error: "Could not remove that member." };
+
+  revalidatePath("/settings/members");
+  return { ok: true };
+}
+
+export async function restoreMember(canonicalId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const client = createServiceRoleClient();
+  const { error } = await client.from("players").update({ status: "regular" }).eq("canonical_id", canonicalId);
+  if (error) return { ok: false, error: "Could not restore that member." };
+
+  revalidatePath("/settings/members");
   return { ok: true };
 }
