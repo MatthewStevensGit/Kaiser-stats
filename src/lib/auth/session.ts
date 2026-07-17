@@ -6,6 +6,7 @@ export interface CurrentUser {
   canonicalId: string;
   displayName: string;
   isAdmin: boolean;
+  email: string;
 }
 
 interface PlayerRow {
@@ -50,6 +51,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       canonicalId: data.canonical_id,
       displayName: data.display_name,
       isAdmin: data.is_admin,
+      email: user.email ?? "",
     };
   } catch {
     return null;

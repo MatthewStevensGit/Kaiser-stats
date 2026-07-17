@@ -82,3 +82,30 @@ export async function linkPlayerAfterLogin(): Promise<{ ok: true } | { ok: false
   if (error) return { ok: false, error: "Could not finish signing you in." };
   return { ok: true };
 }
+
+/**
+ * Renames the CALLER's own players row — re-derives who's asking from their
+ * own auth session server-side (never trusts a client-passed canonicalId),
+ * same "independently re-check, don't trust the caller" pattern as every
+ * other Server Action in this app (see e.g. src/lib/matchday/actions.ts).
+ */
+export async function updateDisplayName(
+  newDisplayName: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const trimmed = newDisplayName.trim();
+  if (!trimmed) return { ok: false, error: "Name can't be empty." };
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const serviceRoleClient = createServiceRoleClient();
+  const { error } = await serviceRoleClient
+    .from("players")
+    .update({ display_name: trimmed })
+    .eq("auth_user_id", user.id);
+  if (error) return { ok: false, error: "Could not update your name." };
+  return { ok: true };
+}

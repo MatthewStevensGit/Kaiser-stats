@@ -45,7 +45,7 @@ export function BottomNav({ displayName }: { displayName?: string }) {
 
       {displayName ? (
         <>
-          <a href="/" className="bottom-nav-item bottom-nav-item-name-case">
+          <a href="/settings" className="bottom-nav-item bottom-nav-item-name-case">
             {displayName.split(" ")[0] ?? displayName}
           </a>
           <button type="button" onClick={handleLogOut} className="bottom-nav-item bottom-nav-logout">
