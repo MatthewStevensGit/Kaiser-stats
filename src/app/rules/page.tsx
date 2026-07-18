@@ -168,7 +168,7 @@ export default function RulesPage() {
       </section>
 
       <section className="card">
-        <h2>On-field game rules</h2>
+        <h2>Free kick rules</h2>
         <p className="note">
           From Vadim&apos;s &quot;Rule clarifications&quot; email, verbatim — including
           his own terms (e.g. &quot;pervaja&quot;), not rephrased.
