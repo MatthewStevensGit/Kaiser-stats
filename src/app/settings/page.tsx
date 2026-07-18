@@ -26,6 +26,14 @@ export default async function SettingsPage() {
         </div>
       )}
 
+      {user.isAdmin && (
+        <div className="card">
+          <Link href="/settings/identities" className="rulebook-link">
+            Identities →
+          </Link>
+        </div>
+      )}
+
       <div className="card">
         <LogOutButton />
       </div>

@@ -7,12 +7,15 @@ export interface CurrentUser {
   displayName: string;
   isAdmin: boolean;
   email: string;
+  /** False until completeOnboarding() runs (see src/lib/auth/actions.ts) — gates every page via OnboardingGate. */
+  onboardingCompleted: boolean;
 }
 
 interface PlayerRow {
   canonical_id: string;
   display_name: string;
   is_admin: boolean;
+  onboarding_completed_at: string | null;
 }
 
 /**
@@ -41,7 +44,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     const serviceRoleClient = createServiceRoleClient();
     const { data } = await serviceRoleClient
       .from("players")
-      .select("canonical_id, display_name, is_admin")
+      .select("canonical_id, display_name, is_admin, onboarding_completed_at")
       .eq("auth_user_id", user.id)
       .maybeSingle<PlayerRow>();
 
@@ -52,6 +55,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       displayName: data.display_name,
       isAdmin: data.is_admin,
       email: user.email ?? "",
+      onboardingCompleted: data.onboarding_completed_at !== null,
     };
   } catch {
     return null;

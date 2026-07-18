@@ -27,6 +27,8 @@ function toPlayerIdentity(row: PlayerRow): PlayerIdentity {
   };
 }
 
+type LinkPlayerResult = { ok: true; needsOnboarding: boolean } | { ok: false; error: string };
+
 /**
  * Runs right after the browser confirms a 6-digit login code
  * (supabase.auth.verifyOtp) — links the now-authenticated auth user to a
@@ -34,9 +36,14 @@ function toPlayerIdentity(row: PlayerRow): PlayerIdentity {
  * email match, a never-seen email gets auto-provisioned (never blocked —
  * same never-guess-a-merge philosophy as report/spreadsheet name
  * resolution; see identity.ts). Idempotent — a returning user with an
- * already-linked row is a no-op.
+ * already-linked row is a no-op. `needsOnboarding` tells the login page
+ * whether to route to /onboarding (display name + roster name, required)
+ * instead of straight to / — true for a brand-new row, or an existing
+ * historical row logging in for the first time (both start with
+ * onboarding_completed_at null; see the schema migration's backfill for why
+ * already-established members are grandfathered past this).
  */
-export async function linkPlayerAfterLogin(): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function linkPlayerAfterLogin(): Promise<LinkPlayerResult> {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -50,11 +57,11 @@ export async function linkPlayerAfterLogin(): Promise<{ ok: true } | { ok: false
 
   const { data: existingByAuthId } = await serviceRoleClient
     .from("players")
-    .select("canonical_id")
+    .select("onboarding_completed_at")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
 
-  if (existingByAuthId) return { ok: true };
+  if (existingByAuthId) return { ok: true, needsOnboarding: existingByAuthId.onboarding_completed_at === null };
 
   const { data: allPlayers } = await serviceRoleClient
     .from("players")
@@ -68,7 +75,7 @@ export async function linkPlayerAfterLogin(): Promise<{ ok: true } | { ok: false
       .update({ auth_user_id: authUserId })
       .eq("canonical_id", match.canonicalId);
     if (error) return { ok: false, error: "Could not finish signing you in." };
-    return { ok: true };
+    return { ok: true, needsOnboarding: true };
   }
 
   const provisional = createProvisionalIdentityFromEmail(email);
@@ -82,6 +89,42 @@ export async function linkPlayerAfterLogin(): Promise<{ ok: true } | { ok: false
     auth_user_id: authUserId,
   });
   if (error) return { ok: false, error: "Could not finish signing you in." };
+  return { ok: true, needsOnboarding: true };
+}
+
+/**
+ * Sets BOTH names at once, required together — the caller's own row only
+ * (re-derived from their session, never a client-passed canonicalId, same
+ * pattern as updateDisplayName below). This is the only place a non-admin
+ * can ever write roster_name: once onboarding_completed_at is set here, the
+ * user has no further self-service way to change it — only an admin can,
+ * via setMemberRosterName below (Settings > Identities).
+ */
+export async function completeOnboarding(
+  displayName: string,
+  rosterName: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const trimmedDisplayName = displayName.trim();
+  const trimmedRosterName = rosterName.trim();
+  if (!trimmedDisplayName) return { ok: false, error: "Display name can't be empty." };
+  if (!trimmedRosterName) return { ok: false, error: "Roster name can't be empty." };
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const serviceRoleClient = createServiceRoleClient();
+  const { error } = await serviceRoleClient
+    .from("players")
+    .update({
+      display_name: trimmedDisplayName,
+      roster_name: trimmedRosterName,
+      onboarding_completed_at: new Date().toISOString(),
+    })
+    .eq("auth_user_id", user.id);
+  if (error) return { ok: false, error: "Could not save your profile." };
   return { ok: true };
 }
 
@@ -177,5 +220,29 @@ export async function restoreMember(canonicalId: string): Promise<{ ok: true } |
   if (error) return { ok: false, error: "Could not restore that member." };
 
   revalidatePath("/settings/members");
+  return { ok: true };
+}
+
+/**
+ * The only way to change roster_name once a user has completed onboarding
+ * (see completeOnboarding above) — corrects mismatches from the
+ * email-match/auto-provision step at login, or a typo the user made at
+ * onboarding time. Settings > Identities.
+ */
+export async function setMemberRosterName(
+  canonicalId: string,
+  rosterName: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const trimmed = rosterName.trim();
+  if (!trimmed) return { ok: false, error: "Roster name can't be empty." };
+
+  const client = createServiceRoleClient();
+  const { error } = await client.from("players").update({ roster_name: trimmed }).eq("canonical_id", canonicalId);
+  if (error) return { ok: false, error: "Could not update that member's roster name." };
+
+  revalidatePath("/settings/identities");
   return { ok: true };
 }

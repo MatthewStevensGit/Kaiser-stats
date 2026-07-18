@@ -131,3 +131,14 @@ export function findPlayerByEmail(players: PlayerIdentity[], email: string): Pla
   const normalized = email.trim().toLowerCase();
   return players.find((p) => p.knownEmails.some((e) => e.toLowerCase() === normalized)) ?? null;
 }
+
+/**
+ * The name to show wherever recognizing a real person by their game-report
+ * name matters more than their personal app-UI preference — today, only the
+ * live snake draft (see draft/page.tsx and draft-actions.ts's
+ * getLiveDraftState). Falls back to displayName for anyone who hasn't set a
+ * roster name yet (never logged in, or onboarded before this field existed).
+ */
+export function rosterDisplayName(player: { displayName: string; rosterName?: string | null }): string {
+  return player.rosterName?.trim() || player.displayName;
+}

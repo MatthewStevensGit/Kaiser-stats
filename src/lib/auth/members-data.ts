@@ -6,6 +6,7 @@ export interface MemberRow {
   email: string;
   isAdmin: boolean;
   isRemoved: boolean;
+  rosterName: string | null;
 }
 
 /**
@@ -20,7 +21,7 @@ export async function listMembers(): Promise<MemberRow[]> {
   const client = createServiceRoleClient();
   const { data } = await client
     .from("players")
-    .select("canonical_id, display_name, known_emails, is_admin, status")
+    .select("canonical_id, display_name, known_emails, is_admin, status, roster_name")
     .not("auth_user_id", "is", null)
     .order("display_name", { ascending: true });
 
@@ -30,5 +31,6 @@ export async function listMembers(): Promise<MemberRow[]> {
     email: row.known_emails?.[0] ?? "",
     isAdmin: row.is_admin,
     isRemoved: row.status === "deferred",
+    rosterName: row.roster_name,
   }));
 }

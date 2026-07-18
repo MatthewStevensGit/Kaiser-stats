@@ -5,6 +5,16 @@ export type StatsView = "saturday" | "sunday" | "merged";
 export interface PlayerIdentity {
   canonicalId: string;
   displayName: string;
+  /**
+   * The name used in game reports — how a live-draft captain would
+   * recognize this player. Undefined/null for anyone who hasn't logged in
+   * and set it themselves at onboarding (or been given one by an admin), and
+   * for every construction site that doesn't deal in real Supabase rows
+   * (sample data, report-parser extraction, tests) — see rosterDisplayName()
+   * in identity.ts for the null-safe fallback used wherever this matters
+   * (the live draft).
+   */
+  rosterName?: string | null;
   aliases: string[];
   knownEmails: string[];
   leagues: League[];

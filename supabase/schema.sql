@@ -355,3 +355,18 @@ create table if not exists draft_picks (
 
 alter table draft_sessions enable row level security;
 alter table draft_picks enable row level security;
+
+-- Migration (2026-07-19): roster-name onboarding. `roster_name` is the player's real
+-- name as used in game reports (how a live-draft captain would recognize them) —
+-- distinct from `display_name`, which is a personal app-UI preference a user can keep
+-- editing in Settings. `roster_name` is only ever settable once by the user themselves
+-- (at first-login onboarding, see completeOnboarding() in src/lib/auth/actions.ts);
+-- afterward only an admin can correct it, via the Settings > Identities page.
+-- `onboarding_completed_at` null means the onboarding gate applies; the backfill below
+-- grandfathers in everyone who has already logged in before this migration, since
+-- onboarding is a first-login gate going forward, not retroactive for existing members.
+alter table players add column if not exists roster_name text;
+alter table players add column if not exists onboarding_completed_at timestamptz;
+
+update players set onboarding_completed_at = now()
+  where auth_user_id is not null and onboarding_completed_at is null;

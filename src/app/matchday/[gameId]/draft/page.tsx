@@ -4,6 +4,7 @@ import { getScheduledGameById } from "@/lib/matchday/data";
 import { getLiveDraftState } from "@/lib/matchday/draft-actions";
 import { getRegistrationStatus } from "@/lib/matchday/registration-window";
 import { listPlayers } from "@/lib/stats-engine/data";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { BackLink } from "../../../_components/BackLink";
 import { DraftPanel } from "../../../_components/DraftPanel";
 
@@ -39,7 +40,7 @@ export default async function DraftPage({
           gameId={gameId}
           date={game.date}
           checkedInCanonicalIds={game.checkedInCanonicalIds}
-          players={players.map((p) => ({ canonicalId: p.canonicalId, displayName: p.displayName }))}
+          players={players.map((p) => ({ canonicalId: p.canonicalId, displayName: rosterDisplayName(p) }))}
           draftState={draftState}
         />
       )}

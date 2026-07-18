@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { draftGameId, saveResolvedGame } from "@/lib/report-parser/save";
 import { listGameRecords, listPlayers } from "@/lib/stats-engine/data";
 import { rollupGameRecords } from "@/lib/stats-engine/game-records";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import type { GameRecord } from "@/lib/stats-engine/types";
 import { createServiceRoleClient } from "@/lib/supabase/client";
 import { getScheduledGameById } from "./data";
@@ -385,11 +386,14 @@ export async function getLiveDraftState(gameId: string): Promise<DraftSessionSta
   const totalsByPlayer = new Map(rollupGameRecords(leagueGames, allPlayers).map((s) => [s.canonicalId, s]));
 
   const remainingRanked: RecommendedPlayer[] = remainingIds
-    .map((canonicalId) => ({
-      canonicalId,
-      displayName: playersById.get(canonicalId)?.displayName ?? canonicalId,
-      avgDraftPosition: totalsByPlayer.get(canonicalId)?.avgDraftPosition ?? null,
-    }))
+    .map((canonicalId) => {
+      const player = playersById.get(canonicalId);
+      return {
+        canonicalId,
+        displayName: player ? rosterDisplayName(player) : canonicalId,
+        avgDraftPosition: totalsByPlayer.get(canonicalId)?.avgDraftPosition ?? null,
+      };
+    })
     .sort((a, b) => {
       if (a.avgDraftPosition === null && b.avgDraftPosition === null) return 0;
       if (a.avgDraftPosition === null) return 1;

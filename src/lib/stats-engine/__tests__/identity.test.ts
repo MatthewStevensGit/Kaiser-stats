@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProvisionalIdentityFromEmail, findPlayerByEmail } from "../identity";
+import { createProvisionalIdentityFromEmail, findPlayerByEmail, rosterDisplayName } from "../identity";
 import type { PlayerIdentity } from "../types";
 
 describe("createProvisionalIdentityFromEmail", () => {
@@ -40,5 +40,24 @@ describe("findPlayerByEmail", () => {
 
   it("returns null when no player has that email", () => {
     expect(findPlayerByEmail(players, "nobody@example.com")).toBeNull();
+  });
+});
+
+describe("rosterDisplayName", () => {
+  it("uses rosterName when set", () => {
+    expect(rosterDisplayName({ displayName: "Matty", rosterName: "Matthew Rakov" })).toBe("Matthew Rakov");
+  });
+
+  it("falls back to displayName when rosterName is null", () => {
+    expect(rosterDisplayName({ displayName: "Matty", rosterName: null })).toBe("Matty");
+  });
+
+  it("falls back to displayName when rosterName is undefined", () => {
+    expect(rosterDisplayName({ displayName: "Matty" })).toBe("Matty");
+  });
+
+  it("falls back to displayName when rosterName is empty or whitespace", () => {
+    expect(rosterDisplayName({ displayName: "Matty", rosterName: "" })).toBe("Matty");
+    expect(rosterDisplayName({ displayName: "Matty", rosterName: "   " })).toBe("Matty");
   });
 });
