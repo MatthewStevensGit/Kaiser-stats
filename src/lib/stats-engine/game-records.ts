@@ -6,7 +6,20 @@ export interface RecentFormStats {
   /** How many of their actual last-`windowSize` games these totals cover — usually `windowSize`, fewer for a newer player. */
   gamesPlayed: number;
   goals: number;
+  assists: number;
   mvpCount: number;
+  /** Same captain-excluded averaging as rollupGameRecords' avgDraftPosition, scoped to just this window's games. */
+  avgDraftPosition: number | null;
+}
+
+/** A player's pickNumber in one game, or null if they weren't a drafted pick in it (captain, or no known draft order — see rollupGameRecords' avgDraftPosition doc comment). */
+function findDraftPickNumber(game: GameRecord, canonicalId: string): number | null {
+  for (const roster of [game.homeRoster, game.awayRoster]) {
+    const index = roster.findIndex((spot) => spot.canonicalId === canonicalId);
+    if (index > 0) return roster[index]!.pickNumber;
+    if (index === 0) return null;
+  }
+  return null;
 }
 
 /** A game's outcome from one specific side's perspective. */
@@ -158,17 +171,28 @@ export function computeRecentForm(
 
   return Array.from(recentGamesByPlayer.entries()).map(([canonicalId, recentGames]) => {
     let goals = 0;
+    let assists = 0;
     let mvpCount = 0;
+    let draftPickSum = 0;
+    let draftPickCount = 0;
     for (const game of recentGames) {
       goals += game.goals.filter((goal) => goal.scorerCanonicalId === canonicalId).length;
+      assists += game.goals.filter((goal) => goal.assistCanonicalId === canonicalId).length;
       if (game.mvpCanonicalId === canonicalId) mvpCount += 1;
+      const pickNumber = findDraftPickNumber(game, canonicalId);
+      if (pickNumber !== null) {
+        draftPickSum += pickNumber;
+        draftPickCount += 1;
+      }
     }
     return {
       canonicalId,
       displayName: playersById.get(canonicalId)?.displayName ?? canonicalId,
       gamesPlayed: recentGames.length,
       goals,
+      assists,
       mvpCount,
+      avgDraftPosition: draftPickCount > 0 ? draftPickSum / draftPickCount : null,
     };
   });
 }

@@ -31,7 +31,14 @@ export default async function MatchDetailPage({
         <p className="player-summary-line">{formatScoreLine(game.homeScore, game.awayScore)}</p>
       </header>
 
-      {mvpName && <MvpBadge name={mvpName} />}
+      {mvpName && game.mvpCanonicalId && (
+        <a
+          href={`/players/${game.mvpCanonicalId}?year=${game.date.slice(0, 4)}#game-${game.gameId}`}
+          className="match-card-mvp-link"
+        >
+          <MvpBadge name={mvpName} />
+        </a>
+      )}
 
       <section className="card match-detail-section">
         <h2>Report</h2>

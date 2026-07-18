@@ -25,6 +25,26 @@ export async function saveResolvedGame(
   const gameRecord: GameRecord = { ...params.gameRecord, description: params.rawText };
   const { gameRecordRow, rosterSpotRows, goalEventRows, notableMentionRows } = buildPersistenceRows(gameRecord);
 
+  // Players must be upserted BEFORE game_records, not after — game_records'
+  // own mvp_canonical_id column is foreign-key-constrained, and the MVP is
+  // sometimes a brand-new player introduced in this very report (confirmed
+  // real failure: a newly-provisioned player who was also this game's top
+  // scorer, so mvp_canonical_id pointed at someone not in `players` yet).
+  // Nothing to roll back if this fails — no game_records row exists yet.
+  if (params.provisionedPlayers.length > 0) {
+    const { error } = await client.from("players").upsert(
+      params.provisionedPlayers.map((p) => ({
+        canonical_id: p.canonicalId,
+        display_name: p.displayName,
+        aliases: p.aliases,
+        known_emails: p.knownEmails,
+        leagues: p.leagues,
+        status: p.status,
+      })),
+    );
+    if (error) return { ok: false, error: "Could not save the new players from this report." };
+  }
+
   const { error: gameRecordError } = await client.from("game_records").insert(gameRecordRow);
   if (gameRecordError) {
     if (gameRecordError.code === UNIQUE_VIOLATION) {
@@ -37,22 +57,11 @@ export async function saveResolvedGame(
     // roster_spots/goal_events/notable_mentions all cascade-delete from
     // game_records, so this cleans up any partial writes below in one call —
     // leaves the game_id free to retry rather than stuck as a broken row.
+    // (The players upserted above are left in place even on rollback — an
+    // extra known-player row with no game attached yet is harmless, and
+    // they'll just get reused next time this name appears.)
     await client.from("game_records").delete().eq("game_id", gameRecord.gameId);
     return { ok: false, error: message };
-  }
-
-  if (params.provisionedPlayers.length > 0) {
-    const { error } = await client.from("players").upsert(
-      params.provisionedPlayers.map((p) => ({
-        canonical_id: p.canonicalId,
-        display_name: p.displayName,
-        aliases: p.aliases,
-        known_emails: p.knownEmails,
-        leagues: p.leagues,
-        status: p.status,
-      })),
-    );
-    if (error) return rollbackAndFail("Could not save the new players from this report.");
   }
 
   // These three don't reference each other (only game_records/players, both
@@ -151,19 +160,10 @@ export async function mergeReportIntoDraftGame(
 ): Promise<SaveResult> {
   const { draftGameId: gameId, gameRecord, provisionedPlayers, flaggedNames, rawText } = params;
 
-  const { error: updateError } = await client
-    .from("game_records")
-    .update({
-      home_score: gameRecord.homeScore,
-      away_score: gameRecord.awayScore,
-      mvp_canonical_id: gameRecord.mvpCanonicalId,
-      home_team_label: gameRecord.homeTeamLabel,
-      away_team_label: gameRecord.awayTeamLabel,
-      description: rawText,
-    })
-    .eq("game_id", gameId);
-  if (updateError) return { ok: false, error: "Could not update the draft game with this report." };
-
+  // Same ordering fix as saveResolvedGame: mvp_canonical_id is foreign-key-
+  // constrained, and the MVP can be a brand-new player introduced in this
+  // very report, so players must be upserted before the game_records update
+  // that might reference one of them.
   if (provisionedPlayers.length > 0) {
     const { error } = await client.from("players").upsert(
       provisionedPlayers.map((p) => ({
@@ -177,6 +177,19 @@ export async function mergeReportIntoDraftGame(
     );
     if (error) return { ok: false, error: "Could not save the new players from this report." };
   }
+
+  const { error: updateError } = await client
+    .from("game_records")
+    .update({
+      home_score: gameRecord.homeScore,
+      away_score: gameRecord.awayScore,
+      mvp_canonical_id: gameRecord.mvpCanonicalId,
+      home_team_label: gameRecord.homeTeamLabel,
+      away_team_label: gameRecord.awayTeamLabel,
+      description: rawText,
+    })
+    .eq("game_id", gameId);
+  if (updateError) return { ok: false, error: "Could not update the draft game with this report." };
 
   // Independent of each other (only game_records/players, already settled
   // above) — run concurrently rather than as two sequential round-trips.

@@ -28,7 +28,7 @@ type GoldenBootSort = "goals" | "rate";
 type MvpSort = "mvp";
 type DraftPositionSort = "draftposition";
 type AssistsSort = "assists";
-type RecentFormSort = "goals" | "mvps";
+type RecentFormSort = "goals" | "assists" | "mvps" | "games" | "draftpos";
 
 const RECENT_FORM_WINDOW = 5;
 
@@ -67,9 +67,22 @@ function plusMinusClass(value: number): string {
   return "value-neutral";
 }
 
-/** href for a column header: clicking an already-active column flips direction, clicking a new one defaults to descending. */
-function sortHref(tab: string, year: string, sortKey: string, currentSort: string, currentDir: SortDir): string {
-  const nextDir: SortDir = currentSort === sortKey && currentDir === "desc" ? "asc" : "desc";
+/**
+ * href for a column header: clicking an already-active column flips direction,
+ * clicking a new one defaults to descending — except a column where a LOW
+ * value is the notable one (e.g. avg draft position: an early pick), which
+ * defaults a fresh click to ascending instead (ascendingIsBetter).
+ */
+function sortHref(
+  tab: string,
+  year: string,
+  sortKey: string,
+  currentSort: string,
+  currentDir: SortDir,
+  ascendingIsBetter = false,
+): string {
+  const isActive = currentSort === sortKey;
+  const nextDir: SortDir = isActive ? (currentDir === "desc" ? "asc" : "desc") : ascendingIsBetter ? "asc" : "desc";
   return `/?tab=${tab}&year=${year}&sort=${sortKey}&dir=${nextDir}`;
 }
 
@@ -104,7 +117,7 @@ const ASSISTS_DEFAULT_SORT: AssistsSort = "assists";
 const RECENT_FORM_DEFAULT_SORT: RecentFormSort = "goals";
 
 function isRecentFormSort(value: string | undefined): value is RecentFormSort {
-  return value === "goals" || value === "mvps";
+  return value === "goals" || value === "assists" || value === "mvps" || value === "games" || value === "draftpos";
 }
 
 function isPlusMinusSort(value: string | undefined): value is PlusMinusSort {
@@ -205,10 +218,30 @@ export default async function Home({
   // spreadsheet backfill, so there's no season_stats_cutoff to respect.
   const recentFormRanked = computeRecentForm(mvpEligibleGames, players, RECENT_FORM_WINDOW).sort((a, b) => {
     if (recentFormSort === "mvps") return sign * (a.mvpCount - b.mvpCount) || b.goals - a.goals;
+    if (recentFormSort === "assists") return sign * (a.assists - b.assists) || b.goals - a.goals;
+    if (recentFormSort === "games") return sign * (a.gamesPlayed - b.gamesPlayed) || b.goals - a.goals;
+    if (recentFormSort === "draftpos") {
+      // Nobody's actual draft-pick data is missing on purpose (only report-
+      // imported games with no known pick order lack it) — always push those
+      // to the bottom regardless of sort direction, same as the dedicated
+      // Draft Position tab excluding them outright.
+      if (a.avgDraftPosition === null && b.avgDraftPosition === null) return 0;
+      if (a.avgDraftPosition === null) return 1;
+      if (b.avgDraftPosition === null) return -1;
+      return sign * (a.avgDraftPosition - b.avgDraftPosition);
+    }
     return sign * (a.goals - b.goals) || b.mvpCount - a.mvpCount;
   });
   const recentFormRanks = computeRanks(recentFormRanked, (p) =>
-    recentFormSort === "mvps" ? p.mvpCount : p.goals,
+    recentFormSort === "mvps"
+      ? p.mvpCount
+      : recentFormSort === "assists"
+        ? p.assists
+        : recentFormSort === "games"
+          ? p.gamesPlayed
+          : recentFormSort === "draftpos"
+            ? (p.avgDraftPosition ?? Infinity)
+            : p.goals,
   );
 
   // League-title/Golden-Boot trophy case, shown only on the All Years view
@@ -499,7 +532,12 @@ export default async function Home({
                 <tr>
                   <th className="num">#</th>
                   <th>Player</th>
-                  <th className="num">Games</th>
+                  <SortableHeader
+                    label="Games"
+                    href={sortHref(tab, year, "games", recentFormSort, dir)}
+                    isActive={recentFormSort === "games"}
+                    dir={dir}
+                  />
                   <SortableHeader
                     label="Goals"
                     href={sortHref(tab, year, "goals", recentFormSort, dir)}
@@ -507,9 +545,21 @@ export default async function Home({
                     dir={dir}
                   />
                   <SortableHeader
+                    label="Assists"
+                    href={sortHref(tab, year, "assists", recentFormSort, dir)}
+                    isActive={recentFormSort === "assists"}
+                    dir={dir}
+                  />
+                  <SortableHeader
                     label="MVPs"
                     href={sortHref(tab, year, "mvps", recentFormSort, dir)}
                     isActive={recentFormSort === "mvps"}
+                    dir={dir}
+                  />
+                  <SortableHeader
+                    label="Avg Draft Pos"
+                    href={sortHref(tab, year, "draftpos", recentFormSort, dir, true)}
+                    isActive={recentFormSort === "draftpos"}
                     dir={dir}
                   />
                 </tr>
@@ -525,7 +575,9 @@ export default async function Home({
                     </td>
                     <td className="num">{p.gamesPlayed}</td>
                     <td className="num">{p.goals}</td>
+                    <td className="num">{p.assists}</td>
                     <td className="num">{p.mvpCount}</td>
+                    <td className="num">{p.avgDraftPosition === null ? "—" : p.avgDraftPosition.toFixed(1)}</td>
                   </tr>
                 ))}
               </tbody>

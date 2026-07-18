@@ -549,6 +549,26 @@ th.num {
   border-color: var(--accent);
 }
 
+/* MatchCard's own inner link (see its doc comment) — .match-card is now the
+   outermost element here, with the MVP link as a separate sibling, so the
+   hover/focus highlight is keyed off the card itself rather than an
+   ancestor link. */
+.match-card:hover,
+.match-card:focus-within {
+  border-color: var(--accent);
+}
+
+.match-card-inner-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.match-card-mvp-link {
+  display: inline-block;
+  text-decoration: none;
+}
+
 /* Matchday list card wrapper — hosts the hover-revealed admin cancel button
    as a sibling of the card link, not nested inside it (a <button> nested
    inside an <a> is invalid HTML and would double-fire click/navigate). */
