@@ -148,6 +148,34 @@ export function getRegistrationStatus(
   return "closed";
 }
 
+/**
+ * The 5 display states for a scheduled game's status dot/bar — a strict
+ * refinement of RegistrationStatus that also accounts for capacity. "filled"
+ * always wins regardless of time remaining (a game that fills up with hours
+ * left in the window is done registering just as much as one that fills up
+ * at the last second); otherwise it's the plain registration-window state,
+ * with "open" further split into "closing-soon" once under an hour remains.
+ */
+export type MatchdayStatusTier = "scheduled" | "open" | "closing-soon" | "filled" | "closed";
+
+const CLOSING_SOON_THRESHOLD_MS = 60 * 60 * 1000;
+
+export function computeMatchdayStatusTier(
+  nowUtc: Date,
+  gameDateIso: string,
+  league: ScheduledLeague,
+  checkedInCount: number,
+  capacity: number,
+): MatchdayStatusTier {
+  if (checkedInCount >= capacity) return "filled";
+  const { opensAt, closesAt } = getRegistrationWindowUtc(gameDateIso, league);
+  const nowMs = nowUtc.getTime();
+  if (nowMs < opensAt.getTime()) return "scheduled";
+  if (nowMs >= closesAt.getTime()) return "closed";
+  if (closesAt.getTime() - nowMs < CLOSING_SOON_THRESHOLD_MS) return "closing-soon";
+  return "open";
+}
+
 /** Formats a UTC instant back into Eastern wall time for display, e.g. "Fri, Jul 17, 5:00 PM ET". */
 export function formatCutoffLabel(instantUtc: Date): string {
   const formatted = new Intl.DateTimeFormat("en-US", {

@@ -48,6 +48,12 @@
   --status-critical-bg: #ff6b5c;
   --status-critical-fg: #2c0a05;
   --status-scheduled: var(--accent);
+
+  /* Matchday status tiers — "scheduled" (light blue, before registration
+     opens) is distinct from the app's teal accent on purpose, so it reads
+     as its own neutral/informational state rather than a call to action. */
+  --status-info-bg: #5aa9e6;
+  --status-info-fg: #04203d;
 }
 
 * {
@@ -579,7 +585,7 @@ th.num {
 .cancel-game-button {
   position: absolute;
   top: 0.6rem;
-  right: 0.6rem;
+  left: 0.6rem;
   width: 1.6rem;
   height: 1.6rem;
   border-radius: 999px;
@@ -596,6 +602,79 @@ th.num {
 .matchday-card-wrapper:hover .cancel-game-button,
 .matchday-card-wrapper:focus-within .cancel-game-button {
   opacity: 1;
+}
+
+/* Checked-in count badge — a sibling of the card link (see matchday-card-wrapper's
+   comment above), always visible (unlike the hover-revealed cancel button) since
+   it's the primary "how full is this game" signal, not an admin action. */
+.checkedin-toggle-corner {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 1;
+}
+
+/* Reset button chrome by default — the capacity-ring trigger (portal page)
+   wraps a rich SVG gauge and needs to stay visually plain; the corner-badge
+   trigger (list page) opts into the small pill look below instead. */
+.checkedin-toggle-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.checkedin-toggle-corner .checkedin-toggle-trigger {
+  width: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkedin-toggle-capacity {
+  text-align: center;
+}
+
+.checkedin-toggle-capacity .checkedin-names-list,
+.checkedin-toggle-capacity .checkedin-names-empty {
+  display: inline-block;
+  text-align: left;
+}
+
+.checkedin-names-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  max-height: 220px;
+  overflow-y: auto;
+  min-width: 9rem;
+}
+
+.checkedin-names-list li {
+  padding: 0.2rem 0;
+}
+
+.checkedin-names-empty {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 .match-card-top {
@@ -835,8 +914,27 @@ th.num {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 999px;
-  background: var(--status-scheduled);
   flex-shrink: 0;
+}
+
+.status-dot-scheduled {
+  background: var(--status-info-bg);
+}
+
+.status-dot-open {
+  background: var(--status-good-bg);
+}
+
+.status-dot-closing-soon {
+  background: var(--status-warning-bg);
+}
+
+.status-dot-filled {
+  background: var(--status-critical-bg);
+}
+
+.status-dot-closed {
+  background: var(--text-secondary);
 }
 
 /* Edit Game link — only rendered for admins; real enforcement is the
@@ -1000,17 +1098,27 @@ th.num {
   text-align: center;
 }
 
+.registration-status-bar-scheduled {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
+}
+
 .registration-status-bar-open {
   background: var(--status-good-bg);
   color: var(--status-good-fg);
 }
 
-.registration-status-bar-closed {
+.registration-status-bar-closing-soon {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+}
+
+.registration-status-bar-filled {
   background: var(--status-critical-bg);
   color: var(--status-critical-fg);
 }
 
-.registration-status-bar-not-open {
+.registration-status-bar-closed {
   background: var(--surface-2);
   color: var(--text-secondary);
   border: 1px solid var(--border);

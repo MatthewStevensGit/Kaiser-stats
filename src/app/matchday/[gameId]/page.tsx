@@ -4,9 +4,15 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { formatMatchDateLabel } from "@/lib/format";
 import { LEAGUE_CAPACITY_BY_LEAGUE, LEAGUE_MINIMUM } from "@/lib/matchday/constants";
 import { getScheduledGameById } from "@/lib/matchday/data";
-import { getRegistrationStatus, getRegistrationWindowUtc } from "@/lib/matchday/registration-window";
+import {
+  computeMatchdayStatusTier,
+  getRegistrationStatus,
+  getRegistrationWindowUtc,
+} from "@/lib/matchday/registration-window";
+import { listPlayers } from "@/lib/stats-engine/data";
 import { BackLink } from "../../_components/BackLink";
 import { CapacityRing } from "../../_components/CapacityRing";
+import { CheckedInNamesToggle } from "../../_components/CheckedInNamesToggle";
 import { RegistrationStatusBar } from "../../_components/RegistrationStatusBar";
 import { ScheduledGameStatusLine } from "../../_components/ScheduledGameStatusLine";
 import { SelfCheckInButton } from "../../_components/SelfCheckInButton";
@@ -22,17 +28,23 @@ export default async function CheckInPortalPage({
   params: Promise<{ gameId: string }>;
 }) {
   const { gameId } = await params;
-  const game = await getScheduledGameById(gameId);
+  const [game, user, players] = await Promise.all([getScheduledGameById(gameId), getCurrentUser(), listPlayers()]);
   if (!game) notFound();
 
-  const user = await getCurrentUser();
+  const now = new Date();
+  const capacity = LEAGUE_CAPACITY_BY_LEAGUE[game.league];
+  const checkedInCount = game.checkedInCanonicalIds.length;
+  const tier = computeMatchdayStatusTier(now, game.date, game.league, checkedInCount, capacity);
+  const registrationStatus = getRegistrationStatus(now, game.date, game.league);
+  const nameById = new Map(players.map((p) => [p.canonicalId, p.displayName]));
+  const checkedInNames = game.checkedInCanonicalIds.map((id) => nameById.get(id) ?? id);
 
   return (
     <main>
       <BackLink fallbackHref="/matchday" />
       <header className="player-header">
         <h1 className="screen-header">{formatMatchDateLabel(game.date)}</h1>
-        <ScheduledGameStatusLine kickoffLabel={game.kickoffLabel} venue={game.venue} />
+        <ScheduledGameStatusLine tier={tier} kickoffLabel={game.kickoffLabel} venue={game.venue} />
         {user?.isAdmin && (
           <Link href={`/matchday/${gameId}/edit`} className="edit-game-button">
             Edit Game
@@ -44,24 +56,22 @@ export default async function CheckInPortalPage({
         <div className="game-cancelled-banner">This game has been cancelled.</div>
       ) : (
         <>
-          <CapacityRing
-            checkedIn={game.checkedInCanonicalIds.length}
-            capacity={LEAGUE_CAPACITY_BY_LEAGUE[game.league]}
-            minimum={LEAGUE_MINIMUM}
+          <CheckedInNamesToggle
+            className="checkedin-toggle checkedin-toggle-capacity"
+            triggerLabel={<CapacityRing checkedIn={checkedInCount} capacity={capacity} minimum={LEAGUE_MINIMUM} />}
+            triggerAriaLabel={`${checkedInCount} of ${capacity} checked in — click to see who`}
+            names={checkedInNames}
           />
-          <RegistrationStatusBar
-            status={getRegistrationStatus(new Date(), game.date, game.league)}
-            {...getRegistrationWindowUtc(game.date, game.league)}
-          />
+          <RegistrationStatusBar tier={tier} {...getRegistrationWindowUtc(game.date, game.league)} />
           {user && (
             <SelfCheckInButton
               gameId={gameId}
               isCheckedIn={game.checkedInCanonicalIds.includes(user.canonicalId)}
-              registrationOpen={getRegistrationStatus(new Date(), game.date, game.league) === "open"}
+              registrationOpen={registrationStatus === "open"}
             />
           )}
           {user?.isAdmin &&
-            (getRegistrationStatus(new Date(), game.date, game.league) === "closed" ? (
+            (registrationStatus === "closed" ? (
               <Link href={`/matchday/${gameId}/draft`} className="start-draft-button">
                 Start Draft
               </Link>

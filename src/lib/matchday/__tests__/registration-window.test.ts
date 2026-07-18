@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeMatchdayStatusTier,
   getCheckinExpiryUtc,
   getGameStartUtc,
   getRegistrationOpenUtc,
@@ -143,6 +144,43 @@ describe("getRegistrationStatus", () => {
     expect(getRegistrationStatus(closesAt, "2026-07-18", "saturday")).toBe("closed");
     const oneMinuteAfter = new Date(closesAt.getTime() + 60_000);
     expect(getRegistrationStatus(oneMinuteAfter, "2026-07-18", "saturday")).toBe("closed");
+  });
+});
+
+describe("computeMatchdayStatusTier", () => {
+  // Same Fri-midnight-open / Fri-5pm-close window as getRegistrationStatus's
+  // suite above, for a Saturday 2026-07-18 game.
+  const opensAt = new Date("2026-07-17T04:00:00.000Z");
+  const closesAt = new Date("2026-07-17T21:00:00.000Z");
+
+  it("is scheduled before registration opens", () => {
+    const before = new Date(opensAt.getTime() - 60_000);
+    expect(computeMatchdayStatusTier(before, "2026-07-18", "saturday", 0, 24)).toBe("scheduled");
+  });
+
+  it("is open right after registration opens, with plenty of time left", () => {
+    expect(computeMatchdayStatusTier(opensAt, "2026-07-18", "saturday", 5, 24)).toBe("open");
+  });
+
+  it("is closing-soon once under an hour remains before the cutoff", () => {
+    const underAnHourLeft = new Date(closesAt.getTime() - 30 * 60_000);
+    expect(computeMatchdayStatusTier(underAnHourLeft, "2026-07-18", "saturday", 5, 24)).toBe(
+      "closing-soon",
+    );
+    const exactlyOneHourLeft = new Date(closesAt.getTime() - 60 * 60_000);
+    expect(computeMatchdayStatusTier(exactlyOneHourLeft, "2026-07-18", "saturday", 5, 24)).toBe("open");
+  });
+
+  it("is closed once the cutoff passes, if never filled", () => {
+    expect(computeMatchdayStatusTier(closesAt, "2026-07-18", "saturday", 10, 24)).toBe("closed");
+  });
+
+  it("is filled once capacity is reached, even with hours left before the cutoff", () => {
+    expect(computeMatchdayStatusTier(opensAt, "2026-07-18", "saturday", 24, 24)).toBe("filled");
+  });
+
+  it("stays filled after the cutoff passes too", () => {
+    expect(computeMatchdayStatusTier(closesAt, "2026-07-18", "saturday", 24, 24)).toBe("filled");
   });
 });
 
