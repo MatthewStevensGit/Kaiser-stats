@@ -293,7 +293,7 @@ export default async function Home({
                   <th className="num">#</th>
                   <th>Player</th>
                   <SortableHeader
-                    label="P"
+                    label="GP"
                     href={sortHref(tab, year, "games", plusMinusSort, dir)}
                     isActive={plusMinusSort === "games"}
                     dir={dir}
