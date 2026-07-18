@@ -69,7 +69,7 @@ body {
 }
 
 main {
-  padding: 1.25rem 1.25rem 5.5rem;
+  padding: 5.5rem 1.25rem 1.5rem;
   max-width: 640px;
   margin-inline: auto;
 }
@@ -1274,21 +1274,24 @@ th.num {
   letter-spacing: 0.02em;
 }
 
-/* Bottom nav */
-.bottom-nav {
+/* Top nav — fixed in place so it stays on screen while the page scrolls,
+   rather than scrolling away with the content underneath it. */
+.top-nav {
   position: fixed;
-  bottom: 0;
+  top: 0;
   left: 0;
   right: 0;
+  z-index: 100;
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 0.5rem;
   background: var(--nav-bg);
-  border-top: 1px solid var(--border);
-  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  border-bottom: 1px solid var(--border);
+  padding: calc(0.75rem + env(safe-area-inset-top, 0px)) 1rem 0.75rem;
 }
 
-.bottom-nav-item {
+.top-nav-item {
   color: var(--nav-fg);
   text-decoration: none;
   font-size: 0.78rem;
@@ -1302,14 +1305,68 @@ th.num {
 }
 
 @media (hover: hover) {
-  .bottom-nav-item:hover {
+  .top-nav-item:hover {
     color: var(--nav-fg-active);
     background-color: rgba(255, 255, 255, 0.08);
   }
 }
 
-.bottom-nav-item-active {
+.top-nav-item-active {
   color: var(--nav-fg-active);
+}
+
+/* Profile tab — a top-nav item that opens a dropdown (Settings, Log
+   In/Out) instead of navigating directly; see ProfileMenu.tsx. */
+.profile-menu {
+  position: relative;
+}
+
+.profile-menu-trigger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.profile-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  min-width: 9rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.35rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.profile-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .profile-menu-item:hover {
+    background: var(--surface-1);
+  }
+}
+
+.profile-menu-item-danger {
+  color: var(--status-critical-bg);
 }
 
 /* Loading skeleton */

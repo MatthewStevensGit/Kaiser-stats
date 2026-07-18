@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getCurrentUser } from "@/lib/auth/session";
-import { BottomNav } from "./_components/BottomNav";
+import { TopNav } from "./_components/TopNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,8 +15,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <TopNav displayName={user?.displayName} />
         {children}
-        <BottomNav displayName={user?.displayName} />
       </body>
     </html>
   );

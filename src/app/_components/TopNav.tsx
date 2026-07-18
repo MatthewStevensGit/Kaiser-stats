@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { ProfileMenu } from "./ProfileMenu";
 
 const NAV_ITEMS = [
   { id: "table", label: "Stats", href: "/" },
@@ -15,18 +16,18 @@ function isActive(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
-export function BottomNav({ displayName }: { displayName?: string }) {
+export function TopNav({ displayName }: { displayName?: string }) {
   const pathname = usePathname();
 
   return (
-    <nav className="bottom-nav" aria-label="Primary">
+    <nav className="top-nav" aria-label="Primary">
       {NAV_ITEMS.map((item) => {
         const active = isActive(pathname, item.href);
         return (
           <a
             key={item.id}
             href={item.href}
-            className={active ? "bottom-nav-item bottom-nav-item-active" : "bottom-nav-item"}
+            className={active ? "top-nav-item top-nav-item-active" : "top-nav-item"}
             aria-current={active ? "page" : undefined}
             aria-label={"ariaLabel" in item ? item.ariaLabel : undefined}
           >
@@ -35,13 +36,7 @@ export function BottomNav({ displayName }: { displayName?: string }) {
         );
       })}
 
-      <a
-        href={displayName ? "/settings" : "/login"}
-        className="bottom-nav-item"
-        aria-label={displayName ? "Settings" : "Log In"}
-      >
-        {displayName ? "⚙️" : "Log In"}
-      </a>
+      <ProfileMenu displayName={displayName} />
     </nav>
   );
 }
