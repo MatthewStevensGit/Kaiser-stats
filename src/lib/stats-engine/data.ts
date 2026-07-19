@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "../supabase/client";
 import { fetchAllRows } from "../supabase/paginate";
+import type { Position } from "./positions";
 import type { GameRecord, League, PlayerIdentity, SeasonStandingRow } from "./types";
 
 /**
@@ -16,19 +17,21 @@ interface PlayerRow {
   canonical_id: string;
   display_name: string;
   roster_name: string | null;
+  positions: string[] | null;
   aliases: string[] | null;
   known_emails: string[] | null;
   leagues: string[] | null;
   status: PlayerIdentity["status"];
 }
 
-const PLAYER_COLUMNS = "canonical_id, display_name, roster_name, aliases, known_emails, leagues, status";
+const PLAYER_COLUMNS = "canonical_id, display_name, roster_name, positions, aliases, known_emails, leagues, status";
 
 export function buildPlayerIdentities(rows: PlayerRow[]): PlayerIdentity[] {
   return rows.map((row) => ({
     canonicalId: row.canonical_id,
     displayName: row.display_name,
     rosterName: row.roster_name,
+    positions: (row.positions ?? []) as Position[],
     aliases: row.aliases ?? [],
     knownEmails: row.known_emails ?? [],
     leagues: (row.leagues ?? []) as League[],

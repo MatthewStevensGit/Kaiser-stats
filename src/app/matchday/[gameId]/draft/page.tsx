@@ -2,9 +2,8 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/session";
 import { getScheduledGameById } from "@/lib/matchday/data";
 import { getLiveDraftState } from "@/lib/matchday/draft-actions";
-import { getRegistrationStatus } from "@/lib/matchday/registration-window";
 import { listPlayers } from "@/lib/stats-engine/data";
-import { rosterDisplayName } from "@/lib/stats-engine/identity";
+import { isUnresolvedLoginStub, rosterDisplayName } from "@/lib/stats-engine/identity";
 import { BackLink } from "../../../_components/BackLink";
 import { DraftPanel } from "../../../_components/DraftPanel";
 
@@ -33,14 +32,14 @@ export default async function DraftPage({
 
       {game.cancelled ? (
         <div className="game-cancelled-banner">This game has been cancelled.</div>
-      ) : getRegistrationStatus(new Date(), game.date, game.league) !== "closed" ? (
-        <p className="note">The draft can&rsquo;t start until registration has closed for this game.</p>
       ) : (
         <DraftPanel
           gameId={gameId}
           date={game.date}
           checkedInCanonicalIds={game.checkedInCanonicalIds}
-          players={players.map((p) => ({ canonicalId: p.canonicalId, displayName: rosterDisplayName(p) }))}
+          players={players
+            .filter((p) => p.status !== "deferred" && !isUnresolvedLoginStub(p))
+            .map((p) => ({ canonicalId: p.canonicalId, displayName: rosterDisplayName(p) }))}
           draftState={draftState}
         />
       )}

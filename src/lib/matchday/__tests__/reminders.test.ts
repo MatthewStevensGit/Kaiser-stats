@@ -10,6 +10,7 @@ const saturdayGame: ReminderCandidateGame = {
   date: "2026-07-18",
   league: "saturday",
   cancelled: false,
+  cutoffOverrideUtc: null,
 };
 
 describe("selectPendingReminders", () => {

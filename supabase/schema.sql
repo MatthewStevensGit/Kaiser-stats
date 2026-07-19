@@ -370,3 +370,27 @@ alter table players add column if not exists onboarding_completed_at timestamptz
 
 update players set onboarding_completed_at = now()
   where auth_user_id is not null and onboarding_completed_at is null;
+
+-- Migration (2026-07-19): per-game registration-cutoff override. Registration
+-- close time is normally computed purely from fixed per-league constants (see
+-- REGISTRATION_CUTOFF_BY_LEAGUE in src/lib/matchday/constants.ts) — this column
+-- lets an admin override that computed default for one specific game (e.g. a
+-- one-off game on an irregular day, or a schedule change), via the Edit Game
+-- page. Null (the default) means "use the computed league default," exactly
+-- today's existing behavior — see resolveRegistrationCutoffUtc() in
+-- src/lib/matchday/registration-window.ts.
+alter table scheduled_games add column if not exists registration_cutoff_override timestamptz;
+
+-- Migration (2026-07-19): playable positions. Free-text array of the 9 basic
+-- codes in src/lib/stats-engine/positions.ts (GK/LB/CB/RB/CM/CAM/LW/RW/ST) — not a
+-- SQL check constraint, since it's validated in TypeScript (isPosition()) the same
+-- way every other array column here (aliases, known_emails, leagues) is. Settable by
+-- the member themselves at onboarding, or by an admin on their behalf via
+-- Settings > Members (setMemberPositions() in src/lib/auth/actions.ts) — unlike
+-- roster_name, a member can keep changing their own positions later too, via
+-- Settings' plain SettingsForm, since this is a preference rather than an
+-- identity-integrity concern. Empty array (the default) means "unknown/not set" —
+-- the live draft's positional-need logic (position-need.ts) never penalizes that,
+-- it only deprioritizes a player once every position they've actually listed is
+-- already filled on the drafting team.
+alter table players add column if not exists positions text[] not null default '{}';

@@ -19,6 +19,7 @@ export interface ReminderCandidateGame {
   date: string;
   league: ScheduledLeague;
   cancelled: boolean;
+  cutoffOverrideUtc: Date | null;
 }
 
 export interface PendingReminder {
@@ -44,7 +45,7 @@ export function selectPendingReminders(
 
   for (const game of games) {
     if (game.cancelled) continue;
-    const { opensAt, closesAt } = getRegistrationWindowUtc(game.date, game.league);
+    const { opensAt, closesAt } = getRegistrationWindowUtc(game.date, game.league, game.cutoffOverrideUtc);
     const oneHourBeforeClose = new Date(closesAt.getTime() - ONE_HOUR_MS);
 
     if (now >= opensAt && now < closesAt && !alreadySent.has(`${game.gameId}|registration_open`)) {

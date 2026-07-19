@@ -18,6 +18,24 @@ function parseIsoDateParts(iso: string): DateParts {
 }
 
 /**
+ * There's only ever been one real league — "Saturday" and "Sunday" just name
+ * which day of the week a game falls on, not two separate communities, and
+ * any date is fair game for a one-off game (there have been non-weekend
+ * games historically too) — no admin-facing league picker needed. A genuine
+ * Saturday/Sunday date derives its matching day-keyed defaults
+ * (capacity/venue/kickoff/registration-window, see constants.ts); any other
+ * day of the week defaults to the Sunday set (arbitrary but harmless — venue
+ * and kickoff are always explicitly entered anyway, and the registration
+ * cutoff this computes can be corrected per-game via the admin edit page's
+ * cutoff override).
+ */
+export function deriveLeagueFromDate(gameDateIso: string): ScheduledLeague {
+  const { year, month, day } = parseIsoDateParts(gameDateIso);
+  const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return dayOfWeek === 6 ? "saturday" : "sunday";
+}
+
+/**
  * Pure calendar-day arithmetic on a date-only ISO string (e.g. "2026-07-18"),
  * treating it as UTC-anchored — same convention as format.ts's
  * formatMatchDateLabel. Returns a new "YYYY-MM-DD" string.
@@ -78,12 +96,28 @@ function zonedWallTimeToUtc(
   return new Date(guessUtcMs - offsetMinutes * 60_000);
 }
 
-/** The exact UTC instant registration closes for a scheduled game. */
+/** The exact UTC instant registration closes for a scheduled game — the computed league default, ignoring any per-game override (see resolveRegistrationCutoffUtc). */
 export function getRegistrationCutoffUtc(gameDateIso: string, league: ScheduledLeague): Date {
   const cutoff = REGISTRATION_CUTOFF_BY_LEAGUE[league];
   const cutoffDateIso = addDaysToIsoDate(gameDateIso, cutoff.dayOffset);
   const { year, month, day } = parseIsoDateParts(cutoffDateIso);
   return zonedWallTimeToUtc(year, month, day, cutoff.hour, cutoff.minute, EASTERN_TIME_ZONE);
+}
+
+/**
+ * The EFFECTIVE registration cutoff for a scheduled game — an admin's per-game
+ * override (see registration_cutoff_override in supabase/schema.sql, settable
+ * via the Edit Game page) wins when set; otherwise falls back to the computed
+ * league default. The one place this fallback logic lives — every other
+ * function below that needs "the real cutoff" goes through this rather than
+ * calling getRegistrationCutoffUtc directly.
+ */
+export function resolveRegistrationCutoffUtc(
+  gameDateIso: string,
+  league: ScheduledLeague,
+  overrideUtc: Date | null,
+): Date {
+  return overrideUtc ?? getRegistrationCutoffUtc(gameDateIso, league);
 }
 
 /**
@@ -126,10 +160,11 @@ export function getCheckinExpiryUtc(gameDateIso: string, league: ScheduledLeague
 export function getRegistrationWindowUtc(
   gameDateIso: string,
   league: ScheduledLeague,
+  cutoffOverrideUtc: Date | null = null,
 ): { opensAt: Date; closesAt: Date } {
   return {
     opensAt: getRegistrationOpenUtc(gameDateIso, league),
-    closesAt: getRegistrationCutoffUtc(gameDateIso, league),
+    closesAt: resolveRegistrationCutoffUtc(gameDateIso, league, cutoffOverrideUtc),
   };
 }
 
@@ -140,8 +175,9 @@ export function getRegistrationStatus(
   nowUtc: Date,
   gameDateIso: string,
   league: ScheduledLeague,
+  cutoffOverrideUtc: Date | null = null,
 ): RegistrationStatus {
-  const { opensAt, closesAt } = getRegistrationWindowUtc(gameDateIso, league);
+  const { opensAt, closesAt } = getRegistrationWindowUtc(gameDateIso, league, cutoffOverrideUtc);
   const nowMs = nowUtc.getTime();
   if (nowMs < opensAt.getTime()) return "not-open";
   if (nowMs < closesAt.getTime()) return "open";
@@ -166,14 +202,54 @@ export function computeMatchdayStatusTier(
   league: ScheduledLeague,
   checkedInCount: number,
   capacity: number,
+  cutoffOverrideUtc: Date | null = null,
 ): MatchdayStatusTier {
   if (checkedInCount >= capacity) return "filled";
-  const { opensAt, closesAt } = getRegistrationWindowUtc(gameDateIso, league);
+  const { opensAt, closesAt } = getRegistrationWindowUtc(gameDateIso, league, cutoffOverrideUtc);
   const nowMs = nowUtc.getTime();
   if (nowMs < opensAt.getTime()) return "scheduled";
   if (nowMs >= closesAt.getTime()) return "closed";
   if (closesAt.getTime() - nowMs < CLOSING_SOON_THRESHOLD_MS) return "closing-soon";
   return "open";
+}
+
+const DATETIME_LOCAL_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+/**
+ * Parses an `<input type="datetime-local">` value — a plain "YYYY-MM-DDTHH:mm"
+ * wall-clock string with no time zone attached — as Eastern time, matching
+ * every other time this app displays/accepts. Used only for the registration
+ * cutoff override field on the Edit Game page.
+ */
+export function parseEasternDateTimeToUtc(dateTimeLocalValue: string): Date {
+  const match = DATETIME_LOCAL_PATTERN.exec(dateTimeLocalValue);
+  if (!match) {
+    throw new Error(`Not a valid datetime-local value: "${dateTimeLocalValue}"`);
+  }
+  const [, yearStr, monthStr, dayStr, hourStr, minuteStr] = match;
+  return zonedWallTimeToUtc(
+    Number(yearStr),
+    Number(monthStr),
+    Number(dayStr),
+    Number(hourStr),
+    Number(minuteStr),
+    EASTERN_TIME_ZONE,
+  );
+}
+
+/** Inverse of parseEasternDateTimeToUtc — pre-fills a datetime-local input from a UTC instant. */
+export function formatEasternDateTimeLocal(instantUtc: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: EASTERN_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instantUtc);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
 
 /** Formats a UTC instant back into Eastern wall time for display, e.g. "Fri, Jul 17, 5:00 PM ET". */

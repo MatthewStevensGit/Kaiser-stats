@@ -11,8 +11,10 @@ import { createServiceRoleClient } from "@/lib/supabase/client";
 import { getScheduledGameById } from "./data";
 import { buildDefaultTurnSizes, expandTurnsToSides, parseManualTurnSizes } from "./draft-order";
 import type { DraftSide } from "./draft-order";
-import { getRegistrationStatus } from "./registration-window";
+import type { PickHistoryEntry } from "./adr-window";
+import { countFilledGroups, isPositionallyNeeded } from "./position-need";
 import type { ScheduledLeague } from "./types";
+import type { Position } from "@/lib/stats-engine/positions";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -41,10 +43,20 @@ interface DraftPickRow {
   canonical_id: string;
 }
 
+/** Avg draft position scoped three ways — captains draft for one specific league, but want to see how a player has gone in the other league too. */
+export interface DraftPositionByLeague {
+  saturday: number | null;
+  sunday: number | null;
+  both: number | null;
+}
+
 export interface RecommendedPlayer {
   canonicalId: string;
   displayName: string;
-  avgDraftPosition: number | null;
+  avgDraftPosition: DraftPositionByLeague;
+  positions: Position[];
+  /** False once every position this player plays is already filled on the CURRENTLY-drafting side — see position-need.ts. Always true for a player with no listed positions (unknown, never penalized). */
+  positionallyNeeded: boolean;
 }
 
 export interface DraftSessionState {
@@ -61,6 +73,8 @@ export interface DraftSessionState {
   /** Undrafted, non-captain pool members, ranked lowest avgDraftPosition first (nulls last). */
   remainingRanked: RecommendedPlayer[];
   currentSide: DraftSide | null;
+  /** Each remaining player's own past draft-pick history (date/league/pick number) — lets the client recompute a time-windowed ADR (Last Month/3 Months/etc.) instantly, with no extra round trip. See adr-window.ts. */
+  pickHistory: PickHistoryEntry[];
 }
 
 function revalidateDraftPaths(gameId: string) {
@@ -97,10 +111,13 @@ export async function startDraftSetup(gameId: string): Promise<ActionResult> {
   const game = await getScheduledGameById(gameId);
   if (!game) return { ok: false, error: "Game not found." };
   if (game.cancelled) return { ok: false, error: "This game has been cancelled." };
-  if (getRegistrationStatus(new Date(), game.date, game.league) !== "closed") {
-    return { ok: false, error: "The draft can't start until registration has closed for this game." };
-  }
 
+  // No registration-status gate here on purpose — an admin can start a
+  // draft for a game whenever they want (testing, an early practice run, or
+  // just wanting to get ahead of it), regardless of whether registration has
+  // opened, is still open, or has closed. This is admin-only already
+  // (requireAdminResult above); the pool is pre-filled from whoever's
+  // checked in so far and can always be edited before Begin Draft.
   const client = createServiceRoleClient();
   const { error } = await client.from("draft_sessions").insert({
     game_id: gameId,
@@ -298,6 +315,67 @@ export async function recordPick(sessionId: number, canonicalId: string): Promis
 }
 
 /**
+ * Undoes the single most recent pick — a fast-recovery safety net for a
+ * misclick, distinct from restartDraft's full reset. Works whether the draft
+ * is still in progress, or was just finalized by that very pick (in which
+ * case the finalization is undone first: the game_records row it created is
+ * deleted — cascading to its roster_spots/goal_events/notable_mentions, see
+ * saveResolvedGame's rollbackAndFail comment — and the session goes back to
+ * "in_progress" before the pick itself is removed).
+ */
+export async function undoLastPick(sessionId: number): Promise<ActionResult> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const session = await fetchSessionById(sessionId);
+  if (!session) return { ok: false, error: "Draft session not found." };
+  if (session.status !== "in_progress" && session.status !== "completed") {
+    return { ok: false, error: "No picks to undo yet." };
+  }
+
+  const client = createServiceRoleClient();
+  const { data: pickRows } = await client
+    .from("draft_picks")
+    .select("pick_number, side, canonical_id")
+    .eq("draft_session_id", sessionId)
+    .order("pick_number", { ascending: false })
+    .limit(1);
+  const lastPick = (pickRows as DraftPickRow[] | null)?.[0];
+  if (!lastPick) return { ok: false, error: "No picks to undo yet." };
+
+  if (session.status === "completed") {
+    const { data: game } = await client
+      .from("scheduled_games")
+      .select("date, league")
+      .eq("game_id", session.game_id)
+      .maybeSingle();
+    if (!game) return { ok: false, error: "Could not find this game to undo that pick." };
+
+    const { error: deleteGameError } = await client
+      .from("game_records")
+      .delete()
+      .eq("game_id", draftGameId(game.date, game.league));
+    if (deleteGameError) return { ok: false, error: "Could not undo the finalized draft result." };
+
+    const { error: reopenError } = await client
+      .from("draft_sessions")
+      .update({ status: "in_progress", completed_at: null })
+      .eq("id", sessionId);
+    if (reopenError) return { ok: false, error: "Could not reopen the draft." };
+  }
+
+  const { error: deletePickError } = await client
+    .from("draft_picks")
+    .delete()
+    .eq("draft_session_id", sessionId)
+    .eq("pick_number", lastPick.pick_number);
+  if (deletePickError) return { ok: false, error: "Could not undo that pick." };
+
+  revalidateDraftPaths(session.game_id);
+  return { ok: true };
+}
+
+/**
  * Builds a bare GameRecord from a completed draft session — real, ground-truth pick
  * numbers (not a report's estimated draft order) — and saves it through the exact same
  * write path a pasted report uses (saveResolvedGame), so a report for this same game
@@ -360,6 +438,53 @@ async function finalizeDraft(
   return { ok: true };
 }
 
+/**
+ * Undoes a completed draft so its captains can redo the picks (e.g. they think the
+ * resulting teams are unfair) — clears the recorded picks, deletes the game_records row
+ * finalizeDraft created (which cascade-deletes its roster_spots/goal_events/
+ * notable_mentions too, see saveResolvedGame's rollbackAndFail comment), and puts the
+ * session back in "setup" with its pool/captains/coin-flip/turn-sizes left exactly as
+ * they were — so the admin can either hit Begin Draft again immediately for a fresh
+ * shuffle, or change any of those first.
+ */
+export async function restartDraft(sessionId: number): Promise<ActionResult> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const session = await fetchSessionById(sessionId);
+  if (!session) return { ok: false, error: "Draft session not found." };
+  if (session.status !== "completed") return { ok: false, error: "Only a completed draft can be restarted." };
+
+  const client = createServiceRoleClient();
+  const { data: game } = await client
+    .from("scheduled_games")
+    .select("date, league")
+    .eq("game_id", session.game_id)
+    .maybeSingle();
+  if (!game) return { ok: false, error: "Could not find this game to restart its draft." };
+
+  const { error: deleteGameError } = await client
+    .from("game_records")
+    .delete()
+    .eq("game_id", draftGameId(game.date, game.league));
+  if (deleteGameError) return { ok: false, error: "Could not undo the finalized draft result." };
+
+  const { error: deletePicksError } = await client
+    .from("draft_picks")
+    .delete()
+    .eq("draft_session_id", sessionId);
+  if (deletePicksError) return { ok: false, error: "Could not clear the previous picks." };
+
+  const { error: updateError } = await client
+    .from("draft_sessions")
+    .update({ status: "setup", completed_at: null })
+    .eq("id", sessionId);
+  if (updateError) return { ok: false, error: "Could not restart the draft." };
+
+  revalidateDraftPaths(session.game_id);
+  return { ok: true };
+}
+
 export async function getLiveDraftState(gameId: string): Promise<DraftSessionState | null> {
   const session = await fetchLatestSession(gameId);
   if (!session) return null;
@@ -382,30 +507,101 @@ export async function getLiveDraftState(gameId: string): Promise<DraftSessionSta
 
   const [allPlayers, allGames] = await Promise.all([listPlayers(), listGameRecords()]);
   const playersById = new Map(allPlayers.map((p) => [p.canonicalId, p]));
-  const leagueGames = allGames.filter((g) => g.league === session.league);
-  const totalsByPlayer = new Map(rollupGameRecords(leagueGames, allPlayers).map((s) => [s.canonicalId, s]));
+
+  // Three independent rollups (not one rollup reused three ways) since each
+  // scopes to a different game subset — Saturday-only, Sunday-only, and
+  // every league combined — captains drafting for one league still want to
+  // see how a player has gone in the other.
+  const adrMapFor = (games: typeof allGames) =>
+    new Map(rollupGameRecords(games, allPlayers).map((s) => [s.canonicalId, s.avgDraftPosition]));
+  const saturdayAdr = adrMapFor(allGames.filter((g) => g.league === "saturday"));
+  const sundayAdr = adrMapFor(allGames.filter((g) => g.league === "sunday"));
+  const bothAdr = adrMapFor(allGames);
+
+  // Every remaining player's own past draft-pick history, sent down once so
+  // the client can recompute a time-windowed ADR (adr-window.ts) instantly on
+  // every dropdown change instead of a round trip per selection — the shot
+  // clock is running during a live draft, an extra fetch per click isn't
+  // acceptable here.
+  const remainingIdSet = new Set(remainingIds);
+  const pickHistory: PickHistoryEntry[] = [];
+  for (const game of allGames) {
+    for (const roster of [game.homeRoster, game.awayRoster]) {
+      roster.forEach((spot, idx) => {
+        if (idx > 0 && spot.pickNumber !== null && remainingIdSet.has(spot.canonicalId)) {
+          pickHistory.push({
+            canonicalId: spot.canonicalId,
+            date: game.date,
+            league: game.league,
+            pickNumber: spot.pickNumber,
+          });
+        }
+      });
+    }
+  }
+
+  // Ranked by the combined ("both") value, not the specific league being
+  // drafted — a player who's only slightly worse in this league but much
+  // better overall is still the better recommendation (e.g. someone with a
+  // marginally lower Sunday-only ADR than another player who's much earlier
+  // picked on Saturday should NOT outrank them; "both" is what actually
+  // reflects who's the stronger overall pick).
+  const sortKeyFor = (canonicalId: string) => bothAdr.get(canonicalId) ?? null;
+
+  let currentSide: DraftSide | null = null;
+  let expandedSides: DraftSide[] = [];
+  if (session.status === "in_progress" && session.turn_sizes && session.first_pick_side) {
+    expandedSides = expandTurnsToSides(session.turn_sizes, session.first_pick_side);
+    currentSide = expandedSides[picks.length] ?? null;
+  }
+
+  // Positional need is scoped to whichever side is actually on the clock —
+  // the team's current headcount per position group, versus a target quota
+  // scaled to that side's own eventual final size (captain + however many
+  // turns the turn-size sequence actually allots them, which the snake
+  // 1-1-1-2 rule can make uneven between sides — see position-need.ts).
+  let filledGroups = { goalkeeper: 0, defense: 0, midfield: 0, attack: 0 };
+  let currentSideTeamSize = 0;
+  if (currentSide) {
+    const currentSideCaptainId = currentSide === "home" ? session.home_captain_canonical_id : session.away_captain_canonical_id;
+    const currentSideRosterIds = [
+      ...(currentSideCaptainId ? [currentSideCaptainId] : []),
+      ...picks.filter((p) => p.side === currentSide).map((p) => p.canonical_id),
+    ];
+    filledGroups = countFilledGroups(currentSideRosterIds.map((id) => playersById.get(id)?.positions ?? []));
+    currentSideTeamSize = currentSideRosterIds.length + expandedSides.slice(picks.length).filter((s) => s === currentSide).length;
+  }
 
   const remainingRanked: RecommendedPlayer[] = remainingIds
     .map((canonicalId) => {
       const player = playersById.get(canonicalId);
+      const positions = player?.positions ?? [];
       return {
         canonicalId,
         displayName: player ? rosterDisplayName(player) : canonicalId,
-        avgDraftPosition: totalsByPlayer.get(canonicalId)?.avgDraftPosition ?? null,
+        avgDraftPosition: {
+          saturday: saturdayAdr.get(canonicalId) ?? null,
+          sunday: sundayAdr.get(canonicalId) ?? null,
+          both: bothAdr.get(canonicalId) ?? null,
+        },
+        positions,
+        positionallyNeeded: currentSide ? isPositionallyNeeded(positions, filledGroups, currentSideTeamSize) : true,
       };
     })
     .sort((a, b) => {
-      if (a.avgDraftPosition === null && b.avgDraftPosition === null) return 0;
-      if (a.avgDraftPosition === null) return 1;
-      if (b.avgDraftPosition === null) return -1;
-      return a.avgDraftPosition - b.avgDraftPosition;
+      // Positionally-needed players sort ahead of positionally-satisfied
+      // ones as a group, THEN by ADR within each group — a surplus defender
+      // never outranks a needed player just for having a better ADR, but
+      // still sits in ADR order relative to other surplus players (so a
+      // captain can still find the best available bench option among them).
+      if (a.positionallyNeeded !== b.positionallyNeeded) return a.positionallyNeeded ? -1 : 1;
+      const aKey = sortKeyFor(a.canonicalId);
+      const bKey = sortKeyFor(b.canonicalId);
+      if (aKey === null && bKey === null) return 0;
+      if (aKey === null) return 1;
+      if (bKey === null) return -1;
+      return aKey - bKey;
     });
-
-  let currentSide: DraftSide | null = null;
-  if (session.status === "in_progress" && session.turn_sizes && session.first_pick_side) {
-    const expandedSides = expandTurnsToSides(session.turn_sizes, session.first_pick_side);
-    currentSide = expandedSides[picks.length] ?? null;
-  }
 
   return {
     id: session.id,
@@ -420,5 +616,6 @@ export async function getLiveDraftState(gameId: string): Promise<DraftSessionSta
     picks: picks.map((p) => ({ pickNumber: p.pick_number, side: p.side, canonicalId: p.canonical_id })),
     remainingRanked,
     currentSide,
+    pickHistory,
   };
 }

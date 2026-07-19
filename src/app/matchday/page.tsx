@@ -3,9 +3,11 @@ import { LEAGUE_CAPACITY_BY_LEAGUE } from "@/lib/matchday/constants";
 import { listScheduledGames } from "@/lib/matchday/data";
 import { computeMatchdayStatusTier } from "@/lib/matchday/registration-window";
 import { listPlayers } from "@/lib/stats-engine/data";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { CancelGameButton } from "../_components/CancelGameButton";
 import { CheckedInNamesToggle } from "../_components/CheckedInNamesToggle";
 import { ScheduledGameCard } from "../_components/ScheduledGameCard";
+import { ScrollRestoration } from "../_components/ScrollRestoration";
 
 // Real Supabase-backed data now (see src/lib/matchday/data.ts) — must not be
 // cached/prerendered at build time.
@@ -18,15 +20,16 @@ export default async function MatchdayPage() {
     listPlayers(),
   ]);
   const sorted = [...scheduledGames].sort((a, b) => a.date.localeCompare(b.date));
-  const nameById = new Map(players.map((p) => [p.canonicalId, p.displayName]));
+  const playerById = new Map(players.map((p) => [p.canonicalId, p]));
   const now = new Date();
 
   return (
     <main>
+      <ScrollRestoration />
       <header className="screen-header-row">
         <div className="matchday-header-links">
           {user?.isAdmin && (
-            <a href="/matchday/new" className="rulebook-link">
+            <a href="/matchday/new" className="rulebook-link" data-tour-id="add-game-link">
               + Add Game
             </a>
           )}
@@ -40,8 +43,18 @@ export default async function MatchdayPage() {
           {sorted.map((game) => {
             const capacity = LEAGUE_CAPACITY_BY_LEAGUE[game.league];
             const checkedInCount = game.checkedInCanonicalIds.length;
-            const tier = computeMatchdayStatusTier(now, game.date, game.league, checkedInCount, capacity);
-            const checkedInNames = game.checkedInCanonicalIds.map((id) => nameById.get(id) ?? id);
+            const tier = computeMatchdayStatusTier(
+              now,
+              game.date,
+              game.league,
+              checkedInCount,
+              capacity,
+              game.cutoffOverrideUtc,
+            );
+            const checkedInNames = game.checkedInCanonicalIds.map((id) => {
+              const player = playerById.get(id);
+              return player ? rosterDisplayName(player) : id;
+            });
 
             return (
               <div key={game.gameId} className="matchday-card-wrapper">

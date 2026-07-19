@@ -1,3 +1,5 @@
+import type { Position } from "./positions";
+
 export type League = "saturday" | "sunday" | "unknown";
 
 export type StatsView = "saturday" | "sunday" | "merged";
@@ -15,6 +17,16 @@ export interface PlayerIdentity {
    * (the live draft).
    */
   rosterName?: string | null;
+  /**
+   * Positions this player can play, self-selected at onboarding (or set by an
+   * admin on their behalf) — see src/lib/stats-engine/positions.ts for the 9
+   * valid codes. Undefined/empty for anyone who hasn't set it, or for every
+   * construction site that doesn't deal in real Supabase rows (sample data,
+   * report-parser extraction, tests). The live draft's positional-need logic
+   * (src/lib/matchday/position-need.ts) treats "unset" as neutral, never as
+   * a strike against a player.
+   */
+  positions?: Position[];
   aliases: string[];
   knownEmails: string[];
   leagues: League[];
@@ -74,6 +86,8 @@ export interface NameResolution {
 export interface PlayerSeasonStats {
   canonicalId: string;
   displayName: string;
+  /** See PlayerIdentity.rosterName's doc comment — same null-safe fallback via rosterDisplayName(). */
+  rosterName?: string | null;
   games: number;
   wins: number;
   losses: number;

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { computeRecentForm, filterGameRecordsByYear, mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "../game-records";
+import {
+  computeRecentForm,
+  computeUnbeatenStreak,
+  filterGameRecordsByYear,
+  mergePlayerSeasonStats,
+  rollupGameRecords,
+  selectStatsEligibleGames,
+} from "../game-records";
 import type { GameRecord, PlayerIdentity, PlayerSeasonStats } from "../types";
 
 const players: PlayerIdentity[] = [
@@ -335,5 +342,74 @@ describe("computeRecentForm", () => {
     const games: GameRecord[] = [game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }] })];
     const stats = computeRecentForm(games, []);
     expect(stats.find((s) => s.canonicalId === "p2")).toBeUndefined();
+  });
+});
+
+describe("computeUnbeatenStreak", () => {
+  function game(overrides: Partial<GameRecord> & { gameId: string; date: string }): GameRecord {
+    return {
+      league: "sunday",
+      homeRoster: [],
+      awayRoster: [],
+      homeTeamLabel: "Orange",
+      awayTeamLabel: "Blue",
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpCanonicalId: null,
+      notableMentions: [],
+      source: overrides.gameId,
+      ...overrides,
+    };
+  }
+
+  it("counts consecutive most-recent wins/ties, stopping at the first loss", () => {
+    const games: GameRecord[] = [
+      // Oldest -> a loss, should never be reached.
+      game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 0, awayScore: 3 }),
+      game({ gameId: "g2", date: "2026-01-08", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 1, awayScore: 3 }), // loss -- streak stops here
+      game({ gameId: "g3", date: "2026-01-15", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 2, awayScore: 2 }), // tie -- counts
+      game({ gameId: "g4", date: "2026-01-22", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 3, awayScore: 1 }), // win -- counts
+      // Most recent
+      game({ gameId: "g5", date: "2026-01-29", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 4, awayScore: 0 }), // win -- counts
+    ];
+    expect(computeUnbeatenStreak(games, "p1")).toBe(3);
+  });
+
+  it("is 0 when their most recent game was a loss", () => {
+    const games: GameRecord[] = [
+      game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 3, awayScore: 0 }),
+      game({ gameId: "g2", date: "2026-01-08", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 0, awayScore: 1 }),
+    ];
+    expect(computeUnbeatenStreak(games, "p1")).toBe(0);
+  });
+
+  it("counts every game if a player has never lost", () => {
+    const games: GameRecord[] = [
+      game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 2, awayScore: 2 }),
+      game({ gameId: "g2", date: "2026-01-08", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 3, awayScore: 1 }),
+    ];
+    expect(computeUnbeatenStreak(games, "p1")).toBe(2);
+  });
+
+  it("is 0 for a player who has never played", () => {
+    const games: GameRecord[] = [game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }] })];
+    expect(computeUnbeatenStreak(games, "someone-else")).toBe(0);
+  });
+
+  it("correctly evaluates results from the away side too", () => {
+    const games: GameRecord[] = [
+      game({ gameId: "g1", date: "2026-01-01", awayRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 1, awayScore: 3 }), // away win
+    ];
+    expect(computeUnbeatenStreak(games, "p1")).toBe(1);
+  });
+
+  it("ignores games the player isn't in at all when determining recency", () => {
+    const games: GameRecord[] = [
+      game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 0, awayScore: 5 }), // p1's loss, but old
+      game({ gameId: "g2", date: "2026-01-08", homeRoster: [{ canonicalId: "other", pickNumber: null }], homeScore: 0, awayScore: 5 }), // not p1's game
+      game({ gameId: "g3", date: "2026-01-15", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 3, awayScore: 0 }), // p1's most recent -- a win
+    ];
+    expect(computeUnbeatenStreak(games, "p1")).toBe(1);
   });
 });

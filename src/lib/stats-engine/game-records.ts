@@ -3,6 +3,8 @@ import type { GameRecord, PlayerIdentity, PlayerSeasonStats } from "./types";
 export interface RecentFormStats {
   canonicalId: string;
   displayName: string;
+  /** See PlayerIdentity.rosterName's doc comment — same null-safe fallback via rosterDisplayName(). */
+  rosterName?: string | null;
   /** How many of their actual last-`windowSize` games these totals cover — usually `windowSize`, fewer for a newer player. */
   gamesPlayed: number;
   goals: number;
@@ -31,6 +33,32 @@ export function resultForSide(
   if (homeScore === awayScore) return "draw";
   const winningSide = homeScore > awayScore ? "home" : "away";
   return side === winningSide ? "win" : "loss";
+}
+
+/**
+ * How many of a player's most recent games (across ALL report-imported
+ * games, not scoped to a selected year — a live streak keeps running across
+ * a year boundary) were NOT a loss, counting back from today until the first
+ * loss or the start of their history. Wins and ties both count as
+ * "unbeaten" — only a loss breaks the streak. This can only be computed from
+ * game_records (real per-game dates/scores); the historical spreadsheet
+ * backfill has no per-game granularity to draw a streak from, which is fine
+ * since a "current streak" is inherently about recent actual games.
+ */
+export function computeUnbeatenStreak(games: GameRecord[], canonicalId: string): number {
+  const ownGamesByDateDesc = games
+    .filter((g) => [...g.homeRoster, ...g.awayRoster].some((spot) => spot.canonicalId === canonicalId))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  let streak = 0;
+  for (const game of ownGamesByDateDesc) {
+    const side: "home" | "away" = game.homeRoster.some((spot) => spot.canonicalId === canonicalId)
+      ? "home"
+      : "away";
+    if (resultForSide(game.homeScore, game.awayScore, side) === "loss") break;
+    streak += 1;
+  }
+  return streak;
 }
 
 /**
@@ -64,6 +92,7 @@ export function rollupGameRecords(
     const created: PlayerSeasonStats = {
       canonicalId,
       displayName: player?.displayName ?? canonicalId,
+      rosterName: player?.rosterName ?? null,
       games: 0,
       wins: 0,
       losses: 0,
@@ -188,6 +217,7 @@ export function computeRecentForm(
     return {
       canonicalId,
       displayName: playersById.get(canonicalId)?.displayName ?? canonicalId,
+      rosterName: playersById.get(canonicalId)?.rosterName ?? null,
       gamesPlayed: recentGames.length,
       goals,
       assists,

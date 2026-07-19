@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const [{ data: games }, { data: alreadySentRows }] = await Promise.all([
     client
       .from("scheduled_games")
-      .select("game_id, date, league, cancelled_at")
+      .select("game_id, date, league, cancelled_at, registration_cutoff_override")
       .gte("date", new Date().toISOString().slice(0, 10)),
     client.from("reminder_email_log").select("game_id, email_type"),
   ]);
@@ -33,6 +33,7 @@ export async function GET(request: Request) {
     date: g.date,
     league: g.league,
     cancelled: g.cancelled_at !== null,
+    cutoffOverrideUtc: g.registration_cutoff_override ? new Date(g.registration_cutoff_override) : null,
   }));
 
   const pending = selectPendingReminders(candidateGames, new Date(), alreadySent);

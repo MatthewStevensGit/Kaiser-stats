@@ -8,17 +8,49 @@ import {
 import { listGameRecords, listPlayers, listSeasonStandingRows, listSeasonStatsCutoffs } from "@/lib/stats-engine/data";
 import {
   computeRecentForm,
+  computeUnbeatenStreak,
   filterGameRecordsByYear,
   mergePlayerSeasonStats,
   rollupGameRecords,
   selectStatsEligibleGames,
 } from "@/lib/stats-engine/game-records";
 import { formatPlusMinus, formatWDL } from "@/lib/format";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { GoldenBootChip } from "./_components/GoldenBootChip";
 import { LeagueTitleChip } from "./_components/LeagueTitleChip";
+import { ScrollRestoration } from "./_components/ScrollRestoration";
 import { SortableHeader } from "./_components/SortableHeader";
 import type { SortDir } from "./_components/SortableHeader";
 import { TabSelect } from "./_components/TabSelect";
+
+/** Below this many consecutive unbeaten games, no fire badge shows — a 2-3 game run isn't a "streak" worth calling out. */
+const STREAK_FIRE_THRESHOLD = 5;
+
+/**
+ * The stats page's name cell always shows the stable roster name (falling
+ * back to display name if unset) — a player's personal display name is a
+ * private login preference, never shown to anyone but the account owner.
+ * `streak`, when passed and at least STREAK_FIRE_THRESHOLD, adds a 🔥 badge
+ * (Plus-Minus tab only — see unbeatenStreakByPlayer above).
+ */
+function PlayerNameLink({
+  player,
+  streak,
+}: {
+  player: { canonicalId: string; displayName: string; rosterName?: string | null };
+  streak?: number;
+}) {
+  return (
+    <a href={`/players/${player.canonicalId}`} className="leaderboard-name">
+      {rosterDisplayName(player)}
+      {streak !== undefined && streak >= STREAK_FIRE_THRESHOLD && (
+        <span className="streak-fire" title={`Unbeaten in their last ${streak} games`}>
+          🔥{streak}
+        </span>
+      )}
+    </a>
+  );
+}
 
 const GOLDEN_BOOT_MIN_GAMES = 3;
 
@@ -164,6 +196,13 @@ export default async function Home({
   const reportTotals = rollupGameRecords(eligibleGames, players);
   const totals = mergePlayerSeasonStats(spreadsheetTotals, reportTotals);
 
+  // A live "current form" indicator, not scoped to the selected year tab —
+  // always drawn from the player's full real game history (only game_records
+  // has per-game dates/scores to draw a streak from at all; the spreadsheet
+  // backfill is season-totals only). Shown on the Plus-Minus tab regardless
+  // of which year is selected.
+  const unbeatenStreakByPlayer = new Map(players.map((p) => [p.canonicalId, computeUnbeatenStreak(allGames, p.canonicalId)]));
+
   // Sign flips the primary key for asc/desc; the tie-break stays in its original
   // (descending) sense regardless of dir — it's just there to keep ties stable, not
   // something a user is choosing to sort by.
@@ -258,7 +297,8 @@ export default async function Home({
 
   return (
     <main>
-      <div className="tab-select-row">
+      <ScrollRestoration />
+      <div className="tab-select-row" data-tour-id="stats-tabs">
         <TabSelect
           value={year}
           ariaLabel="Year"
@@ -317,9 +357,7 @@ export default async function Home({
                   <tr key={p.canonicalId}>
                     <td className="num">{plusMinusRanks[i]}</td>
                     <td>
-                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName}
-                      </a>
+                      <PlayerNameLink player={p} streak={unbeatenStreakByPlayer.get(p.canonicalId)} />
                       {year === ALL_YEARS_ID && (
                         <LeagueTitleChip years={awardTally.get(p.canonicalId)?.leagueTitleYears ?? []} />
                       )}
@@ -367,9 +405,7 @@ export default async function Home({
                   <tr key={p.canonicalId}>
                     <td className="num">{goldenBootRanks[i]}</td>
                     <td>
-                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName}
-                      </a>
+                      <PlayerNameLink player={p} />
                       {year === ALL_YEARS_ID && (
                         <GoldenBootChip years={awardTally.get(p.canonicalId)?.goldenBootYears ?? []} />
                       )}
@@ -416,9 +452,7 @@ export default async function Home({
                   <tr key={p.canonicalId}>
                     <td className="num">{mvpRanks[i]}</td>
                     <td>
-                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName}
-                      </a>
+                      <PlayerNameLink player={p} />
                     </td>
                     <td className="num">{p.mvpCount}</td>
                   </tr>
@@ -454,9 +488,7 @@ export default async function Home({
                   <tr key={p.canonicalId}>
                     <td className="num">{draftPositionRanks[i]}</td>
                     <td>
-                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName}
-                      </a>
+                      <PlayerNameLink player={p} />
                     </td>
                     <td className="num">{p.avgDraftPosition.toFixed(1)}</td>
                   </tr>
@@ -499,9 +531,7 @@ export default async function Home({
                   <tr key={p.canonicalId}>
                     <td className="num">{assistsRanks[i]}</td>
                     <td>
-                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName}
-                      </a>
+                      <PlayerNameLink player={p} />
                     </td>
                     <td className="num">{p.assists}</td>
                   </tr>
@@ -569,9 +599,7 @@ export default async function Home({
                   <tr key={p.canonicalId}>
                     <td className="num">{recentFormRanks[i]}</td>
                     <td>
-                      <a href={`/players/${p.canonicalId}`} className="leaderboard-name">
-                        {p.displayName}
-                      </a>
+                      <PlayerNameLink player={p} />
                     </td>
                     <td className="num">{p.gamesPlayed}</td>
                     <td className="num">{p.goals}</td>
