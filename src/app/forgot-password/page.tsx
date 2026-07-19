@@ -32,16 +32,21 @@ export default function ForgotPasswordPage() {
     setStatus("sending");
     setErrorMessage(null);
 
-    const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
 
-    if (error) {
+      if (error) {
+        setStatus("error");
+        setErrorMessage(friendlyAuthErrorMessage(error.message));
+        return;
+      }
+      setStatus("idle");
+      setStep("reset");
+    } catch {
       setStatus("error");
-      setErrorMessage(friendlyAuthErrorMessage(error.message));
-      return;
+      setErrorMessage("Something went wrong — please try again.");
     }
-    setStatus("idle");
-    setStep("reset");
   }
 
   async function handleResetPassword(e: React.FormEvent) {
@@ -60,27 +65,32 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    const supabase = createBrowserSupabaseClient();
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: "recovery",
-    });
-    if (verifyError) {
-      setStatus("error");
-      setErrorMessage(friendlyAuthErrorMessage(verifyError.message));
-      return;
-    }
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: code,
+        type: "recovery",
+      });
+      if (verifyError) {
+        setStatus("error");
+        setErrorMessage(friendlyAuthErrorMessage(verifyError.message));
+        return;
+      }
 
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-    if (updateError) {
-      setStatus("error");
-      setErrorMessage(friendlyAuthErrorMessage(updateError.message));
-      return;
-    }
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) {
+        setStatus("error");
+        setErrorMessage(friendlyAuthErrorMessage(updateError.message));
+        return;
+      }
 
-    router.push("/");
-    router.refresh();
+      router.push("/");
+      router.refresh();
+    } catch {
+      setStatus("error");
+      setErrorMessage("Something went wrong — please try again.");
+    }
   }
 
   return (

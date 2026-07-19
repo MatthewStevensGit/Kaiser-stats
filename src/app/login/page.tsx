@@ -36,16 +36,22 @@ export default function LoginPage() {
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
+  /** Anything here throwing (network hiccup, server action failure) must never leave the button stuck on its pending label forever — always resolves `status` one way or another. */
   async function afterVerifiedSession() {
-    const linkResult = await linkPlayerAfterLogin();
-    if (!linkResult.ok) {
-      setStatus("error");
-      setErrorMessage(linkResult.error);
-      return;
-    }
+    try {
+      const linkResult = await linkPlayerAfterLogin();
+      if (!linkResult.ok) {
+        setStatus("error");
+        setErrorMessage(linkResult.error);
+        return;
+      }
 
-    router.push(linkResult.needsOnboarding ? "/onboarding" : "/");
-    router.refresh();
+      router.push(linkResult.needsOnboarding ? "/onboarding" : "/");
+      router.refresh();
+    } catch {
+      setStatus("error");
+      setErrorMessage("Something went wrong — please try again.");
+    }
   }
 
   async function handlePasswordLogin(e: React.FormEvent) {
@@ -53,33 +59,44 @@ export default function LoginPage() {
     setStatus("sending");
     setErrorMessage(null);
 
-    const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
+      if (error) {
+        setStatus("error");
+        setErrorMessage(friendlyAuthErrorMessage(error.message));
+        return;
+      }
+
+      await afterVerifiedSession();
+    } catch {
       setStatus("error");
-      setErrorMessage(friendlyAuthErrorMessage(error.message));
-      return;
+      setErrorMessage("Something went wrong — please try again.");
     }
-
-    await afterVerifiedSession();
   }
 
   async function requestCode() {
     setStatus("sending");
     setErrorMessage(null);
 
-    const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase.auth.signInWithOtp({ email });
 
-    if (error) {
+      if (error) {
+        setStatus("error");
+        setErrorMessage(friendlyAuthErrorMessage(error.message));
+        return false;
+      }
+      setStatus("idle");
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      return true;
+    } catch {
       setStatus("error");
-      setErrorMessage(friendlyAuthErrorMessage(error.message));
+      setErrorMessage("Something went wrong — please try again.");
       return false;
     }
-    setStatus("idle");
-    setResendCooldown(RESEND_COOLDOWN_SECONDS);
-    return true;
   }
 
   async function handleSendCode(e: React.FormEvent) {
@@ -96,20 +113,25 @@ export default function LoginPage() {
     setStatus("sending");
     setErrorMessage(null);
 
-    const supabase = createBrowserSupabaseClient();
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: "email",
-    });
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: code,
+        type: "email",
+      });
 
-    if (verifyError) {
+      if (verifyError) {
+        setStatus("error");
+        setErrorMessage(friendlyAuthErrorMessage(verifyError.message));
+        return;
+      }
+
+      await afterVerifiedSession();
+    } catch {
       setStatus("error");
-      setErrorMessage(friendlyAuthErrorMessage(verifyError.message));
-      return;
+      setErrorMessage("Something went wrong — please try again.");
     }
-
-    await afterVerifiedSession();
   }
 
   function resetToStep(next: Step) {
