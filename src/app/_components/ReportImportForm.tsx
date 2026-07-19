@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { previewReportImport, saveReportImport, type ReportPreview } from "@/lib/report-parser/actions";
 import { formatScoreLine, getMultiGoalNickname } from "@/lib/format";
 import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { AssistChip } from "./AssistChip";
 import { GoalChip } from "./GoalChip";
 
@@ -16,8 +17,15 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
   const [isParsing, startParsing] = useTransition();
   const [isSaving, startSaving] = useTransition();
 
+  function identityFor(canonicalId: string): { displayName: string; rosterName?: string | null } {
+    return {
+      displayName: preview?.displayNames[canonicalId] ?? canonicalId,
+      rosterName: preview?.rosterNames[canonicalId] ?? null,
+    };
+  }
+
   function nameFor(canonicalId: string): string {
-    return preview?.displayNames[canonicalId] ?? canonicalId;
+    return rosterDisplayName(identityFor(canonicalId));
   }
 
   /**
@@ -64,20 +72,24 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     setPreview(null);
 
     startParsing(async () => {
-      const result = await previewReportImport({
-        text,
-        // The default snake-order/team-listed-first-picks-first convention
-        // (see parse-report.ts's resolveExtractionToGameRecord) now covers
-        // the common case automatically — this manual override still exists
-        // server-side for the rare game where it's wrong, just not exposed
-        // in this form anymore.
-        firstPickRaw: null,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await previewReportImport({
+          text,
+          // The default snake-order/team-listed-first-picks-first convention
+          // (see parse-report.ts's resolveExtractionToGameRecord) now covers
+          // the common case automatically — this manual override still exists
+          // server-side for the rare game where it's wrong, just not exposed
+          // in this form anymore.
+          firstPickRaw: null,
+        });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setPreview(result.preview);
+      } catch {
+        setError("Something went wrong parsing that report — please try again.");
       }
-      setPreview(result.preview);
     });
   }
 
@@ -85,13 +97,17 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     if (!preview) return;
     setError(null);
     startSaving(async () => {
-      const result = await saveReportImport(preview, text);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await saveReportImport(preview, text);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        router.push("/matches");
+        router.refresh();
+      } catch {
+        setError("Something went wrong saving that report — please try again.");
       }
-      router.push("/matches");
-      router.refresh();
     });
   }
 

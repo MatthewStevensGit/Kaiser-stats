@@ -29,7 +29,7 @@ export function MatchCard({
   mvpHref?: string;
 }) {
   return (
-    <div className="match-card">
+    <div className="match-card" data-tour-id="match-card">
       <a href={`/matches/${gameId}`} className="match-card-inner-link">
         <div className="match-card-top">
           <span className="match-card-date">{formatMatchDateLabel(date)}</span>

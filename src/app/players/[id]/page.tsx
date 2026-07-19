@@ -3,9 +3,11 @@ import { aggregateStandings, filterSeasonStandingRowsByYear } from "@/lib/stats-
 import { listGameRecords, listPlayers, listSeasonStandingRows, listSeasonStatsCutoffs } from "@/lib/stats-engine/data";
 import { mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "@/lib/stats-engine/game-records";
 import { formatPlusMinus, formatWDL } from "@/lib/format";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { getPlayerGameLog } from "@/lib/stats-engine/player-game-log";
 import { BackLink } from "../../_components/BackLink";
 import { PlayerMatchRow } from "../../_components/PlayerMatchRow";
+import { ScrollRestoration } from "../../_components/ScrollRestoration";
 import { TabSelect } from "../../_components/TabSelect";
 
 // Same real seasons as the Table/Past Matches pages' YEARS lists — "all" is
@@ -56,9 +58,10 @@ export default async function PlayerDetailPage({
 
   return (
     <main>
+      <ScrollRestoration />
       <BackLink fallbackHref="/" />
       <header className="player-header">
-        <h1 className="screen-header screen-header-name-case">{player.displayName}</h1>
+        <h1 className="screen-header screen-header-name-case">{rosterDisplayName(player)}</h1>
         <p className="player-summary-line">{summary}</p>
       </header>
 

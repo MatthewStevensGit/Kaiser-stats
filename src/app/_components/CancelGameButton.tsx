@@ -16,12 +16,16 @@ export function CancelGameButton({ gameId, date }: { gameId: string; date: strin
     if (!confirmed) return;
 
     startTransition(async () => {
-      const result = await cancelScheduledGame(gameId);
-      if (!result.ok) {
-        alert(result.error);
-        return;
+      try {
+        const result = await cancelScheduledGame(gameId);
+        if (!result.ok) {
+          alert(result.error);
+          return;
+        }
+        router.refresh();
+      } catch {
+        alert("Something went wrong — please try again.");
       }
-      router.refresh();
     });
   }
 

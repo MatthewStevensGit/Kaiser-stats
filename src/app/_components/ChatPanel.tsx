@@ -39,13 +39,17 @@ export function ChatPanel({
     const toSend = text;
     setError(null);
     startTransition(async () => {
-      const result = await postChatMessage(toSend);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await postChatMessage(toSend);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setText("");
+        router.refresh();
+      } catch {
+        setError("Something went wrong — please try again.");
       }
-      setText("");
-      router.refresh();
     });
   }
 

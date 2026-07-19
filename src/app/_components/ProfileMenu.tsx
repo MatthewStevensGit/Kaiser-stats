@@ -3,6 +3,8 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
+import { startTour } from "@/lib/tour/tour-state";
+import { ADMIN_TOUR_STEPS, GENERAL_TOUR_STEPS } from "@/lib/tour/steps";
 
 /** Generic avatar glyph — a plain silhouette, not tied to any specific user's photo. */
 function ProfileIcon() {
@@ -20,7 +22,7 @@ function ProfileIcon() {
  * dropdown rather than navigating directly, since Settings and Log In/Out
  * are sub-destinations of "your account," not their own top-level tabs.
  */
-export function ProfileMenu({ displayName }: { displayName?: string }) {
+export function ProfileMenu({ displayName, isAdmin }: { displayName?: string; isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -48,6 +50,18 @@ export function ProfileMenu({ displayName }: { displayName?: string }) {
     router.refresh();
   }
 
+  function handleTakeTour() {
+    setOpen(false);
+    startTour("general");
+    router.push(GENERAL_TOUR_STEPS[0]!.path);
+  }
+
+  function handleTakeAdminTour() {
+    setOpen(false);
+    startTour("admin");
+    router.push(ADMIN_TOUR_STEPS[0]!.path);
+  }
+
   return (
     <div className="profile-menu" ref={containerRef}>
       <button
@@ -57,6 +71,7 @@ export function ProfileMenu({ displayName }: { displayName?: string }) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Profile"
+        data-tour-id="profile-menu"
       >
         <ProfileIcon />
       </button>
@@ -64,9 +79,23 @@ export function ProfileMenu({ displayName }: { displayName?: string }) {
         <div className="profile-menu-dropdown" role="menu">
           {displayName ? (
             <>
-              <a href="/settings" className="profile-menu-item" role="menuitem" onClick={() => setOpen(false)}>
+              <a
+                href="/settings"
+                className="profile-menu-item"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                data-tour-id="settings-link"
+              >
                 Settings
               </a>
+              <button type="button" className="profile-menu-item" role="menuitem" onClick={handleTakeTour}>
+                Take a tour
+              </button>
+              {isAdmin && (
+                <button type="button" className="profile-menu-item" role="menuitem" onClick={handleTakeAdminTour}>
+                  Admin tour
+                </button>
+              )}
               <button type="button" className="profile-menu-item profile-menu-item-danger" role="menuitem" onClick={handleLogOut}>
                 Log Out
               </button>

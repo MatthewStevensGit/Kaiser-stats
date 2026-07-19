@@ -4,11 +4,11 @@ import { usePathname } from "next/navigation";
 import { ProfileMenu } from "./ProfileMenu";
 
 const NAV_ITEMS = [
-  { id: "table", label: "Stats", href: "/" },
-  { id: "matches", label: "History", href: "/matches" },
-  { id: "matchday", label: "Check-In", href: "/matchday" },
-  { id: "rules", label: "Rules", href: "/rules" },
-  { id: "chat", label: "💬", href: "/chat", ariaLabel: "Chat" },
+  { id: "table", label: "Stats", href: "/", tourId: "nav-stats" },
+  { id: "matches", label: "History", href: "/matches", tourId: "nav-history" },
+  { id: "matchday", label: "Check-In", href: "/matchday", tourId: "nav-checkin" },
+  { id: "rules", label: "Rules", href: "/rules", tourId: "nav-rules" },
+  { id: "chat", label: "💬", href: "/chat", ariaLabel: "Chat", tourId: "nav-chat" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -16,7 +16,7 @@ function isActive(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
-export function TopNav({ displayName }: { displayName?: string }) {
+export function TopNav({ displayName, isAdmin }: { displayName?: string; isAdmin?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -30,13 +30,14 @@ export function TopNav({ displayName }: { displayName?: string }) {
             className={active ? "top-nav-item top-nav-item-active" : "top-nav-item"}
             aria-current={active ? "page" : undefined}
             aria-label={"ariaLabel" in item ? item.ariaLabel : undefined}
+            data-tour-id={item.tourId}
           >
             {item.label}
           </a>
         );
       })}
 
-      <ProfileMenu displayName={displayName} />
+      <ProfileMenu displayName={displayName} isAdmin={isAdmin} />
     </nav>
   );
 }

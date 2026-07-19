@@ -5,7 +5,7 @@ import { ScheduledGameStatusLine } from "./ScheduledGameStatusLine";
 
 export function ScheduledGameCard({ game, tier }: { game: ScheduledGame; tier: MatchdayStatusTier }) {
   return (
-    <div className="match-card">
+    <div className="match-card" data-tour-id="scheduled-game-card">
       <span className="match-card-date">{formatMatchDateLabel(game.date)}</span>
       <ScheduledGameStatusLine tier={tier} kickoffLabel={game.kickoffLabel} venue={game.venue} />
     </div>

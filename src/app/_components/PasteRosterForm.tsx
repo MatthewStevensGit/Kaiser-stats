@@ -16,14 +16,18 @@ export function PasteRosterForm({ gameId }: { gameId: string }) {
     setError(null);
     setResult(null);
     startTransition(async () => {
-      const outcome = await checkInPastedRoster(gameId, text);
-      if (!outcome.ok) {
-        setError(outcome.error);
-        return;
+      try {
+        const outcome = await checkInPastedRoster(gameId, text);
+        if (!outcome.ok) {
+          setError(outcome.error);
+          return;
+        }
+        setResult(outcome);
+        setText("");
+        router.refresh();
+      } catch {
+        setError("Something went wrong — please try again.");
       }
-      setResult(outcome);
-      setText("");
-      router.refresh();
     });
   }
 

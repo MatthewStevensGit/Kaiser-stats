@@ -60,6 +60,43 @@
   box-sizing: border-box;
 }
 
+/* Form controls should render in the site's own font, not whatever default
+   the browser applies to native controls — otherwise a <select>'s displayed
+   value visibly clashes with the label/text around it. */
+button,
+select,
+input,
+textarea {
+  font-family: inherit;
+}
+
+/* Site-wide hover affordance: every button and link "lights up" a little on
+   hover, even ones with no bespoke hover rule of their own elsewhere in this
+   file. Low-specificity tag selectors, so any more specific hover rule
+   (match-card's border highlight, pill-tab's color change, etc.) still wins
+   the cascade and simply layers this brightness lift on top rather than
+   being overridden by it. Disabled buttons are excluded on purpose —
+   something inert shouldn't look interactive. `select` is deliberately NOT
+   included here: a `filter` on a <select> breaks its native dropdown popup
+   in Chromium (confirmed live — the dropdown stopped opening at all once
+   this was added), so it gets a plain border-color hover instead, below. */
+button:not(:disabled),
+a {
+  transition: filter 0.12s ease;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.18);
+}
+
+a:hover {
+  filter: brightness(1.15);
+}
+
+select:hover {
+  border-color: var(--accent);
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -188,6 +225,34 @@ main {
   color: var(--pill-fg-active);
 }
 
+/* Position multi-select (Members table, onboarding, settings) — small toggle
+   pills rather than checkboxes, same "select multiple" pattern as any
+   multi-pick UI elsewhere, but compact enough to fit 9 options inline. */
+.member-positions-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-width: 220px;
+}
+
+.position-pill {
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.position-pill-active {
+  background: var(--pill-bg-active);
+  border-color: var(--pill-bg-active);
+  color: var(--pill-fg-active);
+}
+
 /* Two independent filters side by side on one row, each its own dropdown —
    used where two separate PillTabs rows would otherwise stack (Table,
    Other Stats). */
@@ -297,6 +362,7 @@ main {
   /* 16px, not smaller — iOS Safari auto-zooms the whole page on focus for
      any input under 16px, a jarring mobile-specific annoyance. */
   font-size: 1rem;
+  transition: border-color 0.12s ease;
 }
 
 .login-form-input:focus-visible {
@@ -482,6 +548,16 @@ th.num {
 .leaderboard-name:hover {
   color: var(--accent);
   text-decoration: underline;
+}
+
+/* Unbeaten-streak badge (Plus-Minus tab) — a plain inline emoji + count
+   right after the name, not a filled pill like the other badges here, so it
+   doesn't visually compete with LeagueTitleChip/GoldenBootChip. */
+.streak-fire {
+  margin-left: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .value-positive {
@@ -955,6 +1031,10 @@ th.num {
   cursor: pointer;
 }
 
+.draft-undo-button {
+  display: block;
+  margin-bottom: 0.75rem;
+}
 
 /* Admin check-in editing */
 .checkin-edit-list {
@@ -988,6 +1068,25 @@ th.num {
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* Same shape as .checkin-edit-remove but the app's positive accent color —
+   for non-destructive row actions (e.g. Save) that shouldn't read as a
+   warning the way the red remove/cancel buttons do. */
+.checkin-edit-save {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.checkin-edit-save:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .add-player-picker {
@@ -1185,20 +1284,6 @@ th.num {
 }
 
 /* Live snake draft */
-.draft-pool-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  margin: 0.6rem 0 1rem;
-}
-
-.draft-pool-item {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.9rem;
-}
-
 .draft-captain-row,
 .draft-coinflip-row,
 .draft-setup-actions {
@@ -1272,6 +1357,127 @@ th.num {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+}
+
+.draft-pick-name {
+  flex: 1;
+}
+
+.draft-pick-adr {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  /* Not nowrap — a low-sample warning like "(!only 1 game)" can make this
+     line too long to fit on one row, especially on a narrow screen. */
+  text-align: right;
+}
+
+/* At least one of Sat/Sun/Both was computed from fewer than
+   LOW_SAMPLE_GAME_THRESHOLD games — still a real number, just flagged so an
+   admin knows it's a small, noisy sample rather than a settled average. */
+.draft-pick-adr-low-sample {
+  color: var(--status-warning-bg);
+}
+
+.draft-pick-positions {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* A player whose only playable positions are already covered on the
+   drafting team — still fully pickable, just visually deprioritized so a
+   captain notices they've dropped out of the recommended ordering. */
+.draft-pick-button-surplus {
+  opacity: 0.6;
+}
+
+.draft-pick-surplus-note {
+  font-size: 0.68rem;
+  font-style: italic;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.draft-teams-so-far {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.draft-team-roster {
+  margin: 0;
+}
+
+/* DraftPoolPicker — replaces the old flat "every player, all at once"
+   checkbox list with a small current-pool list plus a scrollable, searchable
+   add list, both capped to a fixed height rather than growing the whole page. */
+.draft-pool-picker {
+  margin: 0.6rem 0 1rem;
+}
+
+.draft-pool-count {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.draft-pool-current-list,
+.draft-pool-add-list {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.draft-pool-current-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.draft-pool-current-item:last-child {
+  border-bottom: none;
+}
+
+.draft-pool-remove {
+  all: unset;
+  cursor: pointer;
+  color: var(--status-critical-bg);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.3rem;
+}
+
+.draft-pool-add-list button {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.draft-pool-add-list li:last-child button {
+  border-bottom: none;
+}
+
+.draft-pool-add-list button:hover {
+  background: var(--surface-2);
 }
 
 /* Top nav — fixed in place so it stays on screen while the page scrolls,
@@ -1413,4 +1619,172 @@ th.num {
   .skeleton {
     animation: none;
   }
+}
+
+/* Guided app tour (driver.js, see TourGuide.tsx) — themed to match the app's
+   dark/teal look instead of the library's default light popover. Overlay
+   dimming/opacity is set via JS config (driver({overlayColor, overlayOpacity}));
+   everything below is the popover box itself, scoped via driver.js's own
+   `popoverClass` option so it never affects any other driver.js usage. */
+.driver-popover.kaiser-tour-popover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 1000000000;
+}
+
+.kaiser-tour-popover .driver-popover-title {
+  color: var(--text-primary);
+  font-size: 1.05rem;
+}
+
+.kaiser-tour-popover .driver-popover-description {
+  color: var(--text-secondary);
+}
+
+/* The button's actual text ("Skip Tour →", replacing driver.js's default "x") is
+   set directly on the real DOM node in TourGuide.tsx's onPopoverRender — this only
+   restyles it to fit that longer label instead of a tiny icon-sized box. */
+.kaiser-tour-popover .driver-popover-close-btn {
+  width: auto;
+  height: auto;
+  top: 8px;
+  right: 10px;
+  padding: 3px 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.kaiser-tour-popover .driver-popover-close-btn:hover,
+.kaiser-tour-popover .driver-popover-close-btn:focus {
+  color: var(--text-primary);
+}
+
+.kaiser-tour-popover .driver-popover-progress-text {
+  color: var(--text-muted);
+}
+
+.kaiser-tour-popover .driver-popover-footer-btn {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.kaiser-tour-popover .driver-popover-footer-btn:hover,
+.kaiser-tour-popover .driver-popover-footer-btn:focus {
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.kaiser-tour-popover .driver-popover-footer .driver-popover-btn-disabled {
+  opacity: 0.35;
+}
+
+.kaiser-tour-popover .driver-popover-arrow-side-left {
+  border-left-color: var(--surface-1);
+}
+
+.kaiser-tour-popover .driver-popover-arrow-side-right {
+  border-right-color: var(--surface-1);
+}
+
+.kaiser-tour-popover .driver-popover-arrow-side-top {
+  border-top-color: var(--surface-1);
+}
+
+.kaiser-tour-popover .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--surface-1);
+}
+
+/* Toast/snackbar notifications (see ToastProvider.tsx) — stacked bottom-center,
+   above everything else including the tour popover (z-index 1000000000). Reuses
+   the same --status-good/-warning/-critical/-info tokens the matchday status
+   dots already use, rather than a separate color palette. */
+.toast-stack {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000000001;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(420px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 0.9rem;
+  font-weight: 600;
+  pointer-events: auto;
+  animation: toast-slide-in 0.2s ease-out;
+}
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
+.toast-message {
+  flex: 1;
+}
+
+.toast-close {
+  all: unset;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.toast-close:hover,
+.toast-close:focus {
+  opacity: 1;
+}
+
+.toast-success {
+  background: var(--status-good-bg);
+  color: var(--status-good-fg);
+}
+
+.toast-error {
+  background: var(--status-critical-bg);
+  color: var(--status-critical-fg);
+}
+
+.toast-warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+}
+
+.toast-info {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
 }

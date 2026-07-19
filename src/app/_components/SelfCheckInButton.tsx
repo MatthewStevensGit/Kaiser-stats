@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { cancelSelfCheckIn, checkInSelf } from "@/lib/matchday/actions";
+import { useToast } from "./ToastProvider";
 
 export function SelfCheckInButton({
   gameId,
@@ -14,18 +15,22 @@ export function SelfCheckInButton({
   registrationOpen: boolean;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
 
   function handleClick() {
-    setError(null);
     startTransition(async () => {
-      const result = isCheckedIn ? await cancelSelfCheckIn(gameId) : await checkInSelf(gameId);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = isCheckedIn ? await cancelSelfCheckIn(gameId) : await checkInSelf(gameId);
+        if (!result.ok) {
+          showToast("error", result.error);
+          return;
+        }
+        showToast("success", isCheckedIn ? "Check-in cancelled." : "You're checked in!");
+        router.refresh();
+      } catch {
+        showToast("error", "Something went wrong — please try again.");
       }
-      router.refresh();
     });
   }
 
@@ -41,7 +46,6 @@ export function SelfCheckInButton({
       >
         {isPending ? "..." : isCheckedIn ? "Cancel Check-In" : "Check In"}
       </button>
-      {error && <p className="note login-form-error">{error}</p>}
     </div>
   );
 }
