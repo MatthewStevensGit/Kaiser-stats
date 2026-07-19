@@ -74,7 +74,15 @@ export async function linkPlayerAfterLogin(): Promise<LinkPlayerResult> {
     .eq("auth_user_id", authUserId)
     .maybeSingle();
 
-  if (existingByAuthId) return { ok: true, needsOnboarding: existingByAuthId.onboarding_completed_at === null };
+  if (existingByAuthId) {
+    // Revalidated here, server-side and authoritative, rather than leaving
+    // the client to call router.refresh() right after its own router.push()
+    // — that combination raced against itself and could leave the login
+    // button stuck on its pending label even after login had genuinely
+    // already succeeded (see login/page.tsx's afterVerifiedSession).
+    revalidatePath("/");
+    return { ok: true, needsOnboarding: existingByAuthId.onboarding_completed_at === null };
+  }
 
   const { data: allPlayers } = await serviceRoleClient
     .from("players")
@@ -88,6 +96,7 @@ export async function linkPlayerAfterLogin(): Promise<LinkPlayerResult> {
       .update({ auth_user_id: authUserId })
       .eq("canonical_id", match.canonicalId);
     if (error) return { ok: false, error: "Could not finish signing you in." };
+    revalidatePath("/");
     return { ok: true, needsOnboarding: true };
   }
 
@@ -102,6 +111,7 @@ export async function linkPlayerAfterLogin(): Promise<LinkPlayerResult> {
     auth_user_id: authUserId,
   });
   if (error) return { ok: false, error: "Could not finish signing you in." };
+  revalidatePath("/");
   return { ok: true, needsOnboarding: true };
 }
 
@@ -127,14 +137,14 @@ interface OtherPlayerRow {
 export async function completeOnboarding(
   displayName: string,
   rosterName: string,
-  password: string,
+  password: string | null,
   positions: string[] = [],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const trimmedDisplayName = displayName.trim();
   const trimmedRosterName = rosterName.trim();
   if (!trimmedDisplayName) return { ok: false, error: "Display name can't be empty." };
   if (!trimmedRosterName) return { ok: false, error: "Roster name can't be empty." };
-  if (password.length < MIN_PASSWORD_LENGTH) {
+  if (password !== null && password.length < MIN_PASSWORD_LENGTH) {
     return { ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` };
   }
   const cleanPositions = sanitizePositions(positions);
@@ -177,9 +187,12 @@ export async function completeOnboarding(
   // cleanly. Doing it after the merge/update below would risk a completed,
   // merged, onboarding_completed_at-stamped account with no password set —
   // recoverable via "log in with a code" + Settings, but confusing enough to
-  // avoid outright.
-  const { error: passwordError } = await supabase.auth.updateUser({ password });
-  if (passwordError) return { ok: false, error: passwordError.message };
+  // avoid outright. `password` is null for anyone who already set one via
+  // /signup (supabase.auth.signUp already required it there) — nothing to do.
+  if (password !== null) {
+    const { error: passwordError } = await supabase.auth.updateUser({ password });
+    if (passwordError) return { ok: false, error: passwordError.message };
+  }
 
   if (check.outcome === "merge") {
     // Reunite the stub with the real historical identity — delete-then-update
@@ -205,6 +218,7 @@ export async function completeOnboarding(
       })
       .eq("canonical_id", check.targetCanonicalId);
     if (updateError) return { ok: false, error: "Could not save your profile." };
+    revalidatePath("/");
     return { ok: true };
   }
 
@@ -218,6 +232,7 @@ export async function completeOnboarding(
     })
     .eq("auth_user_id", user.id);
   if (error) return { ok: false, error: "Could not save your profile." };
+  revalidatePath("/");
   return { ok: true };
 }
 

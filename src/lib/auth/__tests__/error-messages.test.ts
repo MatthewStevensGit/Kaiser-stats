@@ -23,6 +23,12 @@ describe("friendlyAuthErrorMessage", () => {
     );
   });
 
+  it("recognizes an already-registered signup error", () => {
+    expect(friendlyAuthErrorMessage("User already registered")).toBe(
+      "That email already has an account — try logging in instead.",
+    );
+  });
+
   it("recognizes a network error", () => {
     expect(friendlyAuthErrorMessage("Failed to fetch")).toBe(
       "Couldn't reach the server — check your connection and try again.",

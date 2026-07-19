@@ -7,7 +7,16 @@ import { POSITIONS, type Position } from "@/lib/stats-engine/positions";
 
 const MIN_PASSWORD_LENGTH = 8;
 
-export function OnboardingForm({ initialName, email }: { initialName: string; email: string }) {
+export function OnboardingForm({
+  initialName,
+  email,
+  skipPassword = false,
+}: {
+  initialName: string;
+  email: string;
+  /** True for anyone who came from /signup — they already set a password there via supabase.auth.signUp, so asking again here would be redundant. */
+  skipPassword?: boolean;
+}) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(initialName);
   const [rosterName, setRosterName] = useState(initialName);
@@ -27,24 +36,27 @@ export function OnboardingForm({ initialName, email }: { initialName: string; em
     e.preventDefault();
     setError(null);
 
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords don't match.");
-      return;
+    if (!skipPassword) {
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Passwords don't match.");
+        return;
+      }
     }
 
     startTransition(async () => {
       try {
-        const result = await completeOnboarding(displayName, rosterName, password, positions);
+        const result = await completeOnboarding(displayName, rosterName, skipPassword ? null : password, positions);
         if (!result.ok) {
           setError(result.error);
           return;
         }
+        // No router.refresh() — completeOnboarding already revalidates "/"
+        // server-side, so a plain push shows the fully-onboarded state.
         router.push("/");
-        router.refresh();
       } catch {
         setError("Something went wrong saving your profile — please try again.");
       }
@@ -83,42 +95,46 @@ export function OnboardingForm({ initialName, email }: { initialName: string; em
         admin can change it later.
       </p>
 
-      {/* Hidden, but present so the browser's password manager can associate
-          the new password with this account's email — without a username
-          field in the same form, most browsers won't offer to save it, or
-          won't autofill it correctly on the login page later. */}
-      <input type="email" name="email" value={email} readOnly autoComplete="username" hidden />
+      {!skipPassword && (
+        <>
+          {/* Hidden, but present so the browser's password manager can associate
+              the new password with this account's email — without a username
+              field in the same form, most browsers won't offer to save it, or
+              won't autofill it correctly on the login page later. */}
+          <input type="email" name="email" value={email} readOnly autoComplete="username" hidden />
 
-      <label htmlFor="onboarding-password" className="login-form-label">
-        Create a password
-      </label>
-      <input
-        id="onboarding-password"
-        type="password"
-        required
-        autoComplete="new-password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="login-form-input"
-        disabled={isPending}
-      />
+          <label htmlFor="onboarding-password" className="login-form-label">
+            Create a password
+          </label>
+          <input
+            id="onboarding-password"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="login-form-input"
+            disabled={isPending}
+          />
 
-      <label htmlFor="onboarding-confirm-password" className="login-form-label">
-        Confirm password
-      </label>
-      <input
-        id="onboarding-confirm-password"
-        type="password"
-        required
-        autoComplete="new-password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        className="login-form-input"
-        disabled={isPending}
-      />
-      <p className="note">
-        You&rsquo;ll use this to log in going forward instead of a fresh code every time.
-      </p>
+          <label htmlFor="onboarding-confirm-password" className="login-form-label">
+            Confirm password
+          </label>
+          <input
+            id="onboarding-confirm-password"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="login-form-input"
+            disabled={isPending}
+          />
+          <p className="note">
+            You&rsquo;ll use this to log in going forward instead of a fresh code every time.
+          </p>
+        </>
+      )}
 
       <label className="login-form-label">Positions you play (select any that apply)</label>
       <div className="member-positions-editor">
@@ -145,7 +161,12 @@ export function OnboardingForm({ initialName, email }: { initialName: string; em
       <button
         type="submit"
         className="login-form-submit"
-        disabled={isPending || !displayName.trim() || !rosterName.trim() || !password || !confirmPassword}
+        disabled={
+          isPending ||
+          !displayName.trim() ||
+          !rosterName.trim() ||
+          (!skipPassword && (!password || !confirmPassword))
+        }
       >
         {isPending ? "Saving..." : "Save and continue"}
       </button>

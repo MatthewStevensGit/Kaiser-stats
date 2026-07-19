@@ -46,8 +46,11 @@ export default function LoginPage() {
         return;
       }
 
+      // No router.refresh() here — linkPlayerAfterLogin already revalidated
+      // "/" server-side, so a plain push shows the correct logged-in state.
+      // Calling both was racy and could leave this button stuck on "Logging
+      // in..." even after login had genuinely already succeeded.
       router.push(linkResult.needsOnboarding ? "/onboarding" : "/");
-      router.refresh();
     } catch {
       setStatus("error");
       setErrorMessage("Something went wrong — please try again.");
@@ -190,6 +193,9 @@ export default function LoginPage() {
             </button>
             <Link href="/forgot-password" className="note login-form-resend">
               Forgot password?
+            </Link>
+            <Link href="/signup" className="note login-form-resend">
+              New here? Sign up
             </Link>
           </form>
         )}
