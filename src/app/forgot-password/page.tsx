@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { linkPlayerAfterLogin } from "@/lib/auth/actions";
 import { friendlyAuthErrorMessage } from "@/lib/auth/error-messages";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 
@@ -85,8 +86,19 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      router.push("/");
-      router.refresh();
+      // Same idempotent link/revalidate step the main login flow uses — a
+      // no-op for the common case (already-linked account resetting its
+      // password), but still correct for the rare account that reaches a
+      // real session for the first time via a password reset. No
+      // router.refresh() needed: linkPlayerAfterLogin already revalidates
+      // "/" server-side.
+      const linkResult = await linkPlayerAfterLogin();
+      if (!linkResult.ok) {
+        setStatus("error");
+        setErrorMessage(linkResult.error);
+        return;
+      }
+      router.push(linkResult.needsOnboarding ? "/onboarding" : "/");
     } catch {
       setStatus("error");
       setErrorMessage("Something went wrong — please try again.");

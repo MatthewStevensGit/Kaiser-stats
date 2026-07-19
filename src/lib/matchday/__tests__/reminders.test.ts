@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReminderEmailContent, selectPendingReminders } from "../reminders";
+import { buildLineupEmailContent, buildReminderEmailContent, selectPendingReminders } from "../reminders";
 import type { ReminderCandidateGame } from "../reminders";
 
 // 2026-07-18 is a Saturday; registration opens Fri 2026-07-17 00:00 ET
@@ -11,6 +11,7 @@ const saturdayGame: ReminderCandidateGame = {
   league: "saturday",
   cancelled: false,
   cutoffOverrideUtc: null,
+  checkedInCount: 5,
 };
 
 describe("selectPendingReminders", () => {
@@ -58,6 +59,30 @@ describe("selectPendingReminders", () => {
     const justAfterOpen = new Date("2026-07-17T04:30:00.000Z");
     expect(selectPendingReminders([{ ...saturdayGame, cancelled: true }], justAfterOpen, new Set())).toEqual([]);
   });
+
+  it("fires 'registration_filled' the moment a game hits capacity, even well before closesAt", () => {
+    const justAfterOpen = new Date("2026-07-17T04:30:00.000Z");
+    const fullGame = { ...saturdayGame, checkedInCount: 24 };
+    expect(selectPendingReminders([fullGame], justAfterOpen, new Set())).toEqual([
+      { gameId: fullGame.gameId, emailType: "registration_open" },
+      { gameId: fullGame.gameId, emailType: "registration_filled" },
+    ]);
+  });
+
+  it("doesn't re-fire 'registration_filled' once already logged, even if still full", () => {
+    const justAfterOpen = new Date("2026-07-17T04:30:00.000Z");
+    const fullGame = { ...saturdayGame, checkedInCount: 24 };
+    const alreadySent = new Set([`${fullGame.gameId}|registration_open`, `${fullGame.gameId}|registration_filled`]);
+    expect(selectPendingReminders([fullGame], justAfterOpen, alreadySent)).toEqual([]);
+  });
+
+  it("doesn't fire 'registration_filled' below capacity", () => {
+    const justAfterOpen = new Date("2026-07-17T04:30:00.000Z");
+    expect(selectPendingReminders([saturdayGame], justAfterOpen, new Set())).not.toContainEqual({
+      gameId: saturdayGame.gameId,
+      emailType: "registration_filled",
+    });
+  });
 });
 
 describe("buildReminderEmailContent", () => {
@@ -77,5 +102,29 @@ describe("buildReminderEmailContent", () => {
   it("never reports negative spots left if somehow over capacity", () => {
     const { body } = buildReminderEmailContent("closing_soon", saturdayGame, 30);
     expect(body).toContain("0 spots left");
+  });
+
+  it("includes the roster in the registration_filled email", () => {
+    const { subject, body } = buildReminderEmailContent("registration_filled", saturdayGame, 24, ["Alice", "Bob"]);
+    expect(subject).toContain("full");
+    expect(body).toContain("Alice");
+    expect(body).toContain("Bob");
+  });
+});
+
+describe("buildLineupEmailContent", () => {
+  it("lists both teams by name under their own team label", () => {
+    const { subject, body } = buildLineupEmailContent(saturdayGame, {
+      homeTeamLabel: "Orange",
+      awayTeamLabel: "Blue",
+      homeNames: ["Alice", "Bob"],
+      awayNames: ["Carol", "Dave"],
+    });
+    expect(subject).toContain("Saturday");
+    expect(subject).toContain("lineup");
+    expect(body).toContain("Orange");
+    expect(body).toContain("Alice");
+    expect(body).toContain("Blue");
+    expect(body).toContain("Carol");
   });
 });

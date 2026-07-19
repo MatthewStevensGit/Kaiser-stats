@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "../auth/session";
 import { createServiceRoleClient } from "../supabase/client";
 import type { GameRecord, NameResolution, PlayerIdentity } from "../stats-engine/types";
@@ -147,20 +148,28 @@ export async function saveReportImport(
     preview.gameRecord.date,
     preview.gameRecord.league,
   );
-  if (existingDraftGameId) {
-    return mergeReportIntoDraftGame(client, {
-      draftGameId: existingDraftGameId,
-      gameRecord: preview.gameRecord,
-      provisionedPlayers: preview.provisionedPlayers,
-      flaggedNames: preview.flaggedNames,
-      rawText,
-    });
-  }
 
-  return saveResolvedGame(client, {
-    gameRecord: preview.gameRecord,
-    provisionedPlayers: preview.provisionedPlayers,
-    flaggedNames: preview.flaggedNames,
-    rawText,
-  });
+  const result = existingDraftGameId
+    ? await mergeReportIntoDraftGame(client, {
+        draftGameId: existingDraftGameId,
+        gameRecord: preview.gameRecord,
+        provisionedPlayers: preview.provisionedPlayers,
+        flaggedNames: preview.flaggedNames,
+        rawText,
+      })
+    : await saveResolvedGame(client, {
+        gameRecord: preview.gameRecord,
+        provisionedPlayers: preview.provisionedPlayers,
+        flaggedNames: preview.flaggedNames,
+        rawText,
+      });
+
+  // Invalidate /matches server-side, authoritatively, right here — the
+  // client just navigates there afterward with a plain router.push(), no
+  // extra router.refresh() needed (and no risk of the router.push()+
+  // router.refresh() race that was leaving the UI stuck on "Saving..."
+  // looking done-but-frozen even though the save itself had already
+  // succeeded — see ReportImportForm.tsx's handleSave).
+  if (result.ok) revalidatePath("/matches");
+  return result;
 }

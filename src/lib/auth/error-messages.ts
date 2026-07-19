@@ -15,6 +15,9 @@ export function friendlyAuthErrorMessage(rawMessage: string): string {
   if (lower.includes("credentials")) {
     return "Wrong email or password — double check them, or use \"Forgot password?\" below.";
   }
+  if (lower.includes("already registered") || lower.includes("already exists")) {
+    return "That email already has an account — try logging in instead.";
+  }
   if (lower.includes("rate limit")) {
     return "Too many codes requested for this email — wait a few minutes and try again.";
   }

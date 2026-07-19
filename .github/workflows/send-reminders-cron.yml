@@ -5,9 +5,18 @@ name: Send registration reminders
 # existing route (src/app/api/matchday/send-reminders/route.ts) on GitHub's
 # own free scheduler instead. Requires a repo secret CRON_SECRET matching the
 # CRON_SECRET env var set in Vercel.
+#
+# Runs hourly, on the hour — every league's registration cutoff
+# (REGISTRATION_CUTOFF_BY_LEAGUE in src/lib/matchday/constants.ts) falls
+# exactly on a whole UTC hour, so an hourly tick is guaranteed to land inside
+# the 1-hour "closing soon" window every time (a 4-hour schedule could miss
+# that narrow window entirely, depending on phase — confirmed this actually
+# happened for the Sunday league's cutoff). This still only ever sends ONE
+# email per (game, type) regardless of how often it runs — reminder_email_log's
+# unique(game_id, email_type) is what guarantees that, not the schedule.
 on:
   schedule:
-    - cron: "0 */4 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch: {}
 
 jobs:

@@ -44,10 +44,16 @@ export function ProfileMenu({ displayName, isAdmin }: { displayName?: string; is
   async function handleLogOut() {
     if (!window.confirm("Are you sure you want to log out?")) return;
     setOpen(false);
-    const supabase = createBrowserSupabaseClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    try {
+      const supabase = createBrowserSupabaseClient();
+      await supabase.auth.signOut();
+    } catch {
+      // Ignored — the hard navigation below still takes them to a real,
+      // fresh /login request either way, same reasoning as LogOutButton.tsx.
+    }
+    // A full reload, not router.push()+refresh() — see LogOutButton.tsx's
+    // doc comment for why that combination is unreliable here.
+    window.location.href = "/login";
   }
 
   function handleTakeTour() {
