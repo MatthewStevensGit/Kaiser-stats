@@ -16,7 +16,10 @@ export default async function MembersPage() {
       <header className="screen-header-row">
         <h1 className="screen-header">Members</h1>
       </header>
-      <p className="note">Everyone who has actually logged in, with their name and email.</p>
+      <p className="note">
+        Everyone who has actually logged in. Roster name is what shows in game reports and
+        the live draft — display name is that person&apos;s own private login preference.
+      </p>
 
       <MembersTable members={members} currentCanonicalId={admin.canonicalId} />
     </main>

@@ -2,28 +2,67 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { updateDisplayName } from "@/lib/auth/actions";
+import { updateDisplayName, updateOwnPositions } from "@/lib/auth/actions";
+import { POSITIONS, type Position } from "@/lib/stats-engine/positions";
 
-export function SettingsForm({ displayName, email }: { displayName: string; email: string }) {
+function sameSet(a: Position[], b: Position[]): boolean {
+  if (a.length !== b.length) return false;
+  const bSet = new Set(b);
+  return a.every((p) => bSet.has(p));
+}
+
+export function SettingsForm({
+  displayName,
+  email,
+  positions: initialPositions,
+}: {
+  displayName: string;
+  email: string;
+  positions: Position[];
+}) {
   const router = useRouter();
   const [name, setName] = useState(displayName);
+  const [positions, setPositions] = useState<Position[]>(initialPositions);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function togglePosition(position: Position) {
+    setPositions((current) =>
+      current.includes(position) ? current.filter((p) => p !== position) : [...current, position],
+    );
+    setStatus("idle");
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("saving");
     setError(null);
     startTransition(async () => {
-      const result = await updateDisplayName(name);
-      if (!result.ok) {
+      try {
+        const nameChanged = name.trim() !== displayName.trim();
+        if (nameChanged) {
+          const result = await updateDisplayName(name);
+          if (!result.ok) {
+            setStatus("error");
+            setError(result.error);
+            return;
+          }
+        }
+        if (!sameSet(positions, initialPositions)) {
+          const result = await updateOwnPositions(positions);
+          if (!result.ok) {
+            setStatus("error");
+            setError(result.error);
+            return;
+          }
+        }
+        setStatus("saved");
+        router.refresh();
+      } catch {
         setStatus("error");
-        setError(result.error);
-        return;
+        setError("Something went wrong — please try again.");
       }
-      setStatus("saved");
-      router.refresh();
     });
   }
 
@@ -49,6 +88,22 @@ export function SettingsForm({ displayName, email }: { displayName: string; emai
         className="login-form-input"
         disabled={isPending}
       />
+
+      <label className="login-form-label">Positions you play</label>
+      <div className="member-positions-editor">
+        {POSITIONS.map((position) => (
+          <button
+            key={position}
+            type="button"
+            className={positions.includes(position) ? "position-pill position-pill-active" : "position-pill"}
+            disabled={isPending}
+            onClick={() => togglePosition(position)}
+            aria-pressed={positions.includes(position)}
+          >
+            {position}
+          </button>
+        ))}
+      </div>
 
       {status === "error" && error && <p className="note login-form-error">{error}</p>}
       {status === "saved" && <p className="note">Saved.</p>}

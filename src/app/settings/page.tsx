@@ -15,21 +15,13 @@ export default async function SettingsPage() {
       </header>
 
       <div className="card">
-        <SettingsForm displayName={user.displayName} email={user.email} />
+        <SettingsForm displayName={user.displayName} email={user.email} positions={user.positions} />
       </div>
 
       {user.isAdmin && (
         <div className="card">
-          <Link href="/settings/members" className="rulebook-link">
+          <Link href="/settings/members" className="rulebook-link" data-tour-id="members-link">
             Members →
-          </Link>
-        </div>
-      )}
-
-      {user.isAdmin && (
-        <div className="card">
-          <Link href="/settings/identities" className="rulebook-link">
-            Identities →
           </Link>
         </div>
       )}

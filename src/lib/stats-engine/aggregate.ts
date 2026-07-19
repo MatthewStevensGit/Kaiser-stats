@@ -119,6 +119,7 @@ export function aggregateStandings(
     const existing = totals.get(player.canonicalId) ?? {
       canonicalId: player.canonicalId,
       displayName: player.displayName,
+      rosterName: player.rosterName ?? null,
       games: 0,
       wins: 0,
       losses: 0,

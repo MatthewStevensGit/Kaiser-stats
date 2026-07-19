@@ -10,6 +10,8 @@ export interface ReportPreview {
   gameRecord: GameRecord;
   /** Every canonicalId referenced above (known + newly provisioned), resolved for rendering. */
   displayNames: Record<string, string>;
+  /** Same keys as displayNames — null for anyone with no roster name set (e.g. every provisioned player, always). */
+  rosterNames: Record<string, string | null>;
   provisionedPlayers: PlayerIdentity[];
   flaggedNames: NameResolution[];
   goalSumMismatch: boolean;
@@ -35,11 +37,12 @@ async function fetchKnownPlayers(): Promise<PlayerIdentity[]> {
   const client = createServiceRoleClient();
   const { data } = await client
     .from("players")
-    .select("canonical_id, display_name, aliases, known_emails, leagues, status");
+    .select("canonical_id, display_name, roster_name, aliases, known_emails, leagues, status");
 
   return (data ?? []).map((row) => ({
     canonicalId: row.canonical_id,
     displayName: row.display_name,
+    rosterName: row.roster_name,
     aliases: row.aliases ?? [],
     knownEmails: row.known_emails ?? [],
     leagues: row.leagues ?? [],
@@ -50,6 +53,12 @@ async function fetchKnownPlayers(): Promise<PlayerIdentity[]> {
 function buildDisplayNames(known: PlayerIdentity[], provisioned: PlayerIdentity[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const p of [...known, ...provisioned]) map[p.canonicalId] = p.displayName;
+  return map;
+}
+
+function buildRosterNames(known: PlayerIdentity[], provisioned: PlayerIdentity[]): Record<string, string | null> {
+  const map: Record<string, string | null> = {};
+  for (const p of [...known, ...provisioned]) map[p.canonicalId] = p.rosterName ?? null;
   return map;
 }
 
@@ -110,6 +119,7 @@ export async function previewReportImport(input: {
     preview: {
       gameRecord: resolved.gameRecord,
       displayNames: buildDisplayNames(knownPlayers, resolved.provisionedPlayers),
+      rosterNames: buildRosterNames(knownPlayers, resolved.provisionedPlayers),
       provisionedPlayers: resolved.provisionedPlayers,
       flaggedNames: resolved.flaggedNames,
       goalSumMismatch: resolved.goalSumMismatch,

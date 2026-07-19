@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase/client";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
+import type { Position } from "@/lib/stats-engine/positions";
 
 export interface CurrentUser {
   canonicalId: string;
@@ -9,6 +10,7 @@ export interface CurrentUser {
   email: string;
   /** False until completeOnboarding() runs (see src/lib/auth/actions.ts) — gates every page via OnboardingGate. */
   onboardingCompleted: boolean;
+  positions: Position[];
 }
 
 interface PlayerRow {
@@ -16,6 +18,7 @@ interface PlayerRow {
   display_name: string;
   is_admin: boolean;
   onboarding_completed_at: string | null;
+  positions: string[] | null;
 }
 
 /**
@@ -44,7 +47,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     const serviceRoleClient = createServiceRoleClient();
     const { data } = await serviceRoleClient
       .from("players")
-      .select("canonical_id, display_name, is_admin, onboarding_completed_at")
+      .select("canonical_id, display_name, is_admin, onboarding_completed_at, positions")
       .eq("auth_user_id", user.id)
       .maybeSingle<PlayerRow>();
 
@@ -56,6 +59,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       isAdmin: data.is_admin,
       email: user.email ?? "",
       onboardingCompleted: data.onboarding_completed_at !== null,
+      positions: (data.positions ?? []) as Position[],
     };
   } catch {
     return null;

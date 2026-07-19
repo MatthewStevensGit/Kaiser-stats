@@ -1,7 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createProvisionalIdentityFromEmail, findPlayerByEmail } from "../stats-engine/identity";
+import {
+  createProvisionalIdentityFromEmail,
+  findPlayerByEmail,
+  resolveOnboardingRosterName,
+  type OnboardingRosterCheckPlayer,
+} from "../stats-engine/identity";
+import { isPosition, type Position } from "../stats-engine/positions";
 import type { PlayerIdentity } from "../stats-engine/types";
 import { createServiceRoleClient } from "../supabase/client";
 import { createServerSupabaseClient } from "../supabase/server-client";
@@ -25,6 +31,11 @@ function toPlayerIdentity(row: PlayerRow): PlayerIdentity {
     leagues: row.leagues as PlayerIdentity["leagues"],
     status: row.status,
   };
+}
+
+/** Drops anything that isn't one of the 9 known codes and dedupes — never trusts client input directly into a text[] column. */
+function sanitizePositions(raw: string[]): Position[] {
+  return Array.from(new Set(raw.filter(isPosition)));
 }
 
 type LinkPlayerResult = { ok: true; needsOnboarding: boolean } | { ok: false; error: string };
@@ -92,22 +103,35 @@ export async function linkPlayerAfterLogin(): Promise<LinkPlayerResult> {
   return { ok: true, needsOnboarding: true };
 }
 
+interface OtherPlayerRow {
+  canonical_id: string;
+  display_name: string;
+  roster_name: string | null;
+  aliases: string[] | null;
+  known_emails: string[] | null;
+  leagues: string[] | null;
+  status: PlayerIdentity["status"];
+  auth_user_id: string | null;
+}
+
 /**
  * Sets BOTH names at once, required together — the caller's own row only
  * (re-derived from their session, never a client-passed canonicalId, same
  * pattern as updateDisplayName below). This is the only place a non-admin
  * can ever write roster_name: once onboarding_completed_at is set here, the
  * user has no further self-service way to change it — only an admin can,
- * via setMemberRosterName below (Settings > Identities).
+ * via setMemberRosterName below (Settings > Members).
  */
 export async function completeOnboarding(
   displayName: string,
   rosterName: string,
+  positions: string[] = [],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const trimmedDisplayName = displayName.trim();
   const trimmedRosterName = rosterName.trim();
   if (!trimmedDisplayName) return { ok: false, error: "Display name can't be empty." };
   if (!trimmedRosterName) return { ok: false, error: "Roster name can't be empty." };
+  const cleanPositions = sanitizePositions(positions);
 
   const supabase = await createServerSupabaseClient();
   const {
@@ -116,11 +140,65 @@ export async function completeOnboarding(
   if (!user) return { ok: false, error: "Not signed in." };
 
   const serviceRoleClient = createServiceRoleClient();
+
+  const { data: ownRow } = await serviceRoleClient
+    .from("players")
+    .select("canonical_id, status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!ownRow) return { ok: false, error: "Could not find your account." };
+
+  const { data: othersData } = await serviceRoleClient
+    .from("players")
+    .select("canonical_id, display_name, roster_name, aliases, known_emails, leagues, status, auth_user_id")
+    .neq("canonical_id", ownRow.canonical_id);
+  const others: OnboardingRosterCheckPlayer[] = ((othersData ?? []) as OtherPlayerRow[]).map((row) => ({
+    canonicalId: row.canonical_id,
+    displayName: row.display_name,
+    rosterName: row.roster_name,
+    aliases: row.aliases ?? [],
+    knownEmails: row.known_emails ?? [],
+    leagues: (row.leagues ?? []) as PlayerIdentity["leagues"],
+    status: row.status,
+    authUserId: row.auth_user_id,
+  }));
+
+  const check = resolveOnboardingRosterName(ownRow.canonical_id, ownRow.status, trimmedRosterName, others);
+  if (check.outcome === "error") return { ok: false, error: check.error };
+
+  if (check.outcome === "merge") {
+    // Reunite the stub with the real historical identity — delete-then-update
+    // (never both rows holding auth_user_id at once) since auth_user_id is
+    // unique (see schema.sql). The stub was only ever created moments ago at
+    // login, before onboarding gates every other page, so it can't yet have
+    // accumulated any real foreign-key references.
+    const { error: deleteError } = await serviceRoleClient
+      .from("players")
+      .delete()
+      .eq("canonical_id", ownRow.canonical_id);
+    if (deleteError) return { ok: false, error: "Could not save your profile." };
+
+    const { error: updateError } = await serviceRoleClient
+      .from("players")
+      .update({
+        auth_user_id: user.id,
+        display_name: trimmedDisplayName,
+        roster_name: trimmedRosterName,
+        positions: cleanPositions,
+        onboarding_completed_at: new Date().toISOString(),
+        status: "regular",
+      })
+      .eq("canonical_id", check.targetCanonicalId);
+    if (updateError) return { ok: false, error: "Could not save your profile." };
+    return { ok: true };
+  }
+
   const { error } = await serviceRoleClient
     .from("players")
     .update({
       display_name: trimmedDisplayName,
       roster_name: trimmedRosterName,
+      positions: cleanPositions,
       onboarding_completed_at: new Date().toISOString(),
     })
     .eq("auth_user_id", user.id);
@@ -152,6 +230,31 @@ export async function updateDisplayName(
     .update({ display_name: trimmed })
     .eq("auth_user_id", user.id);
   if (error) return { ok: false, error: "Could not update your name." };
+  return { ok: true };
+}
+
+/**
+ * Updates the CALLER's own playable positions — unlike roster_name, this stays
+ * editable by the member themselves any time (Settings), not just once at
+ * onboarding: it's a preference, not an identity-integrity concern, so there's
+ * no risk in letting someone correct it later as they actually figure out
+ * where they like to play.
+ */
+export async function updateOwnPositions(
+  positions: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const serviceRoleClient = createServiceRoleClient();
+  const { error } = await serviceRoleClient
+    .from("players")
+    .update({ positions: sanitizePositions(positions) })
+    .eq("auth_user_id", user.id);
+  if (error) return { ok: false, error: "Could not update your positions." };
   return { ok: true };
 }
 
@@ -227,7 +330,7 @@ export async function restoreMember(canonicalId: string): Promise<{ ok: true } |
  * The only way to change roster_name once a user has completed onboarding
  * (see completeOnboarding above) — corrects mismatches from the
  * email-match/auto-provision step at login, or a typo the user made at
- * onboarding time. Settings > Identities.
+ * onboarding time. Settings > Members.
  */
 export async function setMemberRosterName(
   canonicalId: string,
@@ -243,6 +346,56 @@ export async function setMemberRosterName(
   const { error } = await client.from("players").update({ roster_name: trimmed }).eq("canonical_id", canonicalId);
   if (error) return { ok: false, error: "Could not update that member's roster name." };
 
-  revalidatePath("/settings/identities");
+  revalidatePath("/settings/members");
+  return { ok: true };
+}
+
+/**
+ * Admin-only rename of ANOTHER member's display name — distinct from
+ * updateDisplayName() above, which only ever lets someone rename themselves.
+ * display_name is otherwise a private, personal login preference (never
+ * shown to anyone but its owner elsewhere in the app); this exists purely so
+ * an admin can fix an obviously wrong/confusing one on someone else's behalf
+ * (e.g. an auto-provisioned stub still showing a raw email). Settings > Members.
+ */
+export async function setMemberDisplayName(
+  canonicalId: string,
+  displayName: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const trimmed = displayName.trim();
+  if (!trimmed) return { ok: false, error: "Display name can't be empty." };
+
+  const client = createServiceRoleClient();
+  const { error } = await client.from("players").update({ display_name: trimmed }).eq("canonical_id", canonicalId);
+  if (error) return { ok: false, error: "Could not update that member's display name." };
+
+  revalidatePath("/settings/members");
+  return { ok: true };
+}
+
+/**
+ * Admin-set positions for ANOTHER member — for filling in a teammate's
+ * playable positions when the admin knows them but that person hasn't set it
+ * themselves (e.g. an older account from before this feature existed).
+ * Settings > Members.
+ */
+export async function setMemberPositions(
+  canonicalId: string,
+  positions: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  const client = createServiceRoleClient();
+  const { error } = await client
+    .from("players")
+    .update({ positions: sanitizePositions(positions) })
+    .eq("canonical_id", canonicalId);
+  if (error) return { ok: false, error: "Could not update that member's positions." };
+
+  revalidatePath("/settings/members");
   return { ok: true };
 }

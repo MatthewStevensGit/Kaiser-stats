@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "../supabase/client";
+import type { Position } from "../stats-engine/positions";
 
 export interface MemberRow {
   canonicalId: string;
@@ -7,6 +8,7 @@ export interface MemberRow {
   isAdmin: boolean;
   isRemoved: boolean;
   rosterName: string | null;
+  positions: Position[];
 }
 
 /**
@@ -21,7 +23,7 @@ export async function listMembers(): Promise<MemberRow[]> {
   const client = createServiceRoleClient();
   const { data } = await client
     .from("players")
-    .select("canonical_id, display_name, known_emails, is_admin, status, roster_name")
+    .select("canonical_id, display_name, known_emails, is_admin, status, roster_name, positions")
     .not("auth_user_id", "is", null)
     .order("display_name", { ascending: true });
 
@@ -32,5 +34,6 @@ export async function listMembers(): Promise<MemberRow[]> {
     isAdmin: row.is_admin,
     isRemoved: row.status === "deferred",
     rosterName: row.roster_name,
+    positions: (row.positions ?? []) as Position[],
   }));
 }
