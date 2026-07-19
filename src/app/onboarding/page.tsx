@@ -19,7 +19,7 @@ export default async function OnboardingPage() {
       </p>
 
       <div className="card">
-        <OnboardingForm initialName={user.displayName} />
+        <OnboardingForm initialName={user.displayName} email={user.email} />
       </div>
     </main>
   );

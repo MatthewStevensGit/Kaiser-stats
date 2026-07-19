@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { ChangePasswordForm } from "../_components/ChangePasswordForm";
 import { LogOutButton } from "../_components/LogOutButton";
 import { SettingsForm } from "../_components/SettingsForm";
 
@@ -16,6 +17,11 @@ export default async function SettingsPage() {
 
       <div className="card">
         <SettingsForm displayName={user.displayName} email={user.email} positions={user.positions} />
+      </div>
+
+      <div className="card">
+        <h2>Change password</h2>
+        <ChangePasswordForm email={user.email} />
       </div>
 
       {user.isAdmin && (

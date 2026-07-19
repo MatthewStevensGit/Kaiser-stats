@@ -41,18 +41,20 @@ function sanitizePositions(raw: string[]): Position[] {
 type LinkPlayerResult = { ok: true; needsOnboarding: boolean } | { ok: false; error: string };
 
 /**
- * Runs right after the browser confirms a 6-digit login code
- * (supabase.auth.verifyOtp) — links the now-authenticated auth user to a
- * players row: an existing player's first login gets their row linked by
- * email match, a never-seen email gets auto-provisioned (never blocked —
- * same never-guess-a-merge philosophy as report/spreadsheet name
- * resolution; see identity.ts). Idempotent — a returning user with an
- * already-linked row is a no-op. `needsOnboarding` tells the login page
- * whether to route to /onboarding (display name + roster name, required)
- * instead of straight to / — true for a brand-new row, or an existing
- * historical row logging in for the first time (both start with
- * onboarding_completed_at null; see the schema migration's backfill for why
- * already-established members are grandfathered past this).
+ * Runs right after the browser establishes a real Supabase session —
+ * either a verified 6-digit code (supabase.auth.verifyOtp, signup/forgot-
+ * password) or a successful password login (signInWithPassword) — links the
+ * now-authenticated auth user to a players row: an existing player's first
+ * login gets their row linked by email match, a never-seen email gets
+ * auto-provisioned (never blocked — same never-guess-a-merge philosophy as
+ * report/spreadsheet name resolution; see identity.ts). Idempotent — a
+ * returning user with an already-linked row is a no-op. `needsOnboarding`
+ * tells the caller whether to route to /onboarding (display name, roster
+ * name, and password, all required) instead of straight to / — true for a
+ * brand-new row, or an existing historical row logging in for the first
+ * time (both start with onboarding_completed_at null; see the schema
+ * migration's backfill for why already-established members are
+ * grandfathered past this).
  */
 export async function linkPlayerAfterLogin(): Promise<LinkPlayerResult> {
   const supabase = await createServerSupabaseClient();
@@ -125,12 +127,16 @@ interface OtherPlayerRow {
 export async function completeOnboarding(
   displayName: string,
   rosterName: string,
+  password: string,
   positions: string[] = [],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const trimmedDisplayName = displayName.trim();
   const trimmedRosterName = rosterName.trim();
   if (!trimmedDisplayName) return { ok: false, error: "Display name can't be empty." };
   if (!trimmedRosterName) return { ok: false, error: "Roster name can't be empty." };
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return { ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` };
+  }
   const cleanPositions = sanitizePositions(positions);
 
   const supabase = await createServerSupabaseClient();
@@ -165,6 +171,15 @@ export async function completeOnboarding(
 
   const check = resolveOnboardingRosterName(ownRow.canonical_id, ownRow.status, trimmedRosterName, others);
   if (check.outcome === "error") return { ok: false, error: check.error };
+
+  // Set the password BEFORE any players-table write: if this fails, nothing
+  // else has been touched yet, so the whole form can just be resubmitted
+  // cleanly. Doing it after the merge/update below would risk a completed,
+  // merged, onboarding_completed_at-stamped account with no password set —
+  // recoverable via "log in with a code" + Settings, but confusing enough to
+  // avoid outright.
+  const { error: passwordError } = await supabase.auth.updateUser({ password });
+  if (passwordError) return { ok: false, error: passwordError.message };
 
   if (check.outcome === "merge") {
     // Reunite the stub with the real historical identity — delete-then-update
@@ -255,6 +270,28 @@ export async function updateOwnPositions(
     .update({ positions: sanitizePositions(positions) })
     .eq("auth_user_id", user.id);
   if (error) return { ok: false, error: "Could not update your positions." };
+  return { ok: true };
+}
+
+const MIN_PASSWORD_LENGTH = 8;
+
+/**
+ * Sets the CALLER's own password — used both at first-time signup (right
+ * after the onboarding code verification) and from Settings' "Change
+ * password" for anyone who already has one. Supabase's own session (read via
+ * cookies, same as every other self-service action here) is what
+ * authorizes this — no separate re-entry of the old password, since this
+ * app's user base is small and trusted enough that the added friction isn't
+ * worth it, same reasoning as updateOwnPositions above.
+ */
+export async function setOwnPassword(password: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return { ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 
