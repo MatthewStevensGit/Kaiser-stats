@@ -394,3 +394,18 @@ alter table scheduled_games add column if not exists registration_cutoff_overrid
 -- it only deprioritizes a player once every position they've actually listed is
 -- already filled on the drafting team.
 alter table players add column if not exists positions text[] not null default '{}';
+
+-- Migration (2026-07-19): two new reminder email types, now that real sending
+-- is wired up (src/lib/email/send-mail.ts, Gmail SMTP) instead of dry-run-only.
+-- 'registration_filled' fires the instant a game hits capacity and includes
+-- the roster in its body; 'lineup_ready' fires once a live draft session
+-- completes and includes both teams' final rosters. Verify the actual
+-- constraint name first (should be the Postgres-default
+-- "reminder_email_log_email_type_check" for this table's original unnamed
+-- inline CHECK) before dropping, same caution as the players_status_check
+-- migration above:
+--   select conname from pg_constraint
+--   where conrelid = 'reminder_email_log'::regclass and contype = 'c';
+alter table reminder_email_log drop constraint reminder_email_log_email_type_check;
+alter table reminder_email_log add constraint reminder_email_log_email_type_check
+  check (email_type in ('registration_open', 'closing_soon', 'registration_filled', 'lineup_ready'));
