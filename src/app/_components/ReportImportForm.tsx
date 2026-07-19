@@ -103,8 +103,11 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
           setError(result.error);
           return;
         }
+        // No router.refresh() here — saveReportImport already revalidated
+        // /matches server-side, so a plain push shows fresh data. Calling
+        // both was racy and could leave this button stuck on "Saving..."
+        // even after the save had genuinely already succeeded.
         router.push("/matches");
-        router.refresh();
       } catch {
         setError("Something went wrong saving that report — please try again.");
       }

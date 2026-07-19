@@ -51,8 +51,11 @@ export function OneOffGameForm() {
           return;
         }
         showToast("success", "Game created.");
+        // No router.refresh() — createOneOffGame already revalidates
+        // /matchday server-side, so a plain push shows the new game. The
+        // combination was racy and could leave this button stuck looking
+        // pending even after the game had genuinely already been created.
         router.push("/matchday");
-        router.refresh();
       } catch {
         setError("Something went wrong — please try again.");
       }
