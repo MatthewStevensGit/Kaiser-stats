@@ -8,6 +8,13 @@
 export function friendlyAuthErrorMessage(rawMessage: string): string {
   const lower = rawMessage.toLowerCase();
 
+  // Checked before the generic "invalid"/"expired" branch below — Supabase's
+  // wrong-password error is literally "Invalid login credentials", which
+  // would otherwise get misclassified as a bad OTP code and show
+  // nonsensical "double check the code" messaging for a password login.
+  if (lower.includes("credentials")) {
+    return "Wrong email or password — double check them, or use \"Forgot password?\" below.";
+  }
   if (lower.includes("rate limit")) {
     return "Too many codes requested for this email — wait a few minutes and try again.";
   }

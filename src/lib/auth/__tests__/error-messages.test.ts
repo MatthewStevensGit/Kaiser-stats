@@ -14,6 +14,15 @@ describe("friendlyAuthErrorMessage", () => {
     );
   });
 
+  it("recognizes wrong-password credentials error distinctly from a bad OTP code", () => {
+    // Supabase's password-login error contains the word "invalid" too — must
+    // not fall into the OTP-code branch and tell someone their CODE is wrong
+    // when they actually typed the wrong PASSWORD.
+    expect(friendlyAuthErrorMessage("Invalid login credentials")).toBe(
+      "Wrong email or password — double check them, or use \"Forgot password?\" below.",
+    );
+  });
+
   it("recognizes a network error", () => {
     expect(friendlyAuthErrorMessage("Failed to fetch")).toBe(
       "Couldn't reach the server — check your connection and try again.",
