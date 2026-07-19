@@ -1,12 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { linkPlayerAfterLogin } from "@/lib/auth/actions";
+import { friendlyAuthErrorMessage } from "@/lib/auth/error-messages";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 
 type Step = "email" | "code";
 type Status = "idle" | "sending" | "error";
+
+/** Blocks the resend button for this long after a code is sent — long enough that a real resend can't itself trip the provider's own rate limit. */
+const RESEND_COOLDOWN_SECONDS = 30;
 
 /**
  * Email + typed code, not a clickable magic link — a clickable link's
@@ -23,9 +27,15 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  async function handleSendCode(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  async function requestCode() {
     setStatus("sending");
     setErrorMessage(null);
 
@@ -34,11 +44,21 @@ export default function LoginPage() {
 
     if (error) {
       setStatus("error");
-      setErrorMessage(error.message);
-      return;
+      setErrorMessage(friendlyAuthErrorMessage(error.message));
+      return false;
     }
     setStatus("idle");
-    setStep("code");
+    setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    return true;
+  }
+
+  async function handleSendCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (await requestCode()) setStep("code");
+  }
+
+  async function handleResendCode() {
+    await requestCode();
   }
 
   async function handleVerifyCode(e: React.FormEvent) {
@@ -55,7 +75,7 @@ export default function LoginPage() {
 
     if (verifyError) {
       setStatus("error");
-      setErrorMessage(verifyError.message);
+      setErrorMessage(friendlyAuthErrorMessage(verifyError.message));
       return;
     }
 
@@ -124,11 +144,20 @@ export default function LoginPage() {
             <button
               type="button"
               className="note login-form-resend"
+              onClick={handleResendCode}
+              disabled={status === "sending" || resendCooldown > 0}
+            >
+              {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
+            </button>
+            <button
+              type="button"
+              className="note login-form-resend"
               onClick={() => {
                 setStep("email");
                 setCode("");
                 setStatus("idle");
                 setErrorMessage(null);
+                setResendCooldown(0);
               }}
             >
               Use a different email
