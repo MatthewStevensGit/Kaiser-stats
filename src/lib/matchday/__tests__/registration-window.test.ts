@@ -1,10 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeMatchdayStatusTier,
+  deriveLeagueFromDate,
+  formatEasternDateTimeLocal,
+  getCheckinExpiryUtc,
+  getGameStartUtc,
   getRegistrationOpenUtc,
   getRegistrationCutoffUtc,
   getRegistrationStatus,
   getTodayIsoInEastern,
+  parseEasternDateTimeToUtc,
+  resolveRegistrationCutoffUtc,
 } from "../registration-window";
+
+describe("deriveLeagueFromDate", () => {
+  it("derives saturday for a Saturday date", () => {
+    expect(deriveLeagueFromDate("2026-07-18")).toBe("saturday");
+  });
+
+  it("derives sunday for a Sunday date", () => {
+    expect(deriveLeagueFromDate("2026-07-19")).toBe("sunday");
+  });
+
+  it("defaults to sunday for a weekday date (any date is allowed for a one-off game)", () => {
+    expect(deriveLeagueFromDate("2026-07-15")).toBe("sunday");
+  });
+});
 
 describe("getRegistrationCutoffUtc", () => {
   it("computes the Friday-5pm-ET cutoff for a Saturday game in EST (winter)", () => {
@@ -63,6 +84,55 @@ describe("getRegistrationCutoffUtc", () => {
     // Same reference date, but Friday-5pm vs Saturday-3pm rules diverge by
     // more than just the 2-hour time-of-day difference (also a day apart).
     expect(saturdayCutoff).not.toBe(sundayCutoff);
+  });
+});
+
+describe("resolveRegistrationCutoffUtc", () => {
+  it("falls back to the computed league default when no override is given", () => {
+    expect(resolveRegistrationCutoffUtc("2026-07-18", "saturday", null).toISOString()).toBe(
+      getRegistrationCutoffUtc("2026-07-18", "saturday").toISOString(),
+    );
+  });
+
+  it("uses the override instead of the computed default when one is given", () => {
+    const override = new Date("2026-07-16T12:00:00.000Z");
+    expect(resolveRegistrationCutoffUtc("2026-07-18", "saturday", override)).toBe(override);
+  });
+});
+
+describe("cutoff override threading through the public API", () => {
+  it("getRegistrationStatus treats a later override as still open past the computed default cutoff", () => {
+    const computedClose = getRegistrationCutoffUtc("2026-07-18", "saturday");
+    const later = new Date(computedClose.getTime() + 60 * 60_000);
+    // Just after the computed default close, but the override pushes it an hour later.
+    const justAfterDefault = new Date(computedClose.getTime() + 1000);
+    expect(getRegistrationStatus(justAfterDefault, "2026-07-18", "saturday", later)).toBe("open");
+    expect(getRegistrationStatus(justAfterDefault, "2026-07-18", "saturday", null)).toBe("closed");
+  });
+
+  it("computeMatchdayStatusTier respects an earlier override, closing sooner than the computed default", () => {
+    const computedClose = getRegistrationCutoffUtc("2026-07-18", "saturday");
+    // 2 hours earlier than the computed default — comfortably past the 1-hour
+    // "closing-soon" threshold either way, so the two branches land in
+    // different tiers rather than both landing in "closing-soon".
+    const earlier = new Date(computedClose.getTime() - 2 * 60 * 60_000);
+    const justAfterEarlierOverride = new Date(earlier.getTime() + 1000);
+    expect(computeMatchdayStatusTier(justAfterEarlierOverride, "2026-07-18", "saturday", 5, 24, earlier)).toBe(
+      "closed",
+    );
+    expect(computeMatchdayStatusTier(justAfterEarlierOverride, "2026-07-18", "saturday", 5, 24, null)).toBe("open");
+  });
+});
+
+describe("parseEasternDateTimeToUtc / formatEasternDateTimeLocal", () => {
+  it("round-trips a known Eastern instant through both directions", () => {
+    const utc = parseEasternDateTimeToUtc("2026-07-17T17:00");
+    expect(utc.toISOString()).toBe(getRegistrationCutoffUtc("2026-07-18", "saturday").toISOString());
+    expect(formatEasternDateTimeLocal(utc)).toBe("2026-07-17T17:00");
+  });
+
+  it("throws on a malformed datetime-local value", () => {
+    expect(() => parseEasternDateTimeToUtc("not-a-date")).toThrow();
   });
 });
 
@@ -144,6 +214,43 @@ describe("getRegistrationStatus", () => {
   });
 });
 
+describe("computeMatchdayStatusTier", () => {
+  // Same Fri-midnight-open / Fri-5pm-close window as getRegistrationStatus's
+  // suite above, for a Saturday 2026-07-18 game.
+  const opensAt = new Date("2026-07-17T04:00:00.000Z");
+  const closesAt = new Date("2026-07-17T21:00:00.000Z");
+
+  it("is scheduled before registration opens", () => {
+    const before = new Date(opensAt.getTime() - 60_000);
+    expect(computeMatchdayStatusTier(before, "2026-07-18", "saturday", 0, 24)).toBe("scheduled");
+  });
+
+  it("is open right after registration opens, with plenty of time left", () => {
+    expect(computeMatchdayStatusTier(opensAt, "2026-07-18", "saturday", 5, 24)).toBe("open");
+  });
+
+  it("is closing-soon once under an hour remains before the cutoff", () => {
+    const underAnHourLeft = new Date(closesAt.getTime() - 30 * 60_000);
+    expect(computeMatchdayStatusTier(underAnHourLeft, "2026-07-18", "saturday", 5, 24)).toBe(
+      "closing-soon",
+    );
+    const exactlyOneHourLeft = new Date(closesAt.getTime() - 60 * 60_000);
+    expect(computeMatchdayStatusTier(exactlyOneHourLeft, "2026-07-18", "saturday", 5, 24)).toBe("open");
+  });
+
+  it("is closed once the cutoff passes, if never filled", () => {
+    expect(computeMatchdayStatusTier(closesAt, "2026-07-18", "saturday", 10, 24)).toBe("closed");
+  });
+
+  it("is filled once capacity is reached, even with hours left before the cutoff", () => {
+    expect(computeMatchdayStatusTier(opensAt, "2026-07-18", "saturday", 24, 24)).toBe("filled");
+  });
+
+  it("stays filled after the cutoff passes too", () => {
+    expect(computeMatchdayStatusTier(closesAt, "2026-07-18", "saturday", 24, 24)).toBe("filled");
+  });
+});
+
 describe("getTodayIsoInEastern", () => {
   it("returns the Eastern calendar date, not the UTC one, near midnight ET", () => {
     // 2026-07-18T02:00:00Z is 2026-07-17 10:00 PM EDT — still the 17th in ET,
@@ -155,5 +262,25 @@ describe("getTodayIsoInEastern", () => {
     // 2026-11-01T23:30:00Z: at that instant it's already EST (transition at
     // 2026-11-01 06:00 UTC), so 23:30 UTC - 5h = 18:30 ET, still Nov 1.
     expect(getTodayIsoInEastern(new Date("2026-11-01T23:30:00.000Z"))).toBe("2026-11-01");
+  });
+});
+
+describe("getGameStartUtc", () => {
+  it("computes 7:00 AM ET kickoff for a Saturday game (EDT)", () => {
+    expect(getGameStartUtc("2026-07-18", "saturday").toISOString()).toBe("2026-07-18T11:00:00.000Z");
+  });
+
+  it("computes 7:30 AM ET kickoff for a Sunday game (EDT)", () => {
+    expect(getGameStartUtc("2026-07-19", "sunday").toISOString()).toBe("2026-07-19T11:30:00.000Z");
+  });
+});
+
+describe("getCheckinExpiryUtc", () => {
+  it("is one hour after Saturday's 7:00 AM ET kickoff", () => {
+    expect(getCheckinExpiryUtc("2026-07-18", "saturday").toISOString()).toBe("2026-07-18T12:00:00.000Z");
+  });
+
+  it("is one hour after Sunday's 7:30 AM ET kickoff", () => {
+    expect(getCheckinExpiryUtc("2026-07-19", "sunday").toISOString()).toBe("2026-07-19T12:30:00.000Z");
   });
 });

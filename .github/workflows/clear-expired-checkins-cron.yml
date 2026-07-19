@@ -1,0 +1,21 @@
+name: Clear expired check-ins
+
+# Vercel's Hobby plan only allows once-per-day native Cron schedules — too
+# coarse for clearing a game's check-in list within an hour of kickoff — so
+# this workflow triggers the existing route
+# (src/app/api/matchday/clear-expired-checkins/route.ts) on GitHub's own free
+# scheduler instead. Requires a repo secret CRON_SECRET matching the
+# CRON_SECRET env var set in Vercel.
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call clear-expired-checkins
+        run: |
+          curl -sf -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://kaiser-stats.vercel.app/api/matchday/clear-expired-checkins

@@ -17,9 +17,13 @@ export interface PlayerGameStat {
  * each team group.
  *
  * Assist coverage is always going to be sparse (most reports never narrate
- * one) — same "show it when known, say nothing when not" treatment as MVP
- * and notable mentions elsewhere in this app: never a ranking input (see
- * PlayerSeasonStats.assists), just extra context when it happens to exist.
+ * one), same "show it when known, say nothing when not" treatment as MVP
+ * and notable mentions elsewhere in this app — but unlike the plus-minus
+ * power ranking (where assists are never a ranking input, see
+ * PlayerSeasonStats.assists), an assist DOES feed into computeMvp() below:
+ * when Vadim's own narrative credits an assist, that's his judgment of a
+ * real contribution to the goal, not noise, so it counts the same as a goal
+ * for deciding MVP (see computeMvp's own doc comment).
  */
 export function summarizePlayerGameStats(goals: GoalEvent[]): PlayerGameStat[] {
   const order: string[] = [];

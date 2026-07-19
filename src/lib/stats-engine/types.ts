@@ -1,3 +1,5 @@
+import type { Position } from "./positions";
+
 export type League = "saturday" | "sunday" | "unknown";
 
 export type StatsView = "saturday" | "sunday" | "merged";
@@ -5,6 +7,26 @@ export type StatsView = "saturday" | "sunday" | "merged";
 export interface PlayerIdentity {
   canonicalId: string;
   displayName: string;
+  /**
+   * The name used in game reports — how a live-draft captain would
+   * recognize this player. Undefined/null for anyone who hasn't logged in
+   * and set it themselves at onboarding (or been given one by an admin), and
+   * for every construction site that doesn't deal in real Supabase rows
+   * (sample data, report-parser extraction, tests) — see rosterDisplayName()
+   * in identity.ts for the null-safe fallback used wherever this matters
+   * (the live draft).
+   */
+  rosterName?: string | null;
+  /**
+   * Positions this player can play, self-selected at onboarding (or set by an
+   * admin on their behalf) — see src/lib/stats-engine/positions.ts for the 9
+   * valid codes. Undefined/empty for anyone who hasn't set it, or for every
+   * construction site that doesn't deal in real Supabase rows (sample data,
+   * report-parser extraction, tests). The live draft's positional-need logic
+   * (src/lib/matchday/position-need.ts) treats "unset" as neutral, never as
+   * a strike against a player.
+   */
+  positions?: Position[];
   aliases: string[];
   knownEmails: string[];
   leagues: League[];
@@ -64,6 +86,8 @@ export interface NameResolution {
 export interface PlayerSeasonStats {
   canonicalId: string;
   displayName: string;
+  /** See PlayerIdentity.rosterName's doc comment — same null-safe fallback via rosterDisplayName(). */
+  rosterName?: string | null;
   games: number;
   wins: number;
   losses: number;
@@ -130,8 +154,12 @@ export interface RosterSpot {
    * a confirmed league convention (each roster's first-listed player is
    * that team's captain, the rest of the list is already in draft order),
    * refined further when a report narrates the real order or a human
-   * supplies a "First pick" annotation. Only left null when something about
-   * that game's data is inconsistent enough not to trust (see
+   * supplies a "First pick" annotation. A captain (roster[0]) always keeps
+   * this null — they choose, they aren't chosen, so they're never part of
+   * the numbered sequence at all (confirmed 2026-07-16: an earlier version
+   * reserved pick 1/2 for the two captains, which inflated every real pick's
+   * number). Otherwise only left null when something about that game's data
+   * is inconsistent enough not to trust (see
    * firstPickWarning/pickOrderWarning). Historical spreadsheet-backfilled
    * games (which predate any of this) still leave it null; rollupGameRecords()
    * simply skips null values when averaging avgDraftPosition.

@@ -1,21 +1,25 @@
 import { formatCutoffLabel } from "@/lib/matchday/registration-window";
-import type { RegistrationStatus } from "@/lib/matchday/registration-window";
+import type { MatchdayStatusTier } from "@/lib/matchday/registration-window";
 
 export function RegistrationStatusBar({
-  status,
+  tier,
   opensAt,
   closesAt,
 }: {
-  status: RegistrationStatus;
+  tier: MatchdayStatusTier;
   opensAt: Date;
   closesAt: Date;
 }) {
   const message =
-    status === "open"
+    tier === "open"
       ? `Registration is open — closes ${formatCutoffLabel(closesAt)}.`
-      : status === "not-open"
-        ? `Registration opens ${formatCutoffLabel(opensAt)}.`
-        : "Registration isn't open for this game.";
+      : tier === "closing-soon"
+        ? `Registration closing soon — closes ${formatCutoffLabel(closesAt)}. Hurry!`
+        : tier === "scheduled"
+          ? `Registration opens ${formatCutoffLabel(opensAt)}.`
+          : tier === "filled"
+            ? "Registration Filled"
+            : "Registration Closed";
 
-  return <div className={`registration-status-bar registration-status-bar-${status}`}>{message}</div>;
+  return <div className={`registration-status-bar registration-status-bar-${tier}`}>{message}</div>;
 }

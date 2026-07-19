@@ -22,6 +22,48 @@ export function extractFirstPickAnnotation(rawFileText: string): { firstPickRaw:
   };
 }
 
+// Gmail's own "copy the thread text" output repeats this exact boilerplate
+// once per message: a sender-name line, then a date/time line, then a
+// "to <comma-separated recipients>" line — none of it is report content,
+// and leaving it in wastes the model's attention (and once already caused a
+// real parse to trip up trying to treat "to Eduard, Muravchik, ..." as game
+// content). "Inbox" and "Summarize this email" are separate stray UI-chrome
+// lines Gmail's copy also includes. The date/time line's exact format
+// varies (confirmed two real variants): "Sun, Jun 21, 11:14 AM" (weekday,
+// no year) and "Jun 28, 2026, 11:46 AM" (year, no weekday) — both the
+// weekday prefix and the year are optional here to cover either.
+const GMAIL_DATE_LINE =
+  /^((Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+)?\w+\s+\d{1,2},\s+(\d{4},\s+)?\d{1,2}:\d{2}\s*(AM|PM)$/i;
+
+/**
+ * Strips Gmail copy-paste chrome (see GMAIL_DATE_LINE's comment) out of a
+ * pasted thread before it reaches the model — deliberately applied inside
+ * parseReportText itself (not left to each caller, unlike
+ * extractFirstPickAnnotation's human-supplied annotation) since this is
+ * pure noise removal that's always safe, regardless of source.
+ */
+export function stripGmailChrome(rawText: string): string {
+  const lines = rawText.split("\n");
+  const kept: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trim();
+
+    if (/^inbox$/i.test(trimmed) || /^summarize this email$/i.test(trimmed)) continue;
+
+    const nextTrimmed = lines[i + 1]?.trim() ?? "";
+    if (trimmed.length > 0 && GMAIL_DATE_LINE.test(nextTrimmed)) {
+      i += 1; // also skip the date line
+      if (lines[i + 1]?.trim().toLowerCase().startsWith("to ")) i += 1; // and the recipients line, if present
+      continue;
+    }
+
+    kept.push(lines[i]!);
+  }
+
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // A real response has been observed to come back HTTP 200, finishReason
 // "STOP" (Gemini considers itself done), but with the JSON body truncated
 // anyway — confirmed via usageMetadata showing thousands of tokens spent on
@@ -32,7 +74,8 @@ export function extractFirstPickAnnotation(rawFileText: string): { firstPickRaw:
 const MAX_PARSE_ATTEMPTS = 2;
 
 export async function parseReportText(apiKey: string, threadText: string): Promise<RawExtraction> {
-  const prompt = buildExtractionPrompt(threadText);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const prompt = buildExtractionPrompt(stripGmailChrome(threadText), todayIso);
 
   let lastMalformedResponse = "";
   for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
@@ -82,23 +125,36 @@ export interface ResolvedReport {
  * path uses (resolvePlayerName / createProvisionalIdentity), never the LLM's
  * own judgment about who a name "really" is.
  *
- * Pick numbers, in priority order:
- * 1. Default (every game): the team listed first (home) is assumed to have
- *    picked first, alternating strict snake order (2*i+1 / 2*i+2) by each
- *    roster's own listed order — this is a confirmed league convention
- *    (first-listed player on each side is that team's captain, the rest of
- *    that side's list is already in the order they were drafted), not a
- *    guess. Overrides a `docs/data-contract.md` note from before this
- *    convention was confirmed with the league organizer.
+ * Pick numbers, in priority order. In every case, roster[0] of each side is
+ * that team's captain (see prompt.ts rule 10) — captains choose, they
+ * aren't chosen, so they always keep pickNumber: null and are never part of
+ * the numbered sequence at all; numbering starts at 1 with the first player
+ * actually drafted (confirmed 2026-07-16 — an earlier version of this
+ * reserved pick 1/2 for the two captains, which inflated every real pick's
+ * number and skewed avgDraftPosition for anyone who frequently captains).
+ * 1. Default — only when the report's roster listing is actually confirmed
+ *    draft order (`rosterOrderIsDraftOrder`: neither side's team label was
+ *    explicitly stated — see rule 5/10 in prompt.ts). A report that instead
+ *    names both sides up front (e.g. "Team Orange:"/"Team Blue:") is
+ *    confirmed (2026-07-17, the real June 27 game) to just be listing who
+ *    played, NOT draft order — every pick number stays null for that game
+ *    unless step 3 below applies. When it does apply: the team listed
+ *    first (home) is assumed to have picked first, alternating strict
+ *    snake order by each roster's own listed order (excluding roster[0]) —
+ *    a confirmed league convention, not a guess. Overrides a
+ *    `docs/data-contract.md` note from before this convention was
+ *    confirmed with the league organizer.
  * 2. `firstPickRaw` (optional, human-supplied — see docs/report-parsing.md):
  *    the name of whoever actually picked first, when a specific game
  *    contradicts the default. Must match one roster's first-listed player,
  *    else `firstPickWarning` is set and pick numbers are left null rather
- *    than guessed.
+ *    than guessed. Only meaningful when step 1 would otherwise apply.
  * 3. `extraction.pickOrderRaw` (optional, model-extracted — see prompt.ts
  *    rule 10): when a report narrates the real pick-by-pick order in prose,
- *    that ground truth overrides the default for every pick after the two
- *    captains (who keep pick 1/2 from the default/firstPickRaw step above).
+ *    that ground truth overrides the default for every pick (captains are
+ *    never in this list either — see prompt.ts rule 10) — applies
+ *    regardless of rosterOrderIsDraftOrder, since narrated prose is a real
+ *    stated fact, not an assumption about listing order.
  */
 export function resolveExtractionToGameRecord(
   extraction: RawExtraction,
@@ -135,17 +191,25 @@ export function resolveExtractionToGameRecord(
     return provisional.canonicalId;
   }
 
-  function resolveRoster(namesRaw: string[]): RosterSpot[] {
-    const spots: RosterSpot[] = [];
-    for (const raw of namesRaw) {
+  // Keeps a `null` placeholder for a flagged/unresolved name instead of just
+  // dropping it — critical for the pick-number math below, which needs each
+  // resolved spot's ORIGINAL position in the report's listing (gaps and
+  // all), not its position after excluded names are filtered out. An
+  // earlier version filtered before numbering, which silently shifted every
+  // subsequent teammate's pick number down by one per exclusion (confirmed
+  // 2026-07-17 on two real games where a flagged name wasn't the last one
+  // listed on its side).
+  function resolveRosterSlots(namesRaw: string[]): (RosterSpot | null)[] {
+    return namesRaw.map((raw) => {
       const canonicalId = resolve(raw);
-      if (canonicalId) spots.push({ canonicalId, pickNumber: null });
-    }
-    return spots;
+      return canonicalId ? { canonicalId, pickNumber: null } : null;
+    });
   }
 
-  const homeRoster = resolveRoster(extraction.homeRosterRaw ?? []);
-  const awayRoster = resolveRoster(extraction.awayRosterRaw ?? []);
+  const homeRosterSlots = resolveRosterSlots(extraction.homeRosterRaw ?? []);
+  const awayRosterSlots = resolveRosterSlots(extraction.awayRosterRaw ?? []);
+  const homeRoster = homeRosterSlots.filter((spot): spot is RosterSpot => spot !== null);
+  const awayRoster = awayRosterSlots.filter((spot): spot is RosterSpot => spot !== null);
 
   let firstPickWarning: string | null = null;
   let homePicksFirst = true; // default: the team listed first (home) picked first — see resolveExtractionToGameRecord's doc comment
@@ -163,28 +227,49 @@ export function resolveExtractionToGameRecord(
     }
   }
 
-  let pickOrderWarning: string | null = null;
-  if (!firstPickWarning) {
-    const firstRoster = homePicksFirst ? homeRoster : awayRoster;
-    const secondRoster = homePicksFirst ? awayRoster : homeRoster;
-    firstRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 1));
-    secondRoster.forEach((spot, i) => (spot.pickNumber = 2 * i + 2));
+  // A report that explicitly names both sides (e.g. "Team Orange:"/"Team
+  // Blue:") is just listing who's playing — confirmed 2026-07-17 this is
+  // NOT the same as the "N people" blank-line-separated convention, whose
+  // listed order IS real draft order. Only the latter format gets the
+  // default alternating assumption; a team-labeled game's pick numbers stay
+  // null unless a narrated pickOrderRaw (real, explicit prose) says otherwise.
+  const rosterOrderIsDraftOrder = !extraction.homeTeamLabelRaw && !extraction.awayTeamLabelRaw;
 
-    if (extraction.pickOrderRaw && extraction.pickOrderRaw.length > 0) {
-      const allSpots = [...homeRoster, ...awayRoster];
-      let nextPick = 3; // 1 and 2 already went to the two captains above
-      for (const turn of extraction.pickOrderRaw) {
-        const namesRaw = Array.isArray(turn) ? turn : [turn];
-        for (const raw of namesRaw) {
-          const canonicalId = resolve(raw);
-          const spot = canonicalId ? allSpots.find((s) => s.canonicalId === canonicalId) : undefined;
-          if (spot) {
-            spot.pickNumber = nextPick;
-          } else if (!pickOrderWarning) {
-            pickOrderWarning = `"${raw}" from the narrated pick order wasn't found on either roster — some pick numbers may be incomplete for this game.`;
-          }
-          nextPick += 1;
+  let pickOrderWarning: string | null = null;
+  if (!firstPickWarning && rosterOrderIsDraftOrder) {
+    const firstSlots = homePicksFirst ? homeRosterSlots : awayRosterSlots;
+    const secondSlots = homePicksFirst ? awayRosterSlots : homeRosterSlots;
+    // roster[0] of each side is that team's captain — never actually
+    // picked, so it's skipped here and keeps its default pickNumber: null
+    // rather than reserving 1/2 for it. Iterating the SLOTS array (not the
+    // filtered roster) so a gap left by an excluded name doesn't shift
+    // every later teammate's pick number down — see resolveRosterSlots.
+    firstSlots.slice(1).forEach((spot, i) => {
+      if (spot) spot.pickNumber = 2 * i + 1;
+    });
+    secondSlots.slice(1).forEach((spot, i) => {
+      if (spot) spot.pickNumber = 2 * i + 2;
+    });
+  }
+
+  // Independent of rosterOrderIsDraftOrder — a narrated pick order is real,
+  // explicit prose naming the actual sequence, not an assumption about
+  // roster listing order, so it applies (and overrides any default numbers
+  // above) regardless of which listing format this report used.
+  if (extraction.pickOrderRaw && extraction.pickOrderRaw.length > 0) {
+    const allSpots = [...homeRoster, ...awayRoster];
+    let nextPick = 1; // captains are never numbered at all, so the narrated sequence starts at 1
+    for (const turn of extraction.pickOrderRaw) {
+      const namesRaw = Array.isArray(turn) ? turn : [turn];
+      for (const raw of namesRaw) {
+        const canonicalId = resolve(raw);
+        const spot = canonicalId ? allSpots.find((s) => s.canonicalId === canonicalId) : undefined;
+        if (spot) {
+          spot.pickNumber = nextPick;
+        } else if (!pickOrderWarning) {
+          pickOrderWarning = `"${raw}" from the narrated pick order wasn't found on either roster — some pick numbers may be incomplete for this game.`;
         }
+        nextPick += 1;
       }
     }
   }

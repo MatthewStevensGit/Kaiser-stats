@@ -48,10 +48,53 @@
   --status-critical-bg: #ff6b5c;
   --status-critical-fg: #2c0a05;
   --status-scheduled: var(--accent);
+
+  /* Matchday status tiers — "scheduled" (light blue, before registration
+     opens) is distinct from the app's teal accent on purpose, so it reads
+     as its own neutral/informational state rather than a call to action. */
+  --status-info-bg: #5aa9e6;
+  --status-info-fg: #04203d;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Form controls should render in the site's own font, not whatever default
+   the browser applies to native controls — otherwise a <select>'s displayed
+   value visibly clashes with the label/text around it. */
+button,
+select,
+input,
+textarea {
+  font-family: inherit;
+}
+
+/* Site-wide hover affordance: every button and link "lights up" a little on
+   hover, even ones with no bespoke hover rule of their own elsewhere in this
+   file. Low-specificity tag selectors, so any more specific hover rule
+   (match-card's border highlight, pill-tab's color change, etc.) still wins
+   the cascade and simply layers this brightness lift on top rather than
+   being overridden by it. Disabled buttons are excluded on purpose —
+   something inert shouldn't look interactive. `select` is deliberately NOT
+   included here: a `filter` on a <select> breaks its native dropdown popup
+   in Chromium (confirmed live — the dropdown stopped opening at all once
+   this was added), so it gets a plain border-color hover instead, below. */
+button:not(:disabled),
+a {
+  transition: filter 0.12s ease;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.18);
+}
+
+a:hover {
+  filter: brightness(1.15);
+}
+
+select:hover {
+  border-color: var(--accent);
 }
 
 body {
@@ -63,7 +106,7 @@ body {
 }
 
 main {
-  padding: 1.25rem 1.25rem 5.5rem;
+  padding: 5.5rem 1.25rem 1.5rem;
   max-width: 640px;
   margin-inline: auto;
 }
@@ -127,6 +170,13 @@ main {
 .back-link {
   display: inline-block;
   margin-bottom: 0.75rem;
+  /* Now a <button> (see BackLink.tsx), not an <a> — reset button chrome so
+     it still looks like a plain link. */
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .subtitle {
@@ -162,7 +212,6 @@ main {
   text-decoration: none;
   font-size: 0.82rem;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -176,12 +225,118 @@ main {
   color: var(--pill-fg-active);
 }
 
+/* Position multi-select (Members table, onboarding, settings) — small toggle
+   pills rather than checkboxes, same "select multiple" pattern as any
+   multi-pick UI elsewhere, but compact enough to fit 9 options inline. */
+.member-positions-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-width: 220px;
+}
+
+.position-pill {
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.position-pill-active {
+  background: var(--pill-bg-active);
+  border-color: var(--pill-bg-active);
+  color: var(--pill-fg-active);
+}
+
+/* Two independent filters side by side on one row, each its own dropdown —
+   used where two separate PillTabs rows would otherwise stack (Table,
+   Other Stats). */
+.tab-select-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.tab-select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 /* Card — the standard container for a stats block */
 .card {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.1rem 1.1rem 1.3rem;
+}
+
+/* Club chat */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chat-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0.25rem 0.1rem;
+}
+
+.chat-message {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.5rem 0.75rem;
+  max-width: 85%;
+  align-self: flex-start;
+}
+
+.chat-message-own {
+  background: var(--pill-bg-active);
+  align-self: flex-end;
+}
+
+.chat-message-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.15rem;
+}
+
+.chat-message-sender {
+  font-weight: 700;
+}
+
+.chat-message-content {
+  margin: 0;
+  font-size: 0.92rem;
+  overflow-wrap: break-word;
+}
+
+.chat-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-form-input {
+  flex: 1;
 }
 
 /* Login form */
@@ -204,7 +359,10 @@ main {
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  /* 16px, not smaller — iOS Safari auto-zooms the whole page on focus for
+     any input under 16px, a jarring mobile-specific annoyance. */
+  font-size: 1rem;
+  transition: border-color 0.12s ease;
 }
 
 .login-form-input:focus-visible {
@@ -247,16 +405,6 @@ main {
   flex-direction: column;
   gap: 0.6rem;
   max-width: 640px;
-}
-
-.report-import-date-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.report-import-date-row input {
-  width: 4rem;
-  text-align: center;
 }
 
 .report-import-textarea {
@@ -379,6 +527,17 @@ th.num {
   white-space: nowrap;
 }
 
+.sortable-header {
+  display: inline-block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sortable-header:hover {
+  color: var(--accent);
+}
+
 .leaderboard-name {
   color: var(--text-primary);
   text-decoration: none;
@@ -389,6 +548,16 @@ th.num {
 .leaderboard-name:hover {
   color: var(--accent);
   text-decoration: underline;
+}
+
+/* Unbeaten-streak badge (Plus-Minus tab) — a plain inline emoji + count
+   right after the name, not a filled pill like the other badges here, so it
+   doesn't visually compete with LeagueTitleChip/GoldenBootChip. */
+.streak-fire {
+  margin-left: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .value-positive {
@@ -462,6 +631,26 @@ th.num {
   border-color: var(--accent);
 }
 
+/* MatchCard's own inner link (see its doc comment) — .match-card is now the
+   outermost element here, with the MVP link as a separate sibling, so the
+   hover/focus highlight is keyed off the card itself rather than an
+   ancestor link. */
+.match-card:hover,
+.match-card:focus-within {
+  border-color: var(--accent);
+}
+
+.match-card-inner-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.match-card-mvp-link {
+  display: inline-block;
+  text-decoration: none;
+}
+
 /* Matchday list card wrapper — hosts the hover-revealed admin cancel button
    as a sibling of the card link, not nested inside it (a <button> nested
    inside an <a> is invalid HTML and would double-fire click/navigate). */
@@ -472,7 +661,7 @@ th.num {
 .cancel-game-button {
   position: absolute;
   top: 0.6rem;
-  right: 0.6rem;
+  left: 0.6rem;
   width: 1.6rem;
   height: 1.6rem;
   border-radius: 999px;
@@ -489,6 +678,79 @@ th.num {
 .matchday-card-wrapper:hover .cancel-game-button,
 .matchday-card-wrapper:focus-within .cancel-game-button {
   opacity: 1;
+}
+
+/* Checked-in count badge — a sibling of the card link (see matchday-card-wrapper's
+   comment above), always visible (unlike the hover-revealed cancel button) since
+   it's the primary "how full is this game" signal, not an admin action. */
+.checkedin-toggle-corner {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 1;
+}
+
+/* Reset button chrome by default — the capacity-ring trigger (portal page)
+   wraps a rich SVG gauge and needs to stay visually plain; the corner-badge
+   trigger (list page) opts into the small pill look below instead. */
+.checkedin-toggle-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.checkedin-toggle-corner .checkedin-toggle-trigger {
+  width: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkedin-toggle-capacity {
+  text-align: center;
+}
+
+.checkedin-toggle-capacity .checkedin-names-list,
+.checkedin-toggle-capacity .checkedin-names-empty {
+  display: inline-block;
+  text-align: left;
+}
+
+.checkedin-names-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  max-height: 220px;
+  overflow-y: auto;
+  min-width: 9rem;
+}
+
+.checkedin-names-list li {
+  padding: 0.2rem 0;
+}
+
+.checkedin-names-empty {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 .match-card-top {
@@ -728,8 +990,27 @@ th.num {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 999px;
-  background: var(--status-scheduled);
   flex-shrink: 0;
+}
+
+.status-dot-scheduled {
+  background: var(--status-info-bg);
+}
+
+.status-dot-open {
+  background: var(--status-good-bg);
+}
+
+.status-dot-closing-soon {
+  background: var(--status-warning-bg);
+}
+
+.status-dot-filled {
+  background: var(--status-critical-bg);
+}
+
+.status-dot-closed {
+  background: var(--text-secondary);
 }
 
 /* Edit Game link — only rendered for admins; real enforcement is the
@@ -748,6 +1029,11 @@ th.num {
   letter-spacing: 0.02em;
   text-decoration: none;
   cursor: pointer;
+}
+
+.draft-undo-button {
+  display: block;
+  margin-bottom: 0.75rem;
 }
 
 /* Admin check-in editing */
@@ -784,6 +1070,25 @@ th.num {
   cursor: pointer;
 }
 
+/* Same shape as .checkin-edit-remove but the app's positive accent color —
+   for non-destructive row actions (e.g. Save) that shouldn't read as a
+   warning the way the red remove/cancel buttons do. */
+.checkin-edit-save {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.checkin-edit-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .add-player-picker {
   display: flex;
   flex-direction: column;
@@ -815,6 +1120,9 @@ th.num {
 }
 
 .add-player-picker-new {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
   background: none;
   border: 1px dashed var(--accent);
   color: var(--accent);
@@ -825,35 +1133,44 @@ th.num {
   cursor: pointer;
 }
 
-/* Capacity ring */
-.capacity-ring {
+.add-player-picker-new:disabled {
+  border-color: var(--border);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+/* Capacity gauge — semicircle speedometer style, replacing the old
+   full-circle tick-mark dial */
+.capacity-gauge {
   position: relative;
-  width: 220px;
-  height: 220px;
-  margin: 1.75rem auto 0.5rem;
+  width: 260px;
+  max-width: 100%;
+  margin: 1.75rem auto 0;
 }
 
-.capacity-ring-svg {
+.capacity-gauge-svg {
+  display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 
-.capacity-ring-center {
+.capacity-gauge-center {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0.1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
 }
 
-.capacity-ring-count {
+.capacity-gauge-count {
   font-size: 1.8rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.capacity-ring-spots-left {
+.capacity-gauge-spots-left {
   color: var(--accent);
   font-size: 0.8rem;
   font-weight: 700;
@@ -867,7 +1184,7 @@ th.num {
   color: var(--status-warning-bg);
   font-size: 0.85rem;
   font-weight: 600;
-  margin: 0;
+  margin: 0.5rem 0 0;
 }
 
 /* Registration status bar */
@@ -880,23 +1197,81 @@ th.num {
   text-align: center;
 }
 
+.registration-status-bar-scheduled {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
+}
+
 .registration-status-bar-open {
   background: var(--status-good-bg);
   color: var(--status-good-fg);
 }
 
-.registration-status-bar-closed {
+.registration-status-bar-closing-soon {
   background: var(--status-warning-bg);
   color: var(--status-warning-fg);
 }
 
-.registration-status-bar-not-open {
+.registration-status-bar-filled {
+  background: var(--status-critical-bg);
+  color: var(--status-critical-fg);
+}
+
+.registration-status-bar-closed {
   background: var(--surface-2);
   color: var(--text-secondary);
   border: 1px solid var(--border);
 }
 
 /* Cancelled-game banner on the check-in portal page */
+.self-checkin {
+  margin-top: 1.25rem;
+}
+
+.self-checkin-button {
+  display: block;
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  color: var(--surface-1);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+
+.self-checkin-button-cancel {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+/* Same row width/shape as .self-checkin-button, distinct neutral color so it
+   doesn't read as the same action as checking in. */
+.start-draft-button {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.start-draft-button-disabled {
+  color: var(--text-muted);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .game-cancelled-banner {
   background: var(--status-critical-bg);
   color: var(--status-critical-fg);
@@ -908,21 +1283,221 @@ th.num {
   margin-top: 1.5rem;
 }
 
-/* Bottom nav */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+/* Live snake draft */
+.draft-captain-row,
+.draft-coinflip-row,
+.draft-setup-actions {
   display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  background: var(--nav-bg);
-  border-top: 1px solid var(--border);
-  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.6rem 0 1rem;
 }
 
-.bottom-nav-item {
+.draft-captain-row select {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.draft-current-turn {
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 0.3rem;
+}
+
+.draft-shot-clock {
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 1rem;
+}
+
+.draft-shot-clock-expired {
+  color: var(--status-critical-bg);
+  animation: draft-clock-flash 1s infinite;
+}
+
+@keyframes draft-clock-flash {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.draft-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.draft-pick-button {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.draft-pick-recommended {
+  background: var(--status-good-bg);
+  color: var(--status-good-fg);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.draft-pick-name {
+  flex: 1;
+}
+
+.draft-pick-adr {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  /* Not nowrap — a low-sample warning like "(!only 1 game)" can make this
+     line too long to fit on one row, especially on a narrow screen. */
+  text-align: right;
+}
+
+/* At least one of Sat/Sun/Both was computed from fewer than
+   LOW_SAMPLE_GAME_THRESHOLD games — still a real number, just flagged so an
+   admin knows it's a small, noisy sample rather than a settled average. */
+.draft-pick-adr-low-sample {
+  color: var(--status-warning-bg);
+}
+
+.draft-pick-positions {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* A player whose only playable positions are already covered on the
+   drafting team — still fully pickable, just visually deprioritized so a
+   captain notices they've dropped out of the recommended ordering. */
+.draft-pick-button-surplus {
+  opacity: 0.6;
+}
+
+.draft-pick-surplus-note {
+  font-size: 0.68rem;
+  font-style: italic;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.draft-teams-so-far {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.draft-team-roster {
+  margin: 0;
+}
+
+/* DraftPoolPicker — replaces the old flat "every player, all at once"
+   checkbox list with a small current-pool list plus a scrollable, searchable
+   add list, both capped to a fixed height rather than growing the whole page. */
+.draft-pool-picker {
+  margin: 0.6rem 0 1rem;
+}
+
+.draft-pool-count {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.draft-pool-current-list,
+.draft-pool-add-list {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.draft-pool-current-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.draft-pool-current-item:last-child {
+  border-bottom: none;
+}
+
+.draft-pool-remove {
+  all: unset;
+  cursor: pointer;
+  color: var(--status-critical-bg);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.3rem;
+}
+
+.draft-pool-add-list button {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.draft-pool-add-list li:last-child button {
+  border-bottom: none;
+}
+
+.draft-pool-add-list button:hover {
+  background: var(--surface-2);
+}
+
+/* Top nav — fixed in place so it stays on screen while the page scrolls,
+   rather than scrolling away with the content underneath it. */
+.top-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--border);
+  padding: calc(0.75rem + env(safe-area-inset-top, 0px)) 1rem 0.75rem;
+}
+
+.top-nav-item {
   color: var(--nav-fg);
   text-decoration: none;
   font-size: 0.78rem;
@@ -931,10 +1506,73 @@ th.num {
   letter-spacing: 0.02em;
   white-space: nowrap;
   padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.bottom-nav-item-active {
+@media (hover: hover) {
+  .top-nav-item:hover {
+    color: var(--nav-fg-active);
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.top-nav-item-active {
   color: var(--nav-fg-active);
+}
+
+/* Profile tab — a top-nav item that opens a dropdown (Settings, Log
+   In/Out) instead of navigating directly; see ProfileMenu.tsx. */
+.profile-menu {
+  position: relative;
+}
+
+.profile-menu-trigger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.profile-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  min-width: 9rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.35rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.profile-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .profile-menu-item:hover {
+    background: var(--surface-1);
+  }
+}
+
+.profile-menu-item-danger {
+  color: var(--status-critical-bg);
 }
 
 /* Loading skeleton */
@@ -981,4 +1619,172 @@ th.num {
   .skeleton {
     animation: none;
   }
+}
+
+/* Guided app tour (driver.js, see TourGuide.tsx) — themed to match the app's
+   dark/teal look instead of the library's default light popover. Overlay
+   dimming/opacity is set via JS config (driver({overlayColor, overlayOpacity}));
+   everything below is the popover box itself, scoped via driver.js's own
+   `popoverClass` option so it never affects any other driver.js usage. */
+.driver-popover.kaiser-tour-popover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 1000000000;
+}
+
+.kaiser-tour-popover .driver-popover-title {
+  color: var(--text-primary);
+  font-size: 1.05rem;
+}
+
+.kaiser-tour-popover .driver-popover-description {
+  color: var(--text-secondary);
+}
+
+/* The button's actual text ("Skip Tour →", replacing driver.js's default "x") is
+   set directly on the real DOM node in TourGuide.tsx's onPopoverRender — this only
+   restyles it to fit that longer label instead of a tiny icon-sized box. */
+.kaiser-tour-popover .driver-popover-close-btn {
+  width: auto;
+  height: auto;
+  top: 8px;
+  right: 10px;
+  padding: 3px 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.kaiser-tour-popover .driver-popover-close-btn:hover,
+.kaiser-tour-popover .driver-popover-close-btn:focus {
+  color: var(--text-primary);
+}
+
+.kaiser-tour-popover .driver-popover-progress-text {
+  color: var(--text-muted);
+}
+
+.kaiser-tour-popover .driver-popover-footer-btn {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.kaiser-tour-popover .driver-popover-footer-btn:hover,
+.kaiser-tour-popover .driver-popover-footer-btn:focus {
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.kaiser-tour-popover .driver-popover-footer .driver-popover-btn-disabled {
+  opacity: 0.35;
+}
+
+.kaiser-tour-popover .driver-popover-arrow-side-left {
+  border-left-color: var(--surface-1);
+}
+
+.kaiser-tour-popover .driver-popover-arrow-side-right {
+  border-right-color: var(--surface-1);
+}
+
+.kaiser-tour-popover .driver-popover-arrow-side-top {
+  border-top-color: var(--surface-1);
+}
+
+.kaiser-tour-popover .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--surface-1);
+}
+
+/* Toast/snackbar notifications (see ToastProvider.tsx) — stacked bottom-center,
+   above everything else including the tour popover (z-index 1000000000). Reuses
+   the same --status-good/-warning/-critical/-info tokens the matchday status
+   dots already use, rather than a separate color palette. */
+.toast-stack {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000000001;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(420px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 0.9rem;
+  font-weight: 600;
+  pointer-events: auto;
+  animation: toast-slide-in 0.2s ease-out;
+}
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
+.toast-message {
+  flex: 1;
+}
+
+.toast-close {
+  all: unset;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.toast-close:hover,
+.toast-close:focus {
+  opacity: 1;
+}
+
+.toast-success {
+  background: var(--status-good-bg);
+  color: var(--status-good-fg);
+}
+
+.toast-error {
+  background: var(--status-critical-bg);
+  color: var(--status-critical-fg);
+}
+
+.toast-warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+}
+
+.toast-info {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
 }

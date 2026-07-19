@@ -17,6 +17,8 @@ export interface ScheduledGame {
   /** Resolved display value — the game's own override, or VENUE_BY_LEAGUE[league]. */
   venue: string;
   cancelled: boolean;
+  /** Admin override for this game's registration cutoff, or null to use the computed league default — see resolveRegistrationCutoffUtc. */
+  cutoffOverrideUtc: Date | null;
 }
 
 /** Result of a Matchday admin Server Action — never throws on an auth/validation failure. */

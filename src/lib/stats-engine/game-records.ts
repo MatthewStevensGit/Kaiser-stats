@@ -1,5 +1,29 @@
 import type { GameRecord, PlayerIdentity, PlayerSeasonStats } from "./types";
 
+export interface RecentFormStats {
+  canonicalId: string;
+  displayName: string;
+  /** See PlayerIdentity.rosterName's doc comment — same null-safe fallback via rosterDisplayName(). */
+  rosterName?: string | null;
+  /** How many of their actual last-`windowSize` games these totals cover — usually `windowSize`, fewer for a newer player. */
+  gamesPlayed: number;
+  goals: number;
+  assists: number;
+  mvpCount: number;
+  /** Same captain-excluded averaging as rollupGameRecords' avgDraftPosition, scoped to just this window's games. */
+  avgDraftPosition: number | null;
+}
+
+/** A player's pickNumber in one game, or null if they weren't a drafted pick in it (captain, or no known draft order — see rollupGameRecords' avgDraftPosition doc comment). */
+function findDraftPickNumber(game: GameRecord, canonicalId: string): number | null {
+  for (const roster of [game.homeRoster, game.awayRoster]) {
+    const index = roster.findIndex((spot) => spot.canonicalId === canonicalId);
+    if (index > 0) return roster[index]!.pickNumber;
+    if (index === 0) return null;
+  }
+  return null;
+}
+
 /** A game's outcome from one specific side's perspective. */
 export function resultForSide(
   homeScore: number,
@@ -9,6 +33,32 @@ export function resultForSide(
   if (homeScore === awayScore) return "draw";
   const winningSide = homeScore > awayScore ? "home" : "away";
   return side === winningSide ? "win" : "loss";
+}
+
+/**
+ * How many of a player's most recent games (across ALL report-imported
+ * games, not scoped to a selected year — a live streak keeps running across
+ * a year boundary) were NOT a loss, counting back from today until the first
+ * loss or the start of their history. Wins and ties both count as
+ * "unbeaten" — only a loss breaks the streak. This can only be computed from
+ * game_records (real per-game dates/scores); the historical spreadsheet
+ * backfill has no per-game granularity to draw a streak from, which is fine
+ * since a "current streak" is inherently about recent actual games.
+ */
+export function computeUnbeatenStreak(games: GameRecord[], canonicalId: string): number {
+  const ownGamesByDateDesc = games
+    .filter((g) => [...g.homeRoster, ...g.awayRoster].some((spot) => spot.canonicalId === canonicalId))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  let streak = 0;
+  for (const game of ownGamesByDateDesc) {
+    const side: "home" | "away" = game.homeRoster.some((spot) => spot.canonicalId === canonicalId)
+      ? "home"
+      : "away";
+    if (resultForSide(game.homeScore, game.awayScore, side) === "loss") break;
+    streak += 1;
+  }
+  return streak;
 }
 
 /**
@@ -42,6 +92,7 @@ export function rollupGameRecords(
     const created: PlayerSeasonStats = {
       canonicalId,
       displayName: player?.displayName ?? canonicalId,
+      rosterName: player?.rosterName ?? null,
       games: 0,
       wins: 0,
       losses: 0,
@@ -116,6 +167,64 @@ export function rollupGameRecords(
   }
 
   return Array.from(totals.values());
+}
+
+/**
+ * Each player's goals/MVPs across their own actual last `windowSize` games
+ * (not the last `windowSize` games of the league as a whole — a player who
+ * skipped a few weeks still gets THEIR most recent games, not a stale mix).
+ * Only ever includes players who appear in at least one of the given games.
+ */
+export function computeRecentForm(
+  games: GameRecord[],
+  knownPlayers: PlayerIdentity[],
+  windowSize = 5,
+): RecentFormStats[] {
+  const playersById = new Map(knownPlayers.map((p) => [p.canonicalId, p]));
+  const gamesByDateDesc = [...games].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  const recentGamesByPlayer = new Map<string, GameRecord[]>();
+  for (const game of gamesByDateDesc) {
+    const participantIds = new Set([
+      ...game.homeRoster.map((spot) => spot.canonicalId),
+      ...game.awayRoster.map((spot) => spot.canonicalId),
+    ]);
+    for (const canonicalId of participantIds) {
+      const recentGames = recentGamesByPlayer.get(canonicalId) ?? [];
+      if (recentGames.length < windowSize) {
+        recentGames.push(game);
+        recentGamesByPlayer.set(canonicalId, recentGames);
+      }
+    }
+  }
+
+  return Array.from(recentGamesByPlayer.entries()).map(([canonicalId, recentGames]) => {
+    let goals = 0;
+    let assists = 0;
+    let mvpCount = 0;
+    let draftPickSum = 0;
+    let draftPickCount = 0;
+    for (const game of recentGames) {
+      goals += game.goals.filter((goal) => goal.scorerCanonicalId === canonicalId).length;
+      assists += game.goals.filter((goal) => goal.assistCanonicalId === canonicalId).length;
+      if (game.mvpCanonicalId === canonicalId) mvpCount += 1;
+      const pickNumber = findDraftPickNumber(game, canonicalId);
+      if (pickNumber !== null) {
+        draftPickSum += pickNumber;
+        draftPickCount += 1;
+      }
+    }
+    return {
+      canonicalId,
+      displayName: playersById.get(canonicalId)?.displayName ?? canonicalId,
+      rosterName: playersById.get(canonicalId)?.rosterName ?? null,
+      gamesPlayed: recentGames.length,
+      goals,
+      assists,
+      mvpCount,
+      avgDraftPosition: draftPickCount > 0 ? draftPickSum / draftPickCount : null,
+    };
+  });
 }
 
 /**

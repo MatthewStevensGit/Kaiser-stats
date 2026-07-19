@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getCurrentUser } from "@/lib/auth/session";
-import { BottomNav } from "./_components/BottomNav";
+import { OnboardingGate } from "./_components/OnboardingGate";
+import { ToastProvider } from "./_components/ToastProvider";
+import { TopNav } from "./_components/TopNav";
+import { TourGuide } from "./_components/TourGuide";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,8 +18,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en">
       <body>
-        {children}
-        <BottomNav displayName={user?.displayName} />
+        <OnboardingGate needsOnboarding={!!user && !user.onboardingCompleted} />
+        <TopNav displayName={user?.displayName} isAdmin={user?.isAdmin} />
+        {user?.onboardingCompleted && <TourGuide isAdmin={user.isAdmin} />}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );

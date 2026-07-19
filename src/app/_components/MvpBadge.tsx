@@ -13,7 +13,7 @@ export function MvpBadge({ name }: { name?: string }) {
   return (
     <span className="mvp-badge" aria-label={name ? `MVP Pick: ${name}` : "MVP Pick"}>
       <span aria-hidden="true">🎖️</span>
-      {name ?? "MVP Pick"}
+      {name ?? "MVP"}
     </span>
   );
 }

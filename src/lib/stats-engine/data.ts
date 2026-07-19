@@ -1,4 +1,6 @@
 import { createServiceRoleClient } from "../supabase/client";
+import { fetchAllRows } from "../supabase/paginate";
+import type { Position } from "./positions";
 import type { GameRecord, League, PlayerIdentity, SeasonStandingRow } from "./types";
 
 /**
@@ -14,18 +16,22 @@ import type { GameRecord, League, PlayerIdentity, SeasonStandingRow } from "./ty
 interface PlayerRow {
   canonical_id: string;
   display_name: string;
+  roster_name: string | null;
+  positions: string[] | null;
   aliases: string[] | null;
   known_emails: string[] | null;
   leagues: string[] | null;
   status: PlayerIdentity["status"];
 }
 
-const PLAYER_COLUMNS = "canonical_id, display_name, aliases, known_emails, leagues, status";
+const PLAYER_COLUMNS = "canonical_id, display_name, roster_name, positions, aliases, known_emails, leagues, status";
 
 export function buildPlayerIdentities(rows: PlayerRow[]): PlayerIdentity[] {
   return rows.map((row) => ({
     canonicalId: row.canonical_id,
     displayName: row.display_name,
+    rosterName: row.roster_name,
+    positions: (row.positions ?? []) as Position[],
     aliases: row.aliases ?? [],
     knownEmails: row.known_emails ?? [],
     leagues: (row.leagues ?? []) as League[],
@@ -35,8 +41,8 @@ export function buildPlayerIdentities(rows: PlayerRow[]): PlayerIdentity[] {
 
 export async function listPlayers(): Promise<PlayerIdentity[]> {
   const client = createServiceRoleClient();
-  const { data } = await client.from("players").select(PLAYER_COLUMNS);
-  return buildPlayerIdentities((data ?? []) as PlayerRow[]);
+  const rows = await fetchAllRows<PlayerRow>(client, "players", PLAYER_COLUMNS);
+  return buildPlayerIdentities(rows);
 }
 
 interface SeasonStandingDbRow {
@@ -74,8 +80,8 @@ export function buildSeasonStandingRows(rows: SeasonStandingDbRow[]): SeasonStan
 
 export async function listSeasonStandingRows(): Promise<SeasonStandingRow[]> {
   const client = createServiceRoleClient();
-  const { data } = await client.from("season_standing_rows").select(SEASON_STANDING_ROW_COLUMNS);
-  return buildSeasonStandingRows((data ?? []) as SeasonStandingDbRow[]);
+  const rows = await fetchAllRows<SeasonStandingDbRow>(client, "season_standing_rows", SEASON_STANDING_ROW_COLUMNS);
+  return buildSeasonStandingRows(rows);
 }
 
 interface GameRecordDbRow {
@@ -121,16 +127,31 @@ const NOTABLE_MENTION_COLUMNS = "game_id, canonical_id, quote";
  * Inverse of buildPersistenceRows() in src/lib/report-parser/persist.ts —
  * regroups the four flat per-game tables back into one GameRecord per game.
  */
+/** Groups rows by game_id once, up front — O(rows), instead of every game re-scanning the entire array (see buildGameRecords). */
+function groupByGameId<T extends { game_id: string }>(rows: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const forGame = grouped.get(row.game_id) ?? [];
+    forGame.push(row);
+    grouped.set(row.game_id, forGame);
+  }
+  return grouped;
+}
+
 export function buildGameRecords(
   gameRows: GameRecordDbRow[],
   rosterRows: RosterSpotDbRow[],
   goalRows: GoalEventDbRow[],
   mentionRows: NotableMentionDbRow[],
 ): GameRecord[] {
+  const rosterByGame = groupByGameId(rosterRows);
+  const goalsByGame = groupByGameId(goalRows);
+  const mentionsByGame = groupByGameId(mentionRows);
+
   return gameRows.map((row) => {
-    const roster = rosterRows.filter((r) => r.game_id === row.game_id);
-    const goals = goalRows.filter((g) => g.game_id === row.game_id);
-    const mentions = mentionRows.filter((m) => m.game_id === row.game_id);
+    const roster = rosterByGame.get(row.game_id) ?? [];
+    const goals = goalsByGame.get(row.game_id) ?? [];
+    const mentions = mentionsByGame.get(row.game_id) ?? [];
 
     return {
       gameId: row.game_id,
@@ -173,16 +194,11 @@ export async function listSeasonStatsCutoffs(): Promise<Map<number, string>> {
 
 export async function listGameRecords(): Promise<GameRecord[]> {
   const client = createServiceRoleClient();
-  const [{ data: gameRows }, { data: rosterRows }, { data: goalRows }, { data: mentionRows }] = await Promise.all([
-    client.from("game_records").select(GAME_RECORD_COLUMNS).order("date"),
-    client.from("roster_spots").select(ROSTER_SPOT_COLUMNS).order("id"),
-    client.from("goal_events").select(GOAL_EVENT_COLUMNS).order("id"),
-    client.from("notable_mentions").select(NOTABLE_MENTION_COLUMNS).order("id"),
+  const [gameRows, rosterRows, goalRows, mentionRows] = await Promise.all([
+    fetchAllRows<GameRecordDbRow>(client, "game_records", GAME_RECORD_COLUMNS, "date"),
+    fetchAllRows<RosterSpotDbRow>(client, "roster_spots", ROSTER_SPOT_COLUMNS, "id"),
+    fetchAllRows<GoalEventDbRow>(client, "goal_events", GOAL_EVENT_COLUMNS, "id"),
+    fetchAllRows<NotableMentionDbRow>(client, "notable_mentions", NOTABLE_MENTION_COLUMNS, "id"),
   ]);
-  return buildGameRecords(
-    (gameRows ?? []) as GameRecordDbRow[],
-    (rosterRows ?? []) as RosterSpotDbRow[],
-    (goalRows ?? []) as GoalEventDbRow[],
-    (mentionRows ?? []) as NotableMentionDbRow[],
-  );
+  return buildGameRecords(gameRows, rosterRows, goalRows, mentionRows);
 }

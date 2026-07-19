@@ -1,12 +1,13 @@
 import { formatMatchDateLabel } from "@/lib/format";
+import type { MatchdayStatusTier } from "@/lib/matchday/registration-window";
 import type { ScheduledGame } from "@/lib/matchday/types";
 import { ScheduledGameStatusLine } from "./ScheduledGameStatusLine";
 
-export function ScheduledGameCard({ game }: { game: ScheduledGame }) {
+export function ScheduledGameCard({ game, tier }: { game: ScheduledGame; tier: MatchdayStatusTier }) {
   return (
-    <div className="match-card">
+    <div className="match-card" data-tour-id="scheduled-game-card">
       <span className="match-card-date">{formatMatchDateLabel(game.date)}</span>
-      <ScheduledGameStatusLine kickoffLabel={game.kickoffLabel} venue={game.venue} />
+      <ScheduledGameStatusLine tier={tier} kickoffLabel={game.kickoffLabel} venue={game.venue} />
     </div>
   );
 }

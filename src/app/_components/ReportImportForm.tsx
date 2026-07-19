@@ -1,36 +1,31 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { previewReportImport, saveReportImport, type ReportPreview } from "@/lib/report-parser/actions";
 import { formatScoreLine, getMultiGoalNickname } from "@/lib/format";
 import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
-import type { League } from "@/lib/stats-engine/types";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { AssistChip } from "./AssistChip";
 import { GoalChip } from "./GoalChip";
 
 export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanonicalId: string }) {
   const router = useRouter();
-  const [month, setMonth] = useState("");
-  const [day, setDay] = useState("");
-  const [year2, setYear2] = useState("");
-  const [league, setLeague] = useState<League>("saturday");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isParsing, startParsing] = useTransition();
   const [isSaving, startSaving] = useTransition();
-  const dayInputRef = useRef<HTMLInputElement>(null);
-  const yearInputRef = useRef<HTMLInputElement>(null);
 
-  /** Auto-advances to the next date field once this one has 2 digits — same feel as a native date picker. */
-  function handleDatePartChange(value: string, setValue: (v: string) => void, next: React.RefObject<HTMLInputElement | null> | null) {
-    setValue(value);
-    if (value.length >= 2) next?.current?.focus();
+  function identityFor(canonicalId: string): { displayName: string; rosterName?: string | null } {
+    return {
+      displayName: preview?.displayNames[canonicalId] ?? canonicalId,
+      rosterName: preview?.rosterNames[canonicalId] ?? null,
+    };
   }
 
   function nameFor(canonicalId: string): string {
-    return preview?.displayNames[canonicalId] ?? canonicalId;
+    return rosterDisplayName(identityFor(canonicalId));
   }
 
   /**
@@ -76,29 +71,25 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     setError(null);
     setPreview(null);
 
-    if (!/^\d{1,2}$/.test(month) || !/^\d{1,2}$/.test(day) || !/^\d{2}$/.test(year2)) {
-      setError("Enter a valid date (2-digit year).");
-      return;
-    }
-    const date = `20${year2}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-
     startParsing(async () => {
-      const result = await previewReportImport({
-        text,
-        date,
-        league,
-        // The default snake-order/team-listed-first-picks-first convention
-        // (see parse-report.ts's resolveExtractionToGameRecord) now covers
-        // the common case automatically — this manual override still exists
-        // server-side for the rare game where it's wrong, just not exposed
-        // in this form anymore.
-        firstPickRaw: null,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await previewReportImport({
+          text,
+          // The default snake-order/team-listed-first-picks-first convention
+          // (see parse-report.ts's resolveExtractionToGameRecord) now covers
+          // the common case automatically — this manual override still exists
+          // server-side for the rare game where it's wrong, just not exposed
+          // in this form anymore.
+          firstPickRaw: null,
+        });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setPreview(result.preview);
+      } catch {
+        setError("Something went wrong parsing that report — please try again.");
       }
-      setPreview(result.preview);
     });
   }
 
@@ -106,13 +97,17 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     if (!preview) return;
     setError(null);
     startSaving(async () => {
-      const result = await saveReportImport(preview, text);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await saveReportImport(preview, text);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        router.push("/matches");
+        router.refresh();
+      } catch {
+        setError("Something went wrong saving that report — please try again.");
       }
-      router.push("/matches");
-      router.refresh();
     });
   }
 
@@ -123,73 +118,17 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     <>
       {!preview && (
       <form onSubmit={handleParse} className="report-import-form">
-        <label htmlFor="report-month" className="login-form-label">
-          Date (MM / DD / YY)
-        </label>
-        <div className="report-import-date-row">
-          <input
-            id="report-month"
-            type="text"
-            inputMode="numeric"
-            maxLength={2}
-            placeholder="MM"
-            required
-            value={month}
-            onChange={(e) => handleDatePartChange(e.target.value, setMonth, dayInputRef)}
-            className="login-form-input"
-            disabled={isPending}
-          />
-          <input
-            ref={dayInputRef}
-            type="text"
-            inputMode="numeric"
-            maxLength={2}
-            placeholder="DD"
-            required
-            value={day}
-            onChange={(e) => handleDatePartChange(e.target.value, setDay, yearInputRef)}
-            className="login-form-input"
-            disabled={isPending}
-          />
-          <input
-            ref={yearInputRef}
-            type="text"
-            inputMode="numeric"
-            maxLength={2}
-            placeholder="YY"
-            required
-            value={year2}
-            onChange={(e) => handleDatePartChange(e.target.value, setYear2, null)}
-            className="login-form-input"
-            disabled={isPending}
-          />
-        </div>
-
-        <label htmlFor="report-league" className="login-form-label">
-          League
-        </label>
-        <select
-          id="report-league"
-          value={league}
-          onChange={(e) => setLeague(e.target.value as League)}
-          className="login-form-input"
-          disabled={isPending}
-        >
-          <option value="saturday">Saturday</option>
-          <option value="sunday">Sunday</option>
-        </select>
-
         <label htmlFor="report-text" className="login-form-label">
           Report text
         </label>
         <textarea
           id="report-text"
           required
-          placeholder="Paste the full report email thread, including replies, in order."
+          placeholder="Paste the full report email thread, including the original date/subject line and every reply, in order. The date and league are read from this text, not typed in separately."
           value={text}
           onChange={(e) => setText(e.target.value)}
           className="login-form-input report-import-textarea"
-          rows={12}
+          rows={16}
           disabled={isPending}
         />
 

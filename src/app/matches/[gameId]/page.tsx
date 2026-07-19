@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { formatMatchDateLabel, formatScoreLine, getMultiGoalNickname } from "@/lib/format";
 import { listGameRecords, listPlayers } from "@/lib/stats-engine/data";
 import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { AssistChip } from "../../_components/AssistChip";
+import { BackLink } from "../../_components/BackLink";
 import { GoalChip } from "../../_components/GoalChip";
 import { MvpBadge } from "../../_components/MvpBadge";
 
@@ -17,22 +19,30 @@ export default async function MatchDetailPage({
   const game = games.find((g) => g.gameId === gameId);
   if (!game) notFound();
 
-  const nameFor = (canonicalId: string) =>
-    players.find((p) => p.canonicalId === canonicalId)?.displayName ?? canonicalId;
+  const playerFor = (canonicalId: string) => players.find((p) => p.canonicalId === canonicalId);
+  const nameFor = (canonicalId: string) => {
+    const player = playerFor(canonicalId);
+    return player ? rosterDisplayName(player) : canonicalId;
+  };
   const mvpName = game.mvpCanonicalId ? nameFor(game.mvpCanonicalId) : undefined;
   const stats = summarizePlayerGameStats(game.goals);
 
   return (
     <main>
-      <a href="/matches" className="back-link">
-        ← Back to past matches
-      </a>
+      <BackLink fallbackHref="/matches" />
       <header className="player-header">
         <h1 className="screen-header">{formatMatchDateLabel(game.date)}</h1>
         <p className="player-summary-line">{formatScoreLine(game.homeScore, game.awayScore)}</p>
       </header>
 
-      {mvpName && <MvpBadge name={mvpName} />}
+      {mvpName && game.mvpCanonicalId && (
+        <a
+          href={`/players/${game.mvpCanonicalId}?year=${game.date.slice(0, 4)}#game-${game.gameId}`}
+          className="match-card-mvp-link"
+        >
+          <MvpBadge name={mvpName} />
+        </a>
+      )}
 
       <section className="card match-detail-section">
         <h2>Report</h2>

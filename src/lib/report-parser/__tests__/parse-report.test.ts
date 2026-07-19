@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { extractFirstPickAnnotation, parseReportText, resolveExtractionToGameRecord } from "../parse-report";
+import { extractFirstPickAnnotation, parseReportText, resolveExtractionToGameRecord, stripGmailChrome } from "../parse-report";
 import { callGemini } from "../gemini-client";
 import type { RawExtraction } from "../types";
 import type { PlayerIdentity } from "../../stats-engine/types";
@@ -42,7 +42,11 @@ describe("resolveExtractionToGameRecord", () => {
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
-    expect(result.gameRecord.homeRoster).toEqual([{ canonicalId: "p1", pickNumber: 1 }, { canonicalId: "p2", pickNumber: 3 }]);
+    // p1 is home's captain (roster[0]) -- never numbered; p2 is the first real pick.
+    expect(result.gameRecord.homeRoster).toEqual([
+      { canonicalId: "p1", pickNumber: null },
+      { canonicalId: "p2", pickNumber: 1 },
+    ]);
     expect(result.gameRecord.mvpCanonicalId).toBe("p1");
     expect(result.goalSumMismatch).toBe(false);
     expect(result.provisionedPlayers).toHaveLength(0);
@@ -70,6 +74,27 @@ describe("resolveExtractionToGameRecord", () => {
     const result = resolveExtractionToGameRecord(extraction, players, meta);
     expect(result.gameRecord.homeTeamLabel).toBe("Orange");
     expect(result.gameRecord.awayTeamLabel).toBe("Blue");
+  });
+
+  it("leaves every pick number null (not just captains') for a report that names both sides — that listing isn't confirmed draft order (real June 27 game)", () => {
+    const extraction: RawExtraction = {
+      date: "2026-06-27",
+      league: "saturday",
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka"],
+      awayRosterRaw: ["Cy Okafor", "Dana Petrov"],
+      homeTeamLabelRaw: "Orange",
+      awayTeamLabelRaw: "Blue",
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: null,
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, players, meta);
+    expect(result.gameRecord.homeRoster.every((s) => s.pickNumber === null)).toBe(true);
+    expect(result.gameRecord.awayRoster.every((s) => s.pickNumber === null)).toBe(true);
   });
 
   it("flags goal-sum mismatches instead of silently trusting the parse", () => {
@@ -140,12 +165,12 @@ describe("resolveExtractionToGameRecord", () => {
     expect(result.flaggedNames[0]?.raw).toBe("Gera");
   });
 
-  it("defaults to alternating pick numbers for every game, even with no annotation at all", () => {
+  it("defaults to alternating pick numbers for every game, even with no annotation at all — captains never numbered", () => {
     const extraction: RawExtraction = {
       date: "2026-07-05",
       league: "sunday",
-      homeRosterRaw: ["Ari Fox"],
-      awayRosterRaw: ["Bex Tanaka"],
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka"],
+      awayRosterRaw: ["Cy Okafor", "Dana Petrov"],
       homeTeamLabelRaw: null,
       awayTeamLabelRaw: null,
       homeScore: 0,
@@ -158,20 +183,35 @@ describe("resolveExtractionToGameRecord", () => {
 
     // Team listed first (home) is assumed to have picked first — a
     // confirmed league convention, not a guess (see parse-report.ts's
-    // resolveExtractionToGameRecord doc comment).
+    // resolveExtractionToGameRecord doc comment). Ari Fox/Cy Okafor
+    // (roster[0] of each side) are captains — never numbered at all.
     const result = resolveExtractionToGameRecord(extraction, players, meta);
     expect(result.firstPickWarning).toBeNull();
     expect(result.pickOrderWarning).toBeNull();
-    expect(result.gameRecord.homeRoster[0]?.pickNumber).toBe(1);
-    expect(result.gameRecord.awayRoster[0]?.pickNumber).toBe(2);
+    expect(result.gameRecord.homeRoster).toEqual([
+      { canonicalId: "p1", pickNumber: null },
+      { canonicalId: "p2", pickNumber: 1 },
+    ]);
+    expect(result.gameRecord.awayRoster).toEqual([
+      { canonicalId: "p3", pickNumber: null },
+      { canonicalId: "auto-dana-petrov", pickNumber: 2 },
+    ]);
   });
 
-  it("computes real pick numbers for a game with a confirmed first-pick annotation, overriding the default", () => {
+  it("keeps a flagged name's gap in the pick-number sequence instead of shifting everyone after it (real bug, found 2026-07-17)", () => {
+    const flaggedPlayers: PlayerIdentity[] = [
+      ...players,
+      { canonicalId: "p4", displayName: "Gena", aliases: [], knownEmails: [], leagues: ["sunday"], status: "regular" },
+    ];
     const extraction: RawExtraction = {
       date: "2026-07-05",
       league: "sunday",
-      homeRosterRaw: ["Bex Tanaka", "Cy Okafor"],
-      awayRosterRaw: ["Ari Fox"],
+      // Ari Fox is captain (never numbered). "Gera" is one edit from the
+      // existing "Gena" — flagged, excluded entirely. Dana Petrov is listed
+      // AFTER the flagged name — this is exactly the case that used to
+      // silently shift her pick number down by one.
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka", "Gera", "Dana Petrov"],
+      awayRosterRaw: [],
       homeTeamLabelRaw: null,
       awayTeamLabelRaw: null,
       homeScore: 0,
@@ -182,13 +222,46 @@ describe("resolveExtractionToGameRecord", () => {
       pickOrderRaw: null,
     };
 
-    // Away's first-listed player ("Ari Fox") actually picked first — contradicts the default.
+    const result = resolveExtractionToGameRecord(extraction, flaggedPlayers, meta);
+    expect(result.flaggedNames).toHaveLength(1);
+    expect(result.flaggedNames[0]?.raw).toBe("Gera");
+    // Bex Tanaka keeps pick 1 (unaffected — listed before the gap). Dana
+    // Petrov must get pick 5 (her real original position, 3rd non-captain
+    // slot: 2*2+1), NOT pick 3 (what she'd get if the gap were collapsed).
+    expect(result.gameRecord.homeRoster).toEqual([
+      { canonicalId: "p1", pickNumber: null },
+      { canonicalId: "p2", pickNumber: 1 },
+      { canonicalId: "auto-dana-petrov", pickNumber: 5 },
+    ]);
+  });
+
+  it("computes real pick numbers for a game with a confirmed first-pick annotation, overriding the default", () => {
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      homeRosterRaw: ["Bex Tanaka", "Cy Okafor"],
+      awayRosterRaw: ["Ari Fox", "Dana Petrov"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: null,
+    };
+
+    // Away's captain ("Ari Fox") is confirmed to have picked first — contradicts the default
+    // (home listed first). Ari Fox/Bex Tanaka are still captains — never numbered.
     const result = resolveExtractionToGameRecord(extraction, players, meta, "Ari Fox");
     expect(result.firstPickWarning).toBeNull();
-    expect(result.gameRecord.awayRoster).toEqual([{ canonicalId: "p1", pickNumber: 1 }]);
+    expect(result.gameRecord.awayRoster).toEqual([
+      { canonicalId: "p1", pickNumber: null },
+      { canonicalId: "auto-dana-petrov", pickNumber: 1 },
+    ]);
     expect(result.gameRecord.homeRoster).toEqual([
-      { canonicalId: "p2", pickNumber: 2 },
-      { canonicalId: "p3", pickNumber: 4 },
+      { canonicalId: "p2", pickNumber: null },
+      { canonicalId: "p3", pickNumber: 2 },
     ]);
   });
 
@@ -238,17 +311,19 @@ describe("resolveExtractionToGameRecord", () => {
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
     expect(result.pickOrderWarning).toBeNull();
+    // Vadim/Alik are captains (roster[0]) — never numbered at all. Real
+    // picks start at 1, in the narrated order (Emre/Matthew tied at 4/5).
     expect(result.gameRecord.homeRoster).toEqual([
-      { canonicalId: "auto-vadim", pickNumber: 1 },
-      { canonicalId: "auto-nick-brazil", pickNumber: 3 },
-      { canonicalId: "auto-josh", pickNumber: 5 },
-      { canonicalId: "auto-oleg", pickNumber: 8 },
+      { canonicalId: "auto-vadim", pickNumber: null },
+      { canonicalId: "auto-nick-brazil", pickNumber: 1 },
+      { canonicalId: "auto-josh", pickNumber: 3 },
+      { canonicalId: "auto-oleg", pickNumber: 6 },
     ]);
     expect(result.gameRecord.awayRoster).toEqual([
-      { canonicalId: "auto-alik", pickNumber: 2 },
-      { canonicalId: "auto-alan", pickNumber: 4 },
-      { canonicalId: "auto-emre", pickNumber: 6 },
-      { canonicalId: "auto-matthew", pickNumber: 7 },
+      { canonicalId: "auto-alik", pickNumber: null },
+      { canonicalId: "auto-alan", pickNumber: 2 },
+      { canonicalId: "auto-emre", pickNumber: 4 },
+      { canonicalId: "auto-matthew", pickNumber: 5 },
     ]);
   });
 
@@ -270,7 +345,8 @@ describe("resolveExtractionToGameRecord", () => {
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
     expect(result.pickOrderWarning).toContain("Someone Else");
-    expect(result.gameRecord.homeRoster.find((s) => s.canonicalId === "p2")?.pickNumber).toBe(4);
+    // "Someone Else" (nextPick 1) fails to resolve; "Bex Tanaka" gets nextPick 2.
+    expect(result.gameRecord.homeRoster.find((s) => s.canonicalId === "p2")?.pickNumber).toBe(2);
   });
 });
 
@@ -317,5 +393,55 @@ describe("extractFirstPickAnnotation", () => {
     const { firstPickRaw, threadText } = extractFirstPickAnnotation(raw);
     expect(firstPickRaw).toBeNull();
     expect(threadText).toBe(raw);
+  });
+});
+
+describe("stripGmailChrome", () => {
+  it("strips Inbox/Summarize/sender-date-recipients chrome, keeps the subject line (real pasted example)", () => {
+    const raw = [
+      "Sunday, june 14",
+      "Inbox",
+      "Summarize this email",
+      "",
+      "Vadim Palmer",
+      "Sun, Jun 14, 1:22 PM",
+      "to Eduard, Muravchik, idolg, kbarona, Mihail, ruscharge, evreychik1, quanmng, avolkin67, Isaac, Jonathan, Boris, nos01, Oleg, bryanfrid, me, matthew.rakov, levinmik, stolyarmarc18, dsherlis, kirill011594, emre.kapuzov94, lazzturkkemran49, Bryan, polarbear1850",
+      "",
+      "20 people",
+      "",
+      "Sandrik, Alan, Lesha, Denis, Boris",
+    ].join("\n");
+
+    const cleaned = stripGmailChrome(raw);
+    expect(cleaned).toContain("Sunday, june 14");
+    expect(cleaned).toContain("20 people");
+    expect(cleaned).toContain("Sandrik, Alan, Lesha, Denis, Boris");
+    expect(cleaned).not.toContain("Inbox");
+    expect(cleaned).not.toContain("Summarize this email");
+    expect(cleaned).not.toContain("Vadim Palmer");
+    expect(cleaned).not.toContain("1:22 PM");
+    expect(cleaned).not.toContain("to Eduard");
+  });
+
+  it("handles a date line with a weekday prefix and no year", () => {
+    const raw = ["Alan Cho", "Sat, Jul 11, 7:45 AM", "to Someone, Else", "", "Report body here."].join("\n");
+    expect(stripGmailChrome(raw)).toBe("Report body here.");
+  });
+
+  it("handles a date line with a year and no weekday prefix (real variant, e.g. June 28's report)", () => {
+    const raw = ["Vadim Palmer", "Jun 28, 2026, 11:46 AM", "to Eduard, Muravchik", "", "Report body here."].join("\n");
+    expect(stripGmailChrome(raw)).toBe("Report body here.");
+  });
+
+  it("leaves plain report text with no Gmail chrome completely unchanged in substance", () => {
+    const raw = "Vadim, 2026-06-27:\n\n18 people\n\nTeam Orange: Isaac, Slava";
+    expect(stripGmailChrome(raw)).toBe(raw);
+  });
+
+  it("doesn't mistake the subject line itself for a Gmail date line", () => {
+    // "Sunday, june 14" starts with "Sun" but isn't followed by a comma
+    // immediately after the day abbreviation — must not be stripped.
+    const cleaned = stripGmailChrome("Sunday, june 14\nSome report content.");
+    expect(cleaned).toContain("Sunday, june 14");
   });
 });

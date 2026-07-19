@@ -17,9 +17,6 @@ export default function RulesPage() {
   return (
     <main>
       <header className="page-header">
-        <a href="/" className="back-link">
-          ← Back to stats
-        </a>
         <h1>Kaiser Rulebook</h1>
         <p className="subtitle">
           How games are organized and how the stats on this site get computed. Where we
@@ -50,10 +47,11 @@ export default function RulesPage() {
             <div>
               <strong>Assists</strong>
               <p className="note">
-                Tracked as their own counting stat, but never used in MVP or the power
-                ranking — they only get mentioned when the report happens to narrate the
-                buildup, so using them in a ranking would penalize good play that just
-                didn&apos;t get a sentence that week.
+                Tracked as their own counting stat, and counted equally alongside goals when
+                deciding MVP — when Vadim&apos;s report credits an assist, that&apos;s his
+                own judgment of a real contribution, not noise. Still never used in the power
+                ranking, though: coverage is too sparse and inconsistent (a report has to
+                specifically narrate the buildup) to use as a fair input there.
               </p>
             </div>
           </li>
@@ -64,10 +62,12 @@ export default function RulesPage() {
             <div>
               <strong>MVP</strong>
               <p className="note">
-                Computed by the app from the report&apos;s narrative (goals plus
-                standout-performance language) — presented as the app&apos;s own derived
-                call, never as a fact Vadim stated. Other players&apos; MVP opinions
-                posted in reply threads are not used as a source.
+                Computed by the app from goals plus assists combined — presented as the
+                app&apos;s own derived call, never as a fact Vadim stated. Ties are broken by
+                the winning team, then by whoever the report&apos;s own narrative
+                specifically calls out; a game with no goals or assists at all falls back to
+                that narrative call alone. Other players&apos; MVP opinions posted in reply
+                threads are not used as a source.
               </p>
             </div>
           </li>
@@ -87,22 +87,6 @@ export default function RulesPage() {
               </p>
             </div>
           </li>
-          <li>
-            <span className="icon" aria-hidden="true">
-              💬
-            </span>
-            <div>
-              <strong>Notable mentions</strong>
-              <p className="note">
-                Verbatim report-narrative snippets naming a player (e.g. a standout
-                zero-goal performance), shown as qualitative context next to the power
-                ranking — never scored or folded into MVP or the ranking itself. Same
-                reasoning as assists: coverage is too sparse and inconsistent (a mention
-                only exists if a report happens to narrate that moment) to use as a fair
-                ranking input.
-              </p>
-            </div>
-          </li>
         </ul>
       </section>
 
@@ -110,9 +94,8 @@ export default function RulesPage() {
         <h2>How a game day works</h2>
         <ul>
           <li>
-            Two leagues, run separately: Saturday (cap 22 regulars) and Sunday (cap 24
-            regulars), plus occasional Friday/Monday and holiday games that roll into the
-            Merged view.
+            Two leagues, run separately, both capped at 24 regulars, plus occasional
+            Friday/Monday and holiday games that roll into the Merged view.
           </li>
           <li>
             Two captains are picked fresh each week. A coin-toss/choice step decides who
@@ -172,16 +155,20 @@ export default function RulesPage() {
         </p>
         <ul>
           <li>Goals: Ari Fox +2, Bex Tanaka +1 — sums to 3, matches the reported score.</li>
-          <li>Assists: Cy Okafor +1 — a standalone stat, doesn&apos;t affect MVP or ranking.</li>
           <li>
-            MVP: decided by the app from the report&apos;s language, not just the goal
-            count — a zero-goal standout performance can still win it.
+            Assists: Cy Okafor +1 — counts toward MVP (combined with goals), but never
+            toward the power ranking.
+          </li>
+          <li>
+            MVP: goals plus assists combined — Ari Fox&apos;s 2 goals beats Bex Tanaka&apos;s
+            and Cy Okafor&apos;s 1 apiece, so Ari Fox wins it here. A zero-goal, zero-assist
+            standout performance can still win MVP from the report&apos;s narrative alone.
           </li>
         </ul>
       </section>
 
       <section className="card">
-        <h2>On-field game rules</h2>
+        <h2>Free kick rules</h2>
         <p className="note">
           From Vadim&apos;s &quot;Rule clarifications&quot; email, verbatim — including
           his own terms (e.g. &quot;pervaja&quot;), not rephrased.

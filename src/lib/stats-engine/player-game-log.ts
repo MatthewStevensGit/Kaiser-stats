@@ -11,6 +11,8 @@ export interface PlayerGameLogEntry {
   result: "win" | "draw" | "loss";
   /** This player's own goals in this specific game. */
   goals: number;
+  /** This player's own assists in this specific game. */
+  assists: number;
   /** Whether this player was the app's determined MVP for this specific game. */
   isMvp: boolean;
 }
@@ -42,6 +44,7 @@ export function getPlayerGameLog(canonicalId: string, games: GameRecord[]): Play
       awayScore: game.awayScore,
       result: resultForSide(game.homeScore, game.awayScore, side),
       goals: game.goals.filter((g) => g.scorerCanonicalId === canonicalId).length,
+      assists: game.goals.filter((g) => g.assistCanonicalId === canonicalId).length,
       isMvp: game.mvpCanonicalId === canonicalId,
     });
   }

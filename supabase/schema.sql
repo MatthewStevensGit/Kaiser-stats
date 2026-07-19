@@ -284,3 +284,113 @@ create table if not exists season_stats_cutoff (
 );
 
 alter table season_stats_cutoff enable row level security;
+
+-- Migration (2026-07-16): club chat. Same RLS-with-no-public-policies
+-- posture as every other table in this app -- reads and writes both go
+-- through the service-role client (src/lib/chat/data.ts, src/lib/chat/actions.ts),
+-- gated by requiring a logged-in session server-side, never a public policy.
+-- No Realtime wiring (that would need a public/authenticated SELECT policy for
+-- the browser client to receive postgres_changes events) -- the chat page
+-- polls (client-side refresh interval) instead, matching this app's existing
+-- "no public policies, ever" rule rather than carving out an exception.
+create table if not exists chat_messages (
+  id bigint generated always as identity primary key,
+  sender_canonical_id text not null references players (canonical_id),
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table chat_messages enable row level security;
+create index if not exists chat_messages_created_at_idx on chat_messages (created_at);
+
+-- Migration (2026-07-17): registration reminder emails. DRY RUN ONLY right
+-- now (see src/lib/matchday/reminders.ts's SENDING_ENABLED constant) --
+-- explicit project decision not to email real people yet (still in the demo
+-- phase). This table's unique(game_id, email_type) is what makes the
+-- send-reminders cron idempotent: once a row exists for a game+type, it's
+-- never sent (or dry-run-logged) again, no matter how many times the cron
+-- re-checks that same still-open window.
+create table if not exists reminder_email_log (
+  id bigint generated always as identity primary key,
+  game_id text not null references scheduled_games (game_id),
+  email_type text not null check (email_type in ('registration_open', 'closing_soon')),
+  recipient_count integer not null,
+  dry_run boolean not null default true,
+  sent_at timestamptz not null default now(),
+  unique (game_id, email_type)
+);
+
+alter table reminder_email_log enable row level security;
+
+-- Migration (2026-07-17): live snake draft sessions. Multiple draft_sessions rows can
+-- exist per game_id (a "redo" when the roster changes after an earlier draft) — the app
+-- always reads/writes against the most recent one by created_at, no explicit
+-- supersede/cancel flag needed. No new RLS policy — same service-role-only access as
+-- every other table here.
+create table if not exists draft_sessions (
+  id bigint generated always as identity primary key,
+  game_id text not null references scheduled_games (game_id),
+  league text not null,
+  status text not null default 'setup', -- 'setup' | 'in_progress' | 'completed'
+  home_captain_canonical_id text references players (canonical_id),
+  away_captain_canonical_id text references players (canonical_id),
+  first_pick_side text, -- 'home' | 'away', set once the coin flip is recorded
+  pool_canonical_ids text[] not null default '{}', -- draftable pool, captains excluded
+  turn_sizes int[], -- admin-overridable pick-sequence; null until confirmed at start
+  created_by text not null references players (canonical_id),
+  created_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+create index if not exists draft_sessions_game_idx on draft_sessions (game_id);
+
+create table if not exists draft_picks (
+  id bigint generated always as identity primary key,
+  draft_session_id bigint not null references draft_sessions (id) on delete cascade,
+  pick_number int not null,
+  side text not null, -- 'home' | 'away'
+  canonical_id text not null references players (canonical_id),
+  picked_at timestamptz not null default now(),
+  unique (draft_session_id, pick_number)
+);
+
+alter table draft_sessions enable row level security;
+alter table draft_picks enable row level security;
+
+-- Migration (2026-07-19): roster-name onboarding. `roster_name` is the player's real
+-- name as used in game reports (how a live-draft captain would recognize them) —
+-- distinct from `display_name`, which is a personal app-UI preference a user can keep
+-- editing in Settings. `roster_name` is only ever settable once by the user themselves
+-- (at first-login onboarding, see completeOnboarding() in src/lib/auth/actions.ts);
+-- afterward only an admin can correct it, via the Settings > Identities page.
+-- `onboarding_completed_at` null means the onboarding gate applies; the backfill below
+-- grandfathers in everyone who has already logged in before this migration, since
+-- onboarding is a first-login gate going forward, not retroactive for existing members.
+alter table players add column if not exists roster_name text;
+alter table players add column if not exists onboarding_completed_at timestamptz;
+
+update players set onboarding_completed_at = now()
+  where auth_user_id is not null and onboarding_completed_at is null;
+
+-- Migration (2026-07-19): per-game registration-cutoff override. Registration
+-- close time is normally computed purely from fixed per-league constants (see
+-- REGISTRATION_CUTOFF_BY_LEAGUE in src/lib/matchday/constants.ts) — this column
+-- lets an admin override that computed default for one specific game (e.g. a
+-- one-off game on an irregular day, or a schedule change), via the Edit Game
+-- page. Null (the default) means "use the computed league default," exactly
+-- today's existing behavior — see resolveRegistrationCutoffUtc() in
+-- src/lib/matchday/registration-window.ts.
+alter table scheduled_games add column if not exists registration_cutoff_override timestamptz;
+
+-- Migration (2026-07-19): playable positions. Free-text array of the 9 basic
+-- codes in src/lib/stats-engine/positions.ts (GK/LB/CB/RB/CM/CAM/LW/RW/ST) — not a
+-- SQL check constraint, since it's validated in TypeScript (isPosition()) the same
+-- way every other array column here (aliases, known_emails, leagues) is. Settable by
+-- the member themselves at onboarding, or by an admin on their behalf via
+-- Settings > Members (setMemberPositions() in src/lib/auth/actions.ts) — unlike
+-- roster_name, a member can keep changing their own positions later too, via
+-- Settings' plain SettingsForm, since this is a preference rather than an
+-- identity-integrity concern. Empty array (the default) means "unknown/not set" —
+-- the live draft's positional-need logic (position-need.ts) never penalizes that,
+-- it only deprioritizes a player once every position they've actually listed is
+-- already filled on the drafting team.
+alter table players add column if not exists positions text[] not null default '{}';

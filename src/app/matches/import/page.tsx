@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/session";
+import { BackLink } from "../../_components/BackLink";
 import { ReportImportForm } from "../../_components/ReportImportForm";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +9,7 @@ export default async function ImportReportPage() {
 
   return (
     <main>
-      <a href="/matches" className="back-link">
-        ← Back to past matches
-      </a>
+      <BackLink fallbackHref="/matches" />
       <header className="screen-header-row">
         <h1 className="screen-header">Import Match Report</h1>
       </header>

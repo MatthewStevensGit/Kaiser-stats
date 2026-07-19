@@ -1,0 +1,20 @@
+name: Send registration reminders
+
+# Vercel's Hobby plan only allows once-per-day native Cron schedules — too
+# coarse for "1 hour before close" reminders — so this workflow triggers the
+# existing route (src/app/api/matchday/send-reminders/route.ts) on GitHub's
+# own free scheduler instead. Requires a repo secret CRON_SECRET matching the
+# CRON_SECRET env var set in Vercel.
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call send-reminders
+        run: |
+          curl -sf -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://kaiser-stats.vercel.app/api/matchday/send-reminders

@@ -3,13 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { checkInExistingPlayer, checkInNewPlayer } from "@/lib/matchday/actions";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 
 export function AddPlayerPicker({
   gameId,
   roster,
 }: {
   gameId: string;
-  roster: { canonicalId: string; displayName: string }[];
+  roster: { canonicalId: string; displayName: string; rosterName?: string | null }[];
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState("");
@@ -17,32 +18,40 @@ export function AddPlayerPicker({
   const [isPending, startTransition] = useTransition();
 
   const filtered = filter.trim()
-    ? roster.filter((p) => p.displayName.toLowerCase().includes(filter.trim().toLowerCase()))
+    ? roster.filter((p) => rosterDisplayName(p).toLowerCase().includes(filter.trim().toLowerCase()))
     : roster;
 
   function addExisting(canonicalId: string) {
     setError(null);
     startTransition(async () => {
-      const result = await checkInExistingPlayer(gameId, canonicalId);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await checkInExistingPlayer(gameId, canonicalId);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setFilter("");
+        router.refresh();
+      } catch {
+        setError("Something went wrong — please try again.");
       }
-      setFilter("");
-      router.refresh();
     });
   }
 
   function addNew() {
     setError(null);
     startTransition(async () => {
-      const result = await checkInNewPlayer(gameId, filter);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await checkInNewPlayer(gameId, filter);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setFilter("");
+        router.refresh();
+      } catch {
+        setError("Something went wrong — please try again.");
       }
-      setFilter("");
-      router.refresh();
     });
   }
 
@@ -61,16 +70,19 @@ export function AddPlayerPicker({
         {filtered.map((p) => (
           <li key={p.canonicalId}>
             <button type="button" onClick={() => addExisting(p.canonicalId)} disabled={isPending}>
-              {p.displayName}
+              {rosterDisplayName(p)}
             </button>
           </li>
         ))}
       </ul>
-      {filter.trim() && (
-        <button type="button" className="add-player-picker-new" onClick={addNew} disabled={isPending}>
-          + Add &ldquo;{filter.trim()}&rdquo; as a new player
-        </button>
-      )}
+      <button
+        type="button"
+        className="add-player-picker-new"
+        onClick={addNew}
+        disabled={isPending || !filter.trim()}
+      >
+        {filter.trim() ? <>+ Create Player: &ldquo;{filter.trim()}&rdquo;</> : "+ Create Player"}
+      </button>
     </div>
   );
 }

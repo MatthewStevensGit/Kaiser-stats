@@ -1,6 +1,7 @@
 import { KICKOFF_LABEL_BY_LEAGUE, VENUE_BY_LEAGUE } from "./constants";
 import { addDaysToIsoDate, getTodayIsoInEastern } from "./registration-window";
 import { createServiceRoleClient } from "../supabase/client";
+import { isUnresolvedLoginStub } from "../stats-engine/identity";
 import type { ScheduledGame, ScheduledLeague } from "./types";
 
 const LIST_HORIZON_DAYS = 7;
@@ -12,6 +13,7 @@ interface ScheduledGameRow {
   kickoff_label: string | null;
   venue: string | null;
   cancelled_at: string | null;
+  registration_cutoff_override: string | null;
 }
 
 interface CheckinRow {
@@ -19,7 +21,8 @@ interface CheckinRow {
   canonical_id: string;
 }
 
-const SCHEDULED_GAME_COLUMNS = "game_id, date, league, kickoff_label, venue, cancelled_at";
+const SCHEDULED_GAME_COLUMNS =
+  "game_id, date, league, kickoff_label, venue, cancelled_at, registration_cutoff_override";
 
 /**
  * Groups scheduled-game rows with their active (non-removed) check-ins, and
@@ -46,6 +49,7 @@ export function buildScheduledGames(
     kickoffLabel: g.kickoff_label ?? KICKOFF_LABEL_BY_LEAGUE[g.league],
     venue: g.venue ?? VENUE_BY_LEAGUE[g.league],
     cancelled: g.cancelled_at !== null,
+    cutoffOverrideUtc: g.registration_cutoff_override ? new Date(g.registration_cutoff_override) : null,
   }));
 }
 
@@ -106,6 +110,7 @@ export async function getScheduledGameById(gameId: string): Promise<ScheduledGam
 export interface CheckinDetail {
   canonicalId: string;
   displayName: string;
+  rosterName: string | null;
   checkedInAt: string;
   checkedInByDisplayName: string;
 }
@@ -134,32 +139,64 @@ export async function getGameCheckinDetails(gameId: string): Promise<CheckinDeta
   );
   const { data: players } = await client
     .from("players")
-    .select("canonical_id, display_name")
+    .select("canonical_id, display_name, roster_name")
     .in("canonical_id", involvedIds);
 
   const nameById = new Map((players ?? []).map((p) => [p.canonical_id, p.display_name]));
+  const rosterNameById = new Map((players ?? []).map((p) => [p.canonical_id, p.roster_name]));
 
   return checkins.map((c) => ({
     canonicalId: c.canonical_id,
     displayName: nameById.get(c.canonical_id) ?? c.canonical_id,
+    rosterName: rosterNameById.get(c.canonical_id) ?? null,
     checkedInAt: c.checked_in_at,
     checkedInByDisplayName: nameById.get(c.checked_in_by) ?? c.checked_in_by,
   }));
 }
 
-/** The known roster, minus anyone already checked in and anyone deferred. Admin-only. */
+interface RosterPickerRow {
+  canonical_id: string;
+  display_name: string;
+  roster_name: string | null;
+  known_emails: string[] | null;
+  status: string;
+}
+
+/**
+ * Excludes anyone already given (already checked in, or already in a draft
+ * pool), `deferred` (removed from the league), and any unresolved login stub
+ * (an auto-created row whose display_name is literally the raw login email —
+ * see isUnresolvedLoginStub's doc comment in stats-engine/identity.ts for why
+ * that's NOT the same thing as `status === "provisional"` alone, which also
+ * covers genuinely new teammates auto-created from a report/pasted-roster
+ * name and must never be excluded). Pure — no Supabase call — so it's
+ * unit-testable on its own; see __tests__/data.test.ts.
+ */
+export function filterRosterForPicker(
+  rows: RosterPickerRow[],
+  excludingCanonicalIds: string[],
+): { canonicalId: string; displayName: string; rosterName: string | null }[] {
+  const excluded = new Set(excludingCanonicalIds);
+  return rows
+    .filter(
+      (p) =>
+        p.status !== "deferred" &&
+        !isUnresolvedLoginStub({ status: p.status, knownEmails: p.known_emails ?? [], rosterName: p.roster_name }) &&
+        !excluded.has(p.canonical_id),
+    )
+    .map((p) => ({ canonicalId: p.canonical_id, displayName: p.display_name, rosterName: p.roster_name }));
+}
+
+/** The known roster, minus anyone already checked in, deferred, or a not-yet-onboarded login stub. Admin-only. */
 export async function getRosterForPicker(
   excludingCanonicalIds: string[],
-): Promise<{ canonicalId: string; displayName: string }[]> {
+): Promise<{ canonicalId: string; displayName: string; rosterName: string | null }[]> {
   const client = createServiceRoleClient();
 
   const { data: players } = await client
     .from("players")
-    .select("canonical_id, display_name, status")
+    .select("canonical_id, display_name, roster_name, known_emails, status")
     .order("display_name", { ascending: true });
 
-  const excluded = new Set(excludingCanonicalIds);
-  return (players ?? [])
-    .filter((p) => p.status !== "deferred" && !excluded.has(p.canonical_id))
-    .map((p) => ({ canonicalId: p.canonical_id, displayName: p.display_name }));
+  return filterRosterForPicker((players ?? []) as RosterPickerRow[], excludingCanonicalIds);
 }

@@ -1,7 +1,9 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { listGameRecords, listPlayers } from "@/lib/stats-engine/data";
+import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { MatchCard } from "../_components/MatchCard";
 import { PillTabs } from "../_components/PillTabs";
+import { ScrollRestoration } from "../_components/ScrollRestoration";
 
 // The real seasons this league has spreadsheets/reports for. Only the
 // current season has per-game GameRecord data today — older years only ever
@@ -16,6 +18,15 @@ function isYear(value: string | undefined): value is string {
   return value !== undefined && YEARS.includes(value);
 }
 
+function mvpNameFor(
+  mvpCanonicalId: string | null,
+  playerById: Map<string, { displayName: string; rosterName?: string | null }>,
+): string | undefined {
+  if (!mvpCanonicalId) return undefined;
+  const mvp = playerById.get(mvpCanonicalId);
+  return mvp ? rosterDisplayName(mvp) : undefined;
+}
+
 export default async function MatchesPage({
   searchParams,
 }: {
@@ -26,16 +37,17 @@ export default async function MatchesPage({
 
   const [players, games] = await Promise.all([listPlayers(), listGameRecords()]);
   const user = await getCurrentUser();
+  const playerById = new Map(players.map((p) => [p.canonicalId, p]));
   const sorted = games
     .filter((g) => g.date.startsWith(year))
     .sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <main>
+      <ScrollRestoration />
       <header className="screen-header-row">
-        <h1 className="screen-header">Past Matches</h1>
         {user?.isAdmin && (
-          <a href="/matches/import" className="rulebook-link">
+          <a href="/matches/import" className="rulebook-link" data-tour-id="import-report-link">
             + Import match report
           </a>
         )}
@@ -57,19 +69,20 @@ export default async function MatchesPage({
       ) : (
         <div className="match-card-list">
           {sorted.map((game) => (
-            <a key={game.gameId} href={`/matches/${game.gameId}`} className="match-card-link">
-              <MatchCard
-                date={game.date}
-                homeScore={game.homeScore}
-                awayScore={game.awayScore}
-                description={game.description}
-                mvpName={
-                  game.mvpCanonicalId
-                    ? players.find((p) => p.canonicalId === game.mvpCanonicalId)?.displayName
-                    : undefined
-                }
-              />
-            </a>
+            <MatchCard
+              key={game.gameId}
+              gameId={game.gameId}
+              date={game.date}
+              homeScore={game.homeScore}
+              awayScore={game.awayScore}
+              description={game.description}
+              mvpName={mvpNameFor(game.mvpCanonicalId, playerById)}
+              mvpHref={
+                game.mvpCanonicalId
+                  ? `/players/${game.mvpCanonicalId}?year=${year}#game-${game.gameId}`
+                  : undefined
+              }
+            />
           ))}
         </div>
       )}
