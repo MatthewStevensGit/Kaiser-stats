@@ -6,9 +6,15 @@ name: Clear expired check-ins
 # (src/app/api/matchday/clear-expired-checkins/route.ts) on GitHub's own free
 # scheduler instead. Requires a repo secret CRON_SECRET matching the
 # CRON_SECRET env var set in Vercel.
+#
+# Paused (2026-07-20): the schedule trigger below is intentionally removed —
+# every run was failing (missing/mismatched CRON_SECRET repo secret), and
+# GitHub was emailing a failure notification for each one. Manual-only via
+# workflow_dispatch until that's sorted out and this is deliberately
+# re-enabled by restoring a `schedule:` block here. The route itself
+# (src/app/api/matchday/clear-expired-checkins/route.ts) is untouched — this
+# only stops it from firing automatically.
 on:
-  schedule:
-    - cron: "0 * * * *"
   workflow_dispatch: {}
 
 jobs:
