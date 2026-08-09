@@ -971,14 +971,14 @@ th.num {
 /* Recent Form tab's rightmost column — a row of the same small W/D/L badges, oldest-to-newest left-to-right */
 .recent-form-boxes {
   display: inline-flex;
-  gap: 0.25rem;
+  gap: 0.15rem;
   justify-content: flex-end;
 }
 
 .recent-form-boxes .result-badge {
-  width: 1.4rem;
-  height: 1.4rem;
-  font-size: 0.7rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  font-size: 0.55rem;
 }
 
 /* Goal chip — small goal icon with an optional count */
