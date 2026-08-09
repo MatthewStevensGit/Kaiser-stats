@@ -440,6 +440,22 @@ main {
   color: var(--text-secondary);
 }
 
+.report-import-flag-list li {
+  margin-bottom: 0.6rem;
+}
+
+.report-import-flag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.report-import-flag-actions select {
+  width: auto;
+}
+
 section {
   margin-bottom: 1.75rem;
 }
@@ -945,6 +961,24 @@ th.num {
 
 .result-badge-loss {
   background: var(--badge-loss-bg);
+}
+
+.result-badge-none {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+/* Recent Form tab's rightmost column — a row of the same small W/D/L badges, oldest-to-newest left-to-right */
+.recent-form-boxes {
+  display: inline-flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.recent-form-boxes .result-badge {
+  width: 1.4rem;
+  height: 1.4rem;
+  font-size: 0.7rem;
 }
 
 /* Goal chip — small goal icon with an optional count */

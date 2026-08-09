@@ -56,6 +56,14 @@ export default async function PlayerDetailPage({
   const fullLog = getPlayerGameLog(id, games);
   const log = year === ALL_YEARS_ID ? fullLog : fullLog.filter((entry) => entry.date.startsWith(year));
 
+  // The totals above come from aggregateStandings/mergePlayerSeasonStats: for
+  // any year with no season_stats_cutoff row, that merge is 100% spreadsheet
+  // (see selectStatsEligibleGames's doc comment) — the per-game log below is
+  // unconditional on cutoffs, so for those years it's a genuinely separate
+  // view of the same season, not a subset that should sum to the totals above.
+  const yearsShown = year === ALL_YEARS_ID ? YEARS.filter((y) => y !== ALL_YEARS_ID).map(Number) : [Number(year)];
+  const hasSpreadsheetOnlyYear = yearsShown.some((y) => !cutoffs.has(y));
+
   return (
     <main>
       <ScrollRestoration />
@@ -76,6 +84,15 @@ export default async function PlayerDetailPage({
           }))}
         />
       </div>
+
+      {hasSpreadsheetOnlyYear && log.length > 0 && (
+        <p className="note">
+          * The totals above come from the official season spreadsheet for any year without
+          live per-game tracking yet. The games below are individually tracked from email
+          reports and are shown for reference — they aren&rsquo;t added into the totals above,
+          since the spreadsheet already covers those seasons in full.
+        </p>
+      )}
 
       {log.length === 0 ? (
         <div className="empty-state">

@@ -22,8 +22,8 @@ export function MatchCard({
 }: {
   gameId: string;
   date: string;
-  homeScore: number;
-  awayScore: number;
+  homeScore: number | null;
+  awayScore: number | null;
   description?: string;
   mvpName?: string;
   mvpHref?: string;

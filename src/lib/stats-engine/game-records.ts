@@ -12,6 +12,15 @@ export interface RecentFormStats {
   mvpCount: number;
   /** Same captain-excluded averaging as rollupGameRecords' avgDraftPosition, scoped to just this window's games. */
   avgDraftPosition: number | null;
+  /**
+   * This window's actual results, oldest-to-newest (so a rendered row of
+   * boxes reads left-to-right chronologically, most recent on the right —
+   * the standard sports-table "form" convention). Same length as
+   * gamesPlayed. Null entries are "no report" games (see resultForSide) —
+   * kept in place rather than skipped, so the boxes still line up with which
+   * of the actual last `windowSize` games they came from.
+   */
+  results: ("win" | "draw" | "loss" | null)[];
 }
 
 /** A player's pickNumber in one game, or null if they weren't a drafted pick in it (captain, or no known draft order — see rollupGameRecords' avgDraftPosition doc comment). */
@@ -24,12 +33,13 @@ function findDraftPickNumber(game: GameRecord, canonicalId: string): number | nu
   return null;
 }
 
-/** A game's outcome from one specific side's perspective. */
+/** A game's outcome from one specific side's perspective, or null for a "no report" game (see GameRecord.homeScore's doc comment). */
 export function resultForSide(
-  homeScore: number,
-  awayScore: number,
+  homeScore: number | null,
+  awayScore: number | null,
   side: "home" | "away",
-): "win" | "draw" | "loss" {
+): "win" | "draw" | "loss" | null {
+  if (homeScore === null || awayScore === null) return null;
   if (homeScore === awayScore) return "draw";
   const winningSide = homeScore > awayScore ? "home" : "away";
   return side === winningSide ? "win" : "loss";
@@ -55,7 +65,9 @@ export function computeUnbeatenStreak(games: GameRecord[], canonicalId: string):
     const side: "home" | "away" = game.homeRoster.some((spot) => spot.canonicalId === canonicalId)
       ? "home"
       : "away";
-    if (resultForSide(game.homeScore, game.awayScore, side) === "loss") break;
+    const result = resultForSide(game.homeScore, game.awayScore, side);
+    if (result === null) continue; // "no report" game — no outcome to break or extend the streak
+    if (result === "loss") break;
     streak += 1;
   }
   return streak;
@@ -110,6 +122,13 @@ export function rollupGameRecords(
   }
 
   for (const game of games) {
+    // A "no report" game (see GameRecord.homeScore's doc comment) has a real,
+    // known roster but no outcome — it contributes nothing to season stats
+    // (no game/win/loss/tie/goal is countable), it only ever shows up in
+    // getPlayerGameLog's unconditional per-game list.
+    const hasScore = game.homeScore !== null && game.awayScore !== null;
+    if (!hasScore) continue;
+
     for (const [side, roster] of [
       ["home", game.homeRoster],
       ["away", game.awayRoster],
@@ -204,6 +223,7 @@ export function computeRecentForm(
     let mvpCount = 0;
     let draftPickSum = 0;
     let draftPickCount = 0;
+    const resultsNewestFirst: ("win" | "draw" | "loss" | null)[] = [];
     for (const game of recentGames) {
       goals += game.goals.filter((goal) => goal.scorerCanonicalId === canonicalId).length;
       assists += game.goals.filter((goal) => goal.assistCanonicalId === canonicalId).length;
@@ -213,6 +233,8 @@ export function computeRecentForm(
         draftPickSum += pickNumber;
         draftPickCount += 1;
       }
+      const side = game.homeRoster.some((spot) => spot.canonicalId === canonicalId) ? "home" : "away";
+      resultsNewestFirst.push(resultForSide(game.homeScore, game.awayScore, side));
     }
     return {
       canonicalId,
@@ -223,6 +245,7 @@ export function computeRecentForm(
       assists,
       mvpCount,
       avgDraftPosition: draftPickCount > 0 ? draftPickSum / draftPickCount : null,
+      results: [...resultsNewestFirst].reverse(),
     };
   });
 }

@@ -1,8 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { previewReportImport, saveReportImport, type ReportPreview } from "@/lib/report-parser/actions";
+import { useEffect, useState, useTransition } from "react";
+import {
+  listPlayersForNameResolution,
+  previewReportImport,
+  saveReportImport,
+  type ReportPreview,
+} from "@/lib/report-parser/actions";
 import { formatScoreLine, getMultiGoalNickname } from "@/lib/format";
 import { summarizePlayerGameStats } from "@/lib/stats-engine/goal-summary";
 import { rosterDisplayName } from "@/lib/stats-engine/identity";
@@ -16,6 +21,22 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
   const [error, setError] = useState<string | null>(null);
   const [isParsing, startParsing] = useTransition();
   const [isSaving, startSaving] = useTransition();
+  const [allPlayers, setAllPlayers] = useState<{ canonicalId: string; displayName: string }[]>([]);
+  // Keyed by raw.trim().toLowerCase() — matches resolveExtractionToGameRecord's
+  // own lookup key, so a re-preview resolves this raw name every time it
+  // reappears regardless of casing. Re-sent on every re-parse of this same
+  // text so an earlier confirmation in this session survives a second edit.
+  const [manualResolutions, setManualResolutions] = useState<Record<string, string>>({});
+  // Original-cased raw text per confirmed name, kept separately from
+  // manualResolutions (which is normalized for matching) — this is what
+  // actually gets written as a player alias on Save, and needs to read
+  // naturally rather than as a lowercased lookup key.
+  const [confirmedResolutions, setConfirmedResolutions] = useState<{ raw: string; canonicalId: string }[]>([]);
+  const [pickerDrafts, setPickerDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    listPlayersForNameResolution().then(setAllPlayers).catch(() => {});
+  }, []);
 
   function identityFor(canonicalId: string): { displayName: string; rosterName?: string | null } {
     return {
@@ -70,6 +91,9 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     e.preventDefault();
     setError(null);
     setPreview(null);
+    setManualResolutions({});
+    setConfirmedResolutions([]);
+    setPickerDrafts({});
 
     startParsing(async () => {
       try {
@@ -93,12 +117,40 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     });
   }
 
+  /**
+   * Confirms a flagged name is really a specific known player — either
+   * accepting the suggested candidate or a manual pick from the search
+   * dropdown. Re-parses immediately so this game's own roster/goals/stats
+   * include them right away; the alias itself (remembered for every future
+   * report) is only written once Save actually succeeds, in saveReportImport.
+   */
+  function handleResolveFlaggedName(raw: string, canonicalId: string) {
+    const key = raw.trim().toLowerCase();
+    const nextManual = { ...manualResolutions, [key]: canonicalId };
+    setManualResolutions(nextManual);
+    setConfirmedResolutions((prev) => [...prev.filter((r) => r.raw.trim().toLowerCase() !== key), { raw, canonicalId }]);
+
+    setError(null);
+    startParsing(async () => {
+      try {
+        const result = await previewReportImport({ text, firstPickRaw: null, manualResolutions: nextManual });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setPreview(result.preview);
+      } catch {
+        setError("Something went wrong re-checking that report — please try again.");
+      }
+    });
+  }
+
   function handleSave() {
     if (!preview) return;
     setError(null);
     startSaving(async () => {
       try {
-        const result = await saveReportImport(preview, text);
+        const result = await saveReportImport(preview, text, confirmedResolutions);
         if (!result.ok) {
           setError(result.error);
           return;
@@ -188,13 +240,51 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
             <div className="report-import-flag-list">
               <h3>Flagged names (excluded — needs a human decision)</h3>
               <ul>
-                {preview.flaggedNames.map((f) => (
-                  <li key={f.raw}>
-                    &ldquo;{f.raw}&rdquo;
-                    {f.candidates[0] &&
-                      ` — closest match: ${f.candidates[0].displayName} (distance ${f.candidates[0].distance})`}
-                  </li>
-                ))}
+                {preview.flaggedNames.map((f) => {
+                  const candidate = f.candidates[0];
+                  const draft = pickerDrafts[f.raw] ?? "";
+                  return (
+                    <li key={f.raw}>
+                      <div>
+                        &ldquo;{f.raw}&rdquo;
+                        {candidate && ` — closest match: ${candidate.displayName} (distance ${candidate.distance})`}
+                      </div>
+                      <div className="report-import-flag-actions">
+                        {candidate && (
+                          <button
+                            type="button"
+                            className="login-form-resend"
+                            disabled={isPending}
+                            onClick={() => handleResolveFlaggedName(f.raw, candidate.canonicalId)}
+                          >
+                            Accept: {candidate.displayName}
+                          </button>
+                        )}
+                        <select
+                          className="login-form-input"
+                          value={draft}
+                          disabled={isPending}
+                          onChange={(e) => setPickerDrafts((d) => ({ ...d, [f.raw]: e.target.value }))}
+                        >
+                          <option value="">Pick a different player…</option>
+                          {allPlayers.map((p) => (
+                            <option key={p.canonicalId} value={p.canonicalId}>
+                              {p.displayName}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="login-form-resend"
+                          disabled={isPending || !draft}
+                          onClick={() => handleResolveFlaggedName(f.raw, draft)}
+                        >
+                          Use this
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

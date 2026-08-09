@@ -165,6 +165,34 @@ describe("resolveExtractionToGameRecord", () => {
     expect(result.flaggedNames[0]?.raw).toBe("Gera");
   });
 
+  it("resolves a flagged name to a human-confirmed player via manualResolutions instead of excluding it — never re-flags it either", () => {
+    const flaggedPlayers: PlayerIdentity[] = [
+      ...players,
+      { canonicalId: "p4", displayName: "Gena", aliases: [], knownEmails: [], leagues: ["sunday"], status: "regular" },
+    ];
+    const extraction: RawExtraction = {
+      date: "2026-07-05",
+      league: "sunday",
+      homeRosterRaw: [],
+      awayRosterRaw: [],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: "Gera",
+      notableMentions: [],
+      pickOrderRaw: null,
+    };
+
+    // Case-insensitive/whitespace-insensitive key, matching how the client
+    // re-sends a confirmed name after a re-parse (ReportImportForm's own
+    // raw.trim().toLowerCase() key).
+    const result = resolveExtractionToGameRecord(extraction, flaggedPlayers, meta, null, { gera: "p4" });
+    expect(result.gameRecord.mvpCanonicalId).toBe("p4");
+    expect(result.flaggedNames).toHaveLength(0);
+  });
+
   it("defaults to alternating pick numbers for every game, even with no annotation at all — captains never numbered", () => {
     const extraction: RawExtraction = {
       date: "2026-07-05",

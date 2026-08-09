@@ -6,9 +6,11 @@ export interface PlayerGameLogEntry {
   date: string; // ISO 8601, same as GameRecord.date
   league: League;
   side: "home" | "away";
-  homeScore: number;
-  awayScore: number;
-  result: "win" | "draw" | "loss";
+  /** Null for a "no report" game — see GameRecord.homeScore's doc comment. */
+  homeScore: number | null;
+  awayScore: number | null;
+  /** Null when homeScore/awayScore are null — no outcome to show. */
+  result: "win" | "draw" | "loss" | null;
   /** This player's own goals in this specific game. */
   goals: number;
   /** This player's own assists in this specific game. */

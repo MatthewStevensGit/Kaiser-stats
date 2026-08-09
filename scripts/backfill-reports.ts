@@ -14,10 +14,13 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { deriveLeagueFromDate } from "../src/lib/matchday/registration-window";
 import { extractFirstPickAnnotation, parseReportText, resolveExtractionToGameRecord } from "../src/lib/report-parser/parse-report";
 import { saveResolvedGame } from "../src/lib/report-parser/save";
 import { createServiceRoleClient } from "../src/lib/supabase/client";
 import type { PlayerIdentity } from "../src/lib/stats-engine/types";
+
+const FILENAME_DATE_PATTERN = /^(\d{4}-\d{2}-\d{2})/;
 
 const DEFAULT_DIR = path.join("private", "sample-reports");
 
@@ -83,10 +86,18 @@ async function main() {
       continue;
     }
 
+    // The filename always encodes the real date (e.g. "2025-08-09-saturday.txt")
+    // even when the report text itself never states a day name — deriving the
+    // league fallback from that date (rather than a hardcoded "unknown") is
+    // what the admin web UI's import path does too (see report-parser/actions.ts).
+    const filenameDateMatch = FILENAME_DATE_PATTERN.exec(gameId);
+    const fallbackDate = filenameDateMatch?.[1] ?? new Date().toISOString().slice(0, 10);
+    const fallbackLeague = deriveLeagueFromDate(fallbackDate);
+
     const resolved = resolveExtractionToGameRecord(
       extraction,
       knownPlayers,
-      { gameId, source: `email:${gameId}`, fallbackDate: new Date().toISOString().slice(0, 10), fallbackLeague: "unknown" },
+      { gameId, source: `email:${gameId}`, fallbackDate, fallbackLeague },
       firstPickRaw,
     );
 

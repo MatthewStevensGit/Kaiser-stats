@@ -177,6 +177,27 @@ describe("rollupGameRecords", () => {
     expect(dana?.mvpCount).toBe(0);
   });
 
+  it("skips a no-report game entirely — no game/win/loss/tie/goal is countable without a score", () => {
+    const noReportGame: GameRecord = {
+      gameId: "g-no-report",
+      date: "2026-08-03",
+      league: "saturday",
+      homeRoster: [{ canonicalId: "p1", pickNumber: null }],
+      awayRoster: [{ canonicalId: "p3", pickNumber: null }],
+      homeTeamLabel: "Orange",
+      awayTeamLabel: "Blue",
+      homeScore: null,
+      awayScore: null,
+      goals: [],
+      mvpCanonicalId: null,
+      notableMentions: [],
+      source: "email:g-no-report",
+    };
+    const stats = rollupGameRecords([...games, noReportGame], players);
+    // p1 already has 2 real games in `games` — the no-report game adds nothing.
+    expect(stats.find((s) => s.canonicalId === "p1")).toMatchObject({ games: 2 });
+  });
+
   it("falls back to the canonicalId as displayName for an unknown player", () => {
     const stats = rollupGameRecords(
       [
@@ -342,6 +363,19 @@ describe("computeRecentForm", () => {
     const games: GameRecord[] = [game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }] })];
     const stats = computeRecentForm(games, []);
     expect(stats.find((s) => s.canonicalId === "p2")).toBeUndefined();
+  });
+
+  it("returns results oldest-to-newest, keeping a 'no report' game's null in place rather than skipping it", () => {
+    const games: GameRecord[] = [
+      game({ gameId: "g1", date: "2026-01-01", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 3, awayScore: 1 }), // win
+      game({ gameId: "g2", date: "2026-01-08", awayRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 2, awayScore: 2 }), // draw
+      game({ gameId: "g3", date: "2026-01-15", homeRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: null, awayScore: null }), // no report
+      game({ gameId: "g4", date: "2026-01-22", awayRoster: [{ canonicalId: "p1", pickNumber: null }], homeScore: 4, awayScore: 1 }), // loss
+    ];
+
+    const stats = computeRecentForm(games, [], 5);
+    const p1 = stats.find((s) => s.canonicalId === "p1");
+    expect(p1?.results).toEqual(["win", "draw", null, "loss"]);
   });
 });
 

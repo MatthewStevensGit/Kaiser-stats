@@ -90,8 +90,8 @@ interface GameRecordDbRow {
   league: League;
   home_team_label: string;
   away_team_label: string;
-  home_score: number;
-  away_score: number;
+  home_score: number | null;
+  away_score: number | null;
   mvp_canonical_id: string | null;
   description: string | null;
   source: string;

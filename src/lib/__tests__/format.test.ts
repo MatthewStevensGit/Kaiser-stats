@@ -21,6 +21,10 @@ describe("formatScoreLine", () => {
   it("joins two scores with an en dash", () => {
     expect(formatScoreLine(2, 4)).toBe("2 – 4");
   });
+
+  it("returns 'No report' for a no-report game (null score)", () => {
+    expect(formatScoreLine(null, null)).toBe("No report");
+  });
 });
 
 describe("formatWDL", () => {
