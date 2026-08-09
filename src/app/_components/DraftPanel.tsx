@@ -9,6 +9,7 @@ import {
   restartDraft,
   setDraftCaptains,
   setFirstPickSide,
+  setPreDraftBalance,
   setTurnSizes,
   startDraftSetup,
   undoLastPick,
@@ -24,6 +25,8 @@ import { DraftPoolPicker } from "./DraftPoolPicker";
 import { useToast } from "./ToastProvider";
 
 const SHOT_CLOCK_SECONDS = 60;
+/** Mirrors MAX_PRE_DRAFT_BALANCE_PER_SIDE in draft-actions.ts — kept in sync manually, both are small and stable. */
+const MAX_PRE_DRAFT_BALANCE_PER_SIDE = 2;
 
 interface PlayerOption {
   canonicalId: string;
@@ -73,21 +76,89 @@ function AdrLine({ adr }: { adr: AdrLike }) {
   );
 }
 
-/** A team's captain + picks so far, in order — shared by the live in-progress view and the post-draft summary so the two never drift apart. */
+/** A team's captain + pre-draft-balance additions + picks so far, in order — shared by the live in-progress view and the post-draft summary so the two never drift apart. */
 function TeamRosterSoFar({
   players,
   captainId,
+  balanceIds = [],
   picks,
 }: {
   players: PlayerOption[];
   captainId: string | null;
+  balanceIds?: string[];
   picks: { canonicalId: string }[];
 }) {
   return (
     <p className="draft-team-roster">
       <strong>{nameFor(players, captainId)}</strong> (captain)
+      {balanceIds.length > 0 &&
+        `, ${balanceIds.map((id) => `${nameFor(players, id)} (pre-draft balance)`).join(", ")}`}
       {picks.length > 0 ? `, ${picks.map((p) => nameFor(players, p.canonicalId)).join(", ")}` : null}
     </p>
+  );
+}
+
+/**
+ * "Add up to N players to this side, pre-draft" — a tiny select-and-chip
+ * picker, deliberately not the full DraftPoolPicker search UX (only ever 0-2
+ * entries, so a plain dropdown of who's left is simpler and faster to use).
+ */
+function PreDraftBalancePicker({
+  label,
+  players,
+  eligible,
+  selected,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  players: PlayerOption[];
+  /** Pool members not already a captain, not already assigned to the OTHER side. */
+  eligible: PlayerOption[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  disabled: boolean;
+}) {
+  const [draft, setDraft] = useState("");
+  const available = eligible.filter((p) => !selected.includes(p.canonicalId));
+  const atMax = selected.length >= MAX_PRE_DRAFT_BALANCE_PER_SIDE;
+
+  return (
+    <div className="draft-balance-side">
+      <p className="draft-balance-side-label">{label}</p>
+      {selected.map((id) => (
+        <span key={id} className="draft-balance-chip">
+          {nameFor(players, id)}
+          <button
+            type="button"
+            aria-label={`Remove ${nameFor(players, id)} from pre-draft balance`}
+            disabled={disabled}
+            onClick={() => onChange(selected.filter((s) => s !== id))}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {!atMax && (
+        <select
+          className="login-form-input"
+          value={draft}
+          disabled={disabled || available.length === 0}
+          onChange={(e) => {
+            const id = e.target.value;
+            if (id) onChange([...selected, id]);
+            setDraft("");
+          }}
+        >
+          <option value="">Add a pre-draft balance player...</option>
+          {available.map((p) => (
+            <option key={p.canonicalId} value={p.canonicalId}>
+              {p.displayName}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
   );
 }
 
@@ -171,8 +242,13 @@ function DraftSetupForm({
   const [homeCaptainId, setHomeCaptainId] = useState(draftState.homeCaptainId ?? "");
   const [awayCaptainId, setAwayCaptainId] = useState(draftState.awayCaptainId ?? "");
   const [firstPickSide, setFirstPickSideState] = useState<DraftSide | null>(draftState.firstPickSide);
+  const [homeBalanceIds, setHomeBalanceIds] = useState<string[]>(draftState.homeBalanceIds);
+  const [awayBalanceIds, setAwayBalanceIds] = useState<string[]>(draftState.awayBalanceIds);
 
-  const remainingCount = Math.max(pool.size - (homeCaptainId ? 1 : 0) - (awayCaptainId ? 1 : 0), 0);
+  const remainingCount = Math.max(
+    pool.size - (homeCaptainId ? 1 : 0) - (awayCaptainId ? 1 : 0) - homeBalanceIds.length - awayBalanceIds.length,
+    0,
+  );
   const defaultTurnSizes = useMemo(() => buildDefaultTurnSizes(remainingCount), [remainingCount]);
   // null = "track the live computed default as captains change" (see remainingCount
   // above, which correctly recomputes every render); once the admin types their own
@@ -186,6 +262,14 @@ function DraftSetupForm({
     .filter((p) => pool.has(p.canonicalId))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
   const canBegin = homeCaptainId && awayCaptainId && firstPickSide && turnSizesText.trim() !== "";
+
+  // Eligible for pre-draft balance: in the pool, not a captain, not already
+  // assigned to the OTHER side (a player can only ever be handed to one team).
+  const balanceEligible = poolOptions.filter(
+    (p) => p.canonicalId !== homeCaptainId && p.canonicalId !== awayCaptainId,
+  );
+  const homeBalanceEligible = balanceEligible.filter((p) => !awayBalanceIds.includes(p.canonicalId));
+  const awayBalanceEligible = balanceEligible.filter((p) => !homeBalanceIds.includes(p.canonicalId));
 
   /** Persists the form's current local state — shared by "Save Setup" and "Begin
    * Draft" so beginning a draft never depends on Save Setup having been clicked
@@ -201,6 +285,11 @@ function DraftSetupForm({
       const captainsResult = await setDraftCaptains(draftState.id, homeCaptainId, awayCaptainId);
       if (!captainsResult.ok) return captainsResult;
     }
+
+    const homeBalanceResult = await setPreDraftBalance(draftState.id, "home", homeBalanceIds);
+    if (!homeBalanceResult.ok) return homeBalanceResult;
+    const awayBalanceResult = await setPreDraftBalance(draftState.id, "away", awayBalanceIds);
+    if (!awayBalanceResult.ok) return awayBalanceResult;
 
     if (firstPickSide) {
       const firstPickResult = await setFirstPickSide(draftState.id, firstPickSide);
@@ -283,7 +372,31 @@ function DraftSetupForm({
 
       {homeCaptainId && awayCaptainId && (
         <>
-          <h2>3. Who won the coin flip?</h2>
+          <h2>3. Pre-draft balance (optional)</h2>
+          <p className="note">
+            To balance a lopsided pool, hand up to {MAX_PRE_DRAFT_BALANCE_PER_SIDE} players straight to a side
+            before the snake draft starts — they won&rsquo;t take a live turn or count toward avg draft position.
+          </p>
+          <div className="draft-balance-row">
+            <PreDraftBalancePicker
+              label={`${nameFor(players, homeCaptainId)}'s side`}
+              players={players}
+              eligible={homeBalanceEligible}
+              selected={homeBalanceIds}
+              onChange={setHomeBalanceIds}
+              disabled={isPending}
+            />
+            <PreDraftBalancePicker
+              label={`${nameFor(players, awayCaptainId)}'s side`}
+              players={players}
+              eligible={awayBalanceEligible}
+              selected={awayBalanceIds}
+              onChange={setAwayBalanceIds}
+              disabled={isPending}
+            />
+          </div>
+
+          <h2>4. Who won the coin flip?</h2>
           <div className="draft-coinflip-row">
             <button
               type="button"
@@ -305,11 +418,17 @@ function DraftSetupForm({
         </>
       )}
 
-      <h2>4. Pick sequence</h2>
+      <h2>5. Pick sequence</h2>
       <p className="note">
         Computed default for {remainingCount} remaining player{remainingCount === 1 ? "" : "s"}
-        {homeCaptainId && awayCaptainId ? ` (pool of ${pool.size}, minus your 2 captains)` : ""}: edit if the
-        captains want something different.
+        {homeCaptainId && awayCaptainId
+          ? ` (pool of ${pool.size}, minus your 2 captains${
+              homeBalanceIds.length + awayBalanceIds.length > 0
+                ? ` and ${homeBalanceIds.length + awayBalanceIds.length} pre-draft balance`
+                : ""
+            })`
+          : ""}
+        : edit if the captains want something different.
       </p>
       <input
         type="text"
@@ -400,6 +519,24 @@ function DraftLivePanel({
     });
   }
 
+  function handleRestart() {
+    const confirmed = window.confirm(
+      "Restart this draft? This clears every pick made so far — captains will pick again from scratch.",
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      try {
+        const result = await restartDraft(draftState.id);
+        if (!result.ok) return showToast("error", result.error);
+        showToast("success", "Draft restarted — set up captains and pick order again.");
+        router.refresh();
+      } catch {
+        showToast("error", "Something went wrong — please try again.");
+      }
+    });
+  }
+
   const currentCaptainId = draftState.currentSide === "home" ? draftState.homeCaptainId : draftState.awayCaptainId;
   const homePicks = draftState.picks.filter((p) => p.side === "home").sort((a, b) => a.pickNumber - b.pickNumber);
   const awayPicks = draftState.picks.filter((p) => p.side === "away").sort((a, b) => a.pickNumber - b.pickNumber);
@@ -416,20 +553,35 @@ function DraftLivePanel({
       </p>
 
       <div className="draft-teams-so-far">
-        <TeamRosterSoFar players={players} captainId={draftState.homeCaptainId} picks={homePicks} />
-        <TeamRosterSoFar players={players} captainId={draftState.awayCaptainId} picks={awayPicks} />
+        <TeamRosterSoFar
+          players={players}
+          captainId={draftState.homeCaptainId}
+          balanceIds={draftState.homeBalanceIds}
+          picks={homePicks}
+        />
+        <TeamRosterSoFar
+          players={players}
+          captainId={draftState.awayCaptainId}
+          balanceIds={draftState.awayBalanceIds}
+          picks={awayPicks}
+        />
       </div>
 
-      {lastPick && (
-        <button
-          type="button"
-          className="edit-game-button draft-undo-button"
-          disabled={isPending}
-          onClick={() => handleUndoLastPick(nameFor(players, lastPick.canonicalId))}
-        >
-          Undo last pick ({nameFor(players, lastPick.canonicalId)})
+      <div className="draft-setup-actions">
+        {lastPick && (
+          <button
+            type="button"
+            className="edit-game-button draft-undo-button"
+            disabled={isPending}
+            onClick={() => handleUndoLastPick(nameFor(players, lastPick.canonicalId))}
+          >
+            Undo last pick ({nameFor(players, lastPick.canonicalId)})
+          </button>
+        )}
+        <button type="button" className="edit-game-button" onClick={handleRestart} disabled={isPending}>
+          Restart Draft
         </button>
-      )}
+      </div>
 
       <label htmlFor="draft-adr-window" className="login-form-label">
         Avg draft position — time range
@@ -532,9 +684,19 @@ function DraftCompletedSummary({
     <div className="card">
       <p className="note">Draft complete.</p>
       <h2>{nameFor(players, draftState.homeCaptainId)}&rsquo;s team</h2>
-      <TeamRosterSoFar players={players} captainId={draftState.homeCaptainId} picks={homePicks} />
+      <TeamRosterSoFar
+        players={players}
+        captainId={draftState.homeCaptainId}
+        balanceIds={draftState.homeBalanceIds}
+        picks={homePicks}
+      />
       <h2>{nameFor(players, draftState.awayCaptainId)}&rsquo;s team</h2>
-      <TeamRosterSoFar players={players} captainId={draftState.awayCaptainId} picks={awayPicks} />
+      <TeamRosterSoFar
+        players={players}
+        captainId={draftState.awayCaptainId}
+        balanceIds={draftState.awayBalanceIds}
+        picks={awayPicks}
+      />
       <a href={`/matches/${matchGameId}`} className="rulebook-link">
         View match →
       </a>

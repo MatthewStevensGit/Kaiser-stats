@@ -35,7 +35,15 @@ interface DraftSessionRow {
   first_pick_side: DraftSide | null;
   pool_canonical_ids: string[];
   turn_sizes: number[] | null;
+  home_balance_canonical_ids: string[];
+  away_balance_canonical_ids: string[];
 }
+
+/** Max players one side can be handed pre-draft to balance a lopsided pool — see setPreDraftBalance. */
+const MAX_PRE_DRAFT_BALANCE_PER_SIDE = 2;
+
+const SESSION_COLUMNS =
+  "id, game_id, league, status, home_captain_canonical_id, away_captain_canonical_id, first_pick_side, pool_canonical_ids, turn_sizes, home_balance_canonical_ids, away_balance_canonical_ids";
 
 interface DraftPickRow {
   pick_number: number;
@@ -69,6 +77,9 @@ export interface DraftSessionState {
   firstPickSide: DraftSide | null;
   poolCanonicalIds: string[];
   turnSizes: number[] | null;
+  /** Players handed straight to a side before the snake draft — see setPreDraftBalance. */
+  homeBalanceIds: string[];
+  awayBalanceIds: string[];
   picks: { pickNumber: number; side: DraftSide; canonicalId: string }[];
   /** Undrafted, non-captain pool members, ranked lowest avgDraftPosition first (nulls last). */
   remainingRanked: RecommendedPlayer[];
@@ -86,9 +97,7 @@ async function fetchLatestSession(gameId: string): Promise<DraftSessionRow | nul
   const client = createServiceRoleClient();
   const { data } = await client
     .from("draft_sessions")
-    .select(
-      "id, game_id, league, status, home_captain_canonical_id, away_captain_canonical_id, first_pick_side, pool_canonical_ids, turn_sizes",
-    )
+    .select(SESSION_COLUMNS)
     .eq("game_id", gameId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -96,12 +105,15 @@ async function fetchLatestSession(gameId: string): Promise<DraftSessionRow | nul
   return (data as DraftSessionRow | null) ?? null;
 }
 
-/** The pool minus its 2 captains — what's actually left to draft, pick-sequence math is relative to this. */
+/** The pool minus its 2 captains and any pre-draft-balance assignments — what's actually left to LIVE draft, pick-sequence math is relative to this. */
 function remainingCountFor(session: DraftSessionRow): number {
-  const captains = [session.home_captain_canonical_id, session.away_captain_canonical_id].filter(
-    (id): id is string => id !== null,
-  );
-  return session.pool_canonical_ids.filter((id) => !captains.includes(id)).length;
+  const setAside = [
+    session.home_captain_canonical_id,
+    session.away_captain_canonical_id,
+    ...session.home_balance_canonical_ids,
+    ...session.away_balance_canonical_ids,
+  ].filter((id): id is string => id !== null);
+  return session.pool_canonical_ids.filter((id) => !setAside.includes(id)).length;
 }
 
 export async function startDraftSetup(gameId: string): Promise<ActionResult> {
@@ -177,6 +189,62 @@ export async function setDraftCaptains(
     .update({ home_captain_canonical_id: homeCaptainId, away_captain_canonical_id: awayCaptainId })
     .eq("id", sessionId);
   if (error) return { ok: false, error: "Could not set captains." };
+
+  revalidateDraftPaths(session.game_id);
+  return { ok: true };
+}
+
+/**
+ * Hands 0-2 players straight to one side before the snake draft begins, to
+ * balance a lopsided pool (e.g. one very strong and one very weak player,
+ * one to each captain) — real roster members from the moment the draft is
+ * saved, but excluded from the live pick sequence entirely and never
+ * assigned a pick number, the same treatment finalizeDraft already gives
+ * each side's captain. `canonicalIds` replaces this side's whole list each
+ * call (matches updateDraftPool's replace-not-append convention) — the
+ * setup UI always sends its full current local Set.
+ */
+export async function setPreDraftBalance(
+  sessionId: number,
+  side: DraftSide,
+  canonicalIds: string[],
+): Promise<ActionResult> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return admin;
+
+  if (canonicalIds.length > MAX_PRE_DRAFT_BALANCE_PER_SIDE) {
+    return { ok: false, error: `At most ${MAX_PRE_DRAFT_BALANCE_PER_SIDE} pre-draft balance players per side.` };
+  }
+  if (new Set(canonicalIds).size !== canonicalIds.length) {
+    return { ok: false, error: "Duplicate player in the pre-draft balance list." };
+  }
+
+  const session = await fetchSessionById(sessionId);
+  if (!session) return { ok: false, error: "Draft session not found." };
+  if (session.status !== "setup") return { ok: false, error: "Draft has already started." };
+
+  const captains = [session.home_captain_canonical_id, session.away_captain_canonical_id];
+  const otherSideBalance =
+    side === "home" ? session.away_balance_canonical_ids : session.home_balance_canonical_ids;
+  for (const id of canonicalIds) {
+    if (!session.pool_canonical_ids.includes(id)) {
+      return { ok: false, error: "Every pre-draft balance player must be in the draft pool." };
+    }
+    if (captains.includes(id)) {
+      return { ok: false, error: "A captain can't also be a pre-draft balance player." };
+    }
+    if (otherSideBalance.includes(id)) {
+      return { ok: false, error: "That player is already assigned to the other side." };
+    }
+  }
+
+  const client = createServiceRoleClient();
+  const column = side === "home" ? "home_balance_canonical_ids" : "away_balance_canonical_ids";
+  const { error } = await client
+    .from("draft_sessions")
+    .update({ [column]: canonicalIds })
+    .eq("id", sessionId);
+  if (error) return { ok: false, error: "Could not save the pre-draft balance assignment." };
 
   revalidateDraftPaths(session.game_id);
   return { ok: true };
@@ -259,9 +327,7 @@ async function fetchSessionById(sessionId: number): Promise<DraftSessionRow | nu
   const client = createServiceRoleClient();
   const { data } = await client
     .from("draft_sessions")
-    .select(
-      "id, game_id, league, status, home_captain_canonical_id, away_captain_canonical_id, first_pick_side, pool_canonical_ids, turn_sizes",
-    )
+    .select(SESSION_COLUMNS)
     .eq("id", sessionId)
     .maybeSingle();
   return (data as DraftSessionRow | null) ?? null;
@@ -288,7 +354,11 @@ export async function recordPick(sessionId: number, canonicalId: string): Promis
 
   const captains = [session.home_captain_canonical_id, session.away_captain_canonical_id];
   const alreadyPicked = new Set(picks.map((p) => p.canonical_id));
+  const preDraftBalance = [...session.home_balance_canonical_ids, ...session.away_balance_canonical_ids];
   if (captains.includes(canonicalId)) return { ok: false, error: "Captains aren't drafted — they're already set." };
+  if (preDraftBalance.includes(canonicalId)) {
+    return { ok: false, error: "That player was already assigned pre-draft — they're already on a team." };
+  }
   if (alreadyPicked.has(canonicalId)) return { ok: false, error: "That player is already on a team." };
   if (!session.pool_canonical_ids.includes(canonicalId)) {
     return { ok: false, error: "That player isn't in the draft pool." };
@@ -404,10 +474,12 @@ async function finalizeDraft(
     league: game.league,
     homeRoster: [
       { canonicalId: session.home_captain_canonical_id!, pickNumber: null },
+      ...session.home_balance_canonical_ids.map((canonicalId) => ({ canonicalId, pickNumber: null })),
       ...homePicks.map((p) => ({ canonicalId: p.canonical_id, pickNumber: p.pick_number })),
     ],
     awayRoster: [
       { canonicalId: session.away_captain_canonical_id!, pickNumber: null },
+      ...session.away_balance_canonical_ids.map((canonicalId) => ({ canonicalId, pickNumber: null })),
       ...awayPicks.map((p) => ({ canonicalId: p.canonical_id, pickNumber: p.pick_number })),
     ],
     homeTeamLabel: "Orange",
@@ -439,13 +511,16 @@ async function finalizeDraft(
 }
 
 /**
- * Undoes a completed draft so its captains can redo the picks (e.g. they think the
- * resulting teams are unfair) — clears the recorded picks, deletes the game_records row
- * finalizeDraft created (which cascade-deletes its roster_spots/goal_events/
- * notable_mentions too, see saveResolvedGame's rollbackAndFail comment), and puts the
- * session back in "setup" with its pool/captains/coin-flip/turn-sizes left exactly as
- * they were — so the admin can either hit Begin Draft again immediately for a fresh
- * shuffle, or change any of those first.
+ * Undoes a completed OR still-in-progress draft so its captains can redo the
+ * picks (e.g. they think the resulting teams are unfair, or want a full
+ * do-over mid-draft rather than undoing one pick at a time) — clears every
+ * recorded pick, deletes the game_records row finalizeDraft created if the
+ * draft had already completed (cascade-deletes its roster_spots/goal_events/
+ * notable_mentions too, see saveResolvedGame's rollbackAndFail comment; a
+ * no-op delete if it hadn't), and puts the session back in "setup" with its
+ * pool/captains/coin-flip/turn-sizes left exactly as they were — so the admin
+ * can either hit Begin Draft again immediately for a fresh shuffle, or change
+ * any of those first.
  */
 export async function restartDraft(sessionId: number): Promise<ActionResult> {
   const admin = await requireAdminResult();
@@ -453,7 +528,9 @@ export async function restartDraft(sessionId: number): Promise<ActionResult> {
 
   const session = await fetchSessionById(sessionId);
   if (!session) return { ok: false, error: "Draft session not found." };
-  if (session.status !== "completed") return { ok: false, error: "Only a completed draft can be restarted." };
+  if (session.status !== "completed" && session.status !== "in_progress") {
+    return { ok: false, error: "This draft hasn't started yet." };
+  }
 
   const client = createServiceRoleClient();
   const { data: game } = await client
@@ -500,9 +577,10 @@ export async function getLiveDraftState(gameId: string): Promise<DraftSessionSta
   const captains = [session.home_captain_canonical_id, session.away_captain_canonical_id].filter(
     (id): id is string => id !== null,
   );
+  const preDraftBalance = [...session.home_balance_canonical_ids, ...session.away_balance_canonical_ids];
   const pickedIds = new Set(picks.map((p) => p.canonical_id));
   const remainingIds = session.pool_canonical_ids.filter(
-    (id) => !captains.includes(id) && !pickedIds.has(id),
+    (id) => !captains.includes(id) && !preDraftBalance.includes(id) && !pickedIds.has(id),
   );
 
   const [allPlayers, allGames] = await Promise.all([listPlayers(), listGameRecords()]);
@@ -564,8 +642,10 @@ export async function getLiveDraftState(gameId: string): Promise<DraftSessionSta
   let currentSideTeamSize = 0;
   if (currentSide) {
     const currentSideCaptainId = currentSide === "home" ? session.home_captain_canonical_id : session.away_captain_canonical_id;
+    const currentSideBalanceIds = currentSide === "home" ? session.home_balance_canonical_ids : session.away_balance_canonical_ids;
     const currentSideRosterIds = [
       ...(currentSideCaptainId ? [currentSideCaptainId] : []),
+      ...currentSideBalanceIds,
       ...picks.filter((p) => p.side === currentSide).map((p) => p.canonical_id),
     ];
     filledGroups = countFilledGroups(currentSideRosterIds.map((id) => playersById.get(id)?.positions ?? []));
@@ -613,6 +693,8 @@ export async function getLiveDraftState(gameId: string): Promise<DraftSessionSta
     firstPickSide: session.first_pick_side,
     poolCanonicalIds: session.pool_canonical_ids,
     turnSizes: session.turn_sizes,
+    homeBalanceIds: session.home_balance_canonical_ids,
+    awayBalanceIds: session.away_balance_canonical_ids,
     picks: picks.map((p) => ({ pickNumber: p.pick_number, side: p.side, canonicalId: p.canonical_id })),
     remainingRanked,
     currentSide,

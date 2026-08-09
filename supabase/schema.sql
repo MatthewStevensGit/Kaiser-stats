@@ -340,6 +340,14 @@ create table if not exists draft_sessions (
   first_pick_side text, -- 'home' | 'away', set once the coin flip is recorded
   pool_canonical_ids text[] not null default '{}', -- draftable pool, captains excluded
   turn_sizes int[], -- admin-overridable pick-sequence; null until confirmed at start
+  -- Players assigned to a side BEFORE the snake draft begins, to balance a
+  -- lopsided pool (e.g. one very strong and one very weak player, handed one
+  -- to each captain) — real roster members, but never part of the live pick
+  -- sequence and never counted toward avgDraftPosition, same treatment as a
+  -- captain. Capped at 2 per side in setPreDraftBalance(); empty is the
+  -- normal case. See draft-actions.ts.
+  home_balance_canonical_ids text[] not null default '{}',
+  away_balance_canonical_ids text[] not null default '{}',
   created_by text not null references players (canonical_id),
   created_at timestamptz not null default now(),
   completed_at timestamptz
@@ -412,3 +420,13 @@ alter table players add column if not exists positions text[] not null default '
 alter table reminder_email_log drop constraint reminder_email_log_email_type_check;
 alter table reminder_email_log add constraint reminder_email_log_email_type_check
   check (email_type in ('registration_open', 'closing_soon', 'registration_filled', 'lineup_ready'));
+
+-- Migration (2026-08-08): pre-draft balance. Confirmed real, recurring case
+-- (draft-2026-08-08-saturday): to balance a lopsided pool, a captain
+-- sometimes hands one specific player straight to each side before the snake
+-- draft starts. Previously that player just got drafted as a normal pick
+-- (usually the very last one), quietly corrupting their avgDraftPosition —
+-- see draft_sessions' own doc comment above for the intended treatment
+-- (same as a captain: real roster member, never a real pick).
+alter table draft_sessions add column if not exists home_balance_canonical_ids text[] not null default '{}';
+alter table draft_sessions add column if not exists away_balance_canonical_ids text[] not null default '{}';
