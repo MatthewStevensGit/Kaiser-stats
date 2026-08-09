@@ -969,6 +969,15 @@ th.num {
 }
 
 /* Recent Form tab's rightmost column — a row of the same small W/D/L badges, oldest-to-newest left-to-right */
+/* Games/Goals/Assists/MVPs/ADP columns only — ~25% less horizontal padding
+   than the app default, freeing width for the Form column's 5 boxes. Scoped
+   to this table alone so every other tab's spacing is untouched. */
+.recent-form-table td.num,
+.recent-form-table th.num {
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
+}
+
 .recent-form-boxes {
   display: inline-flex;
   gap: 0.15rem;
