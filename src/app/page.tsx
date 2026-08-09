@@ -625,7 +625,7 @@ export default async function Home({
                     dir={dir}
                   />
                   <SortableHeader
-                    label="Avg Draft Pos"
+                    label="ADP"
                     href={sortHref(tab, year, "draftpos", recentFormSort, dir, true)}
                     isActive={recentFormSort === "draftpos"}
                     dir={dir}
