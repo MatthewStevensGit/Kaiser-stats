@@ -595,7 +595,7 @@ export default async function Home({
           </div>
         ) : (
           <div className="table-scroll">
-            <table>
+            <table className="recent-form-table">
               <thead>
                 <tr>
                   <th className="num">#</th>
