@@ -221,6 +221,14 @@ export function resolveExtractionToGameRecord(
   const homeRoster = homeRosterSlots.filter((spot): spot is RosterSpot => spot !== null);
   const awayRoster = awayRosterSlots.filter((spot): spot is RosterSpot => spot !== null);
 
+  // Players handed straight to a side pre-draft (see prompt.ts rule 13) —
+  // real roster spots, but they never get a pick number and are removed from
+  // the sequence entirely below, same as a captain (never gap-preserved like
+  // a flagged name, since they never actually took a real draft turn at all).
+  const preDraftBalanceIds = new Set(
+    (extraction.preDraftBalanceRaw ?? []).map((raw) => resolve(raw)).filter((id): id is string => id !== null),
+  );
+
   let firstPickWarning: string | null = null;
   let homePicksFirst = true; // default: the team listed first (home) picked first — see resolveExtractionToGameRecord's doc comment
   if (firstPickRaw) {
@@ -253,11 +261,16 @@ export function resolveExtractionToGameRecord(
     // picked, so it's skipped here and keeps its default pickNumber: null
     // rather than reserving 1/2 for it. Iterating the SLOTS array (not the
     // filtered roster) so a gap left by an excluded name doesn't shift
-    // every later teammate's pick number down — see resolveRosterSlots.
-    firstSlots.slice(1).forEach((spot, i) => {
+    // every later teammate's pick number down — see resolveRosterSlots. A
+    // pre-draft-balance slot is filtered out of this array entirely first
+    // (not just skipped in place) — unlike a flagged name's gap, it never
+    // occupied a real draft turn, so it must not consume a numbered slot
+    // that shifts everyone listed after it.
+    const notBalance = (spot: RosterSpot | null) => spot === null || !preDraftBalanceIds.has(spot.canonicalId);
+    firstSlots.slice(1).filter(notBalance).forEach((spot, i) => {
       if (spot) spot.pickNumber = 2 * i + 1;
     });
-    secondSlots.slice(1).forEach((spot, i) => {
+    secondSlots.slice(1).filter(notBalance).forEach((spot, i) => {
       if (spot) spot.pickNumber = 2 * i + 2;
     });
   }
@@ -274,9 +287,13 @@ export function resolveExtractionToGameRecord(
       for (const raw of namesRaw) {
         const canonicalId = resolve(raw);
         const spot = canonicalId ? allSpots.find((s) => s.canonicalId === canonicalId) : undefined;
-        if (spot) {
+        // A pre-draft-balance player should never legitimately appear in a
+        // narrated pick order (see rule 13) — guarded here too rather than
+        // trusting that never happens, same "never a real pick number"
+        // treatment as the default-numbering path above.
+        if (spot && canonicalId && !preDraftBalanceIds.has(canonicalId)) {
           spot.pickNumber = nextPick;
-        } else if (!pickOrderWarning) {
+        } else if (!spot && !pickOrderWarning) {
           pickOrderWarning = `"${raw}" from the narrated pick order wasn't found on either roster — some pick numbers may be incomplete for this game.`;
         }
         nextPick += 1;

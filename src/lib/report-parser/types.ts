@@ -47,4 +47,14 @@ export interface RawExtraction {
    * applies instead (see parse-report.ts).
    */
   pickOrderRaw: (string | string[])[] | null;
+  /**
+   * Raw names of players handed straight to a side before the snake draft
+   * started, to balance a lopsided pool — narrated separately from the rest
+   * of the report (e.g. "To balance the teams X was given to home and Y to
+   * away, disclude those from the average draft position"). Same treatment
+   * as a captain in resolveExtractionToGameRecord(): still on the roster,
+   * but never assigned a pick number and never counted toward
+   * avgDraftPosition. Empty/null when the report doesn't mention this.
+   */
+  preDraftBalanceRaw: string[] | null;
 }

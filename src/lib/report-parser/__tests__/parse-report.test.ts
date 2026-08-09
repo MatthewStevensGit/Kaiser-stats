@@ -39,6 +39,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: "Ari Fox",
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -69,6 +70,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -90,6 +92,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -111,6 +114,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -131,6 +135,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -157,6 +162,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: "Gera", // one edit away from "Gena" — a different, existing player
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, flaggedPlayers, meta);
@@ -183,6 +189,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: "Gera",
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     // Case-insensitive/whitespace-insensitive key, matching how the client
@@ -207,6 +214,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     // Team listed first (home) is assumed to have picked first — a
@@ -223,6 +231,34 @@ describe("resolveExtractionToGameRecord", () => {
     expect(result.gameRecord.awayRoster).toEqual([
       { canonicalId: "p3", pickNumber: null },
       { canonicalId: "auto-dana-petrov", pickNumber: 2 },
+    ]);
+  });
+
+  it("removes a pre-draft-balance player from the pick sequence entirely, never gap-preserved like a flagged name", () => {
+    const extraction: RawExtraction = {
+      date: "2026-08-08",
+      league: "saturday",
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka", "Eli Cruz"],
+      awayRosterRaw: ["Cy Okafor"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: null,
+      preDraftBalanceRaw: ["Bex Tanaka"],
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, players, meta);
+    // Bex Tanaka (pre-draft balance) keeps pickNumber null, and — unlike a
+    // flagged name's gap — Eli Cruz right after them is still pick 1, not
+    // pick 2: their slot never consumed a real draft-turn number at all.
+    expect(result.gameRecord.homeRoster).toEqual([
+      { canonicalId: "p1", pickNumber: null },
+      { canonicalId: "p2", pickNumber: null },
+      { canonicalId: "auto-eli-cruz", pickNumber: 1 },
     ]);
   });
 
@@ -248,6 +284,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, flaggedPlayers, meta);
@@ -277,6 +314,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     // Away's captain ("Ari Fox") is confirmed to have picked first — contradicts the default
@@ -307,6 +345,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: null,
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta, "Ari Fox");
@@ -335,6 +374,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: ["Nick Brazil", "Alan", "Josh", ["Emre", "Matthew"], "Oleg"],
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
@@ -369,6 +409,7 @@ describe("resolveExtractionToGameRecord", () => {
       mvpRaw: null,
       notableMentions: [],
       pickOrderRaw: ["Someone Else", "Bex Tanaka"],
+      preDraftBalanceRaw: null,
     };
 
     const result = resolveExtractionToGameRecord(extraction, players, meta);
