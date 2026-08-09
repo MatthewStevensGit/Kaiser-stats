@@ -70,8 +70,11 @@ create table if not exists game_records (
   game_id text primary key,
   date date not null,
   league text not null check (league in ('saturday', 'sunday', 'unknown')),
-  home_score integer not null,
-  away_score integer not null,
+  -- Null means a "no report" game: a real team-split roster is known (real
+  -- roster_spots rows exist) but no score was ever emailed and never will
+  -- be recoverable. Always both-null-or-both-set together. See GameRecord.
+  home_score integer,
+  away_score integer,
   mvp_canonical_id text references players (canonical_id),
   -- Admin-pasted free-text summary of the game (originally lifted from the
   -- league organizer's report message). No admin-editing UI exists yet.

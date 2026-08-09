@@ -198,8 +198,14 @@ export interface GameRecord {
    */
   homeTeamLabel: string;
   awayTeamLabel: string;
-  homeScore: number;
-  awayScore: number;
+  /**
+   * Null when a team-split roster is known (players really played) but no
+   * one ever emailed a final score/report — a real, permanent gap (see
+   * "no report" games in the backfill), not a parsing failure. Always
+   * both-null-or-both-set together.
+   */
+  homeScore: number | null;
+  awayScore: number | null;
   goals: GoalEvent[];
   /** App-derived MVP call for this game, or null if not yet computed. */
   mvpCanonicalId: string | null;

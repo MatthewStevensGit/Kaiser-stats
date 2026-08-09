@@ -22,17 +22,19 @@ function parseIsoDateParts(iso: string): DateParts {
  * which day of the week a game falls on, not two separate communities, and
  * any date is fair game for a one-off game (there have been non-weekend
  * games historically too) — no admin-facing league picker needed. A genuine
- * Saturday/Sunday date derives its matching day-keyed defaults
- * (capacity/venue/kickoff/registration-window, see constants.ts); any other
- * day of the week defaults to the Sunday set (arbitrary but harmless — venue
- * and kickoff are always explicitly entered anyway, and the registration
- * cutoff this computes can be corrected per-game via the admin edit page's
- * cutoff override).
+ * Sunday date derives its matching day-keyed defaults
+ * (capacity/venue/kickoff/registration-window, see constants.ts); every
+ * OTHER day of the week (including Saturday) defaults to the Saturday set —
+ * confirmed project rule (2026-07-20): off-day one-off games are "usually at
+ * Kaiser" (Saturday's venue, see VENUE_BY_LEAGUE), and only genuine Sunday
+ * games should ever count as the Sunday league for stats purposes. The
+ * registration cutoff this computes can still be corrected per-game via the
+ * admin edit page's cutoff override.
  */
 export function deriveLeagueFromDate(gameDateIso: string): ScheduledLeague {
   const { year, month, day } = parseIsoDateParts(gameDateIso);
   const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-  return dayOfWeek === 6 ? "saturday" : "sunday";
+  return dayOfWeek === 0 ? "sunday" : "saturday";
 }
 
 /**

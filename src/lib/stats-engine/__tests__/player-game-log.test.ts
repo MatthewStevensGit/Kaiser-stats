@@ -83,4 +83,33 @@ describe("resultForSide", () => {
     expect(resultForSide(2, 2, "home")).toBe("draw");
     expect(resultForSide(2, 2, "away")).toBe("draw");
   });
+
+  it("returns null for a no-report game (either score null)", () => {
+    expect(resultForSide(null, null, "home")).toBeNull();
+    expect(resultForSide(null, 2, "away")).toBeNull();
+    expect(resultForSide(2, null, "home")).toBeNull();
+  });
+});
+
+describe("getPlayerGameLog with a no-report game", () => {
+  it("still lists a no-report game (roster known) with null score/result", () => {
+    const noReportGame: GameRecord = {
+      gameId: "g-no-report",
+      date: "2026-08-03",
+      league: "saturday",
+      homeRoster: [{ canonicalId: "p1", pickNumber: null }],
+      awayRoster: [{ canonicalId: "p2", pickNumber: null }],
+      homeTeamLabel: "Orange",
+      awayTeamLabel: "Blue",
+      homeScore: null,
+      awayScore: null,
+      goals: [],
+      mvpCanonicalId: null,
+      notableMentions: [],
+      source: "email:g-no-report",
+    };
+    const log = getPlayerGameLog("p1", [noReportGame]);
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({ side: "home", homeScore: null, awayScore: null, result: null, goals: 0 });
+  });
 });

@@ -22,8 +22,8 @@ describe("deriveLeagueFromDate", () => {
     expect(deriveLeagueFromDate("2026-07-19")).toBe("sunday");
   });
 
-  it("defaults to sunday for a weekday date (any date is allowed for a one-off game)", () => {
-    expect(deriveLeagueFromDate("2026-07-15")).toBe("sunday");
+  it("defaults to saturday for a weekday date (any date is allowed for a one-off game)", () => {
+    expect(deriveLeagueFromDate("2026-07-15")).toBe("saturday");
   });
 });
 

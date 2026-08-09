@@ -17,7 +17,9 @@ export function formatChatTimestamp(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-export function formatScoreLine(homeScore: number, awayScore: number): string {
+/** Null scores mean a "no report" game (see GameRecord.homeScore's doc comment) — a real roster, no score ever emailed. */
+export function formatScoreLine(homeScore: number | null, awayScore: number | null): string {
+  if (homeScore === null || awayScore === null) return "No report";
   return `${homeScore} – ${awayScore}`;
 }
 
