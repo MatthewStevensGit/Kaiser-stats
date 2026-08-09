@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "../auth/session";
+import { deriveLeagueFromDate } from "../matchday/registration-window";
 import { createServiceRoleClient } from "../supabase/client";
 import type { GameRecord, NameResolution, PlayerIdentity } from "../stats-engine/types";
 import { parseReportText, resolveExtractionToGameRecord } from "./parse-report";
@@ -66,6 +67,7 @@ function buildRosterNames(known: PlayerIdentity[], provisioned: PlayerIdentity[]
 export async function previewReportImport(input: {
   text: string;
   firstPickRaw: string | null;
+  manualResolutions?: Record<string, string>;
 }): Promise<PreviewResult> {
   const admin = await requireAdminResult();
   if ("ok" in admin) return admin;
@@ -85,34 +87,39 @@ export async function previewReportImport(input: {
     return { ok: false, error: err instanceof Error ? err.message : "Report parsing failed." };
   }
 
-  // Date/league used to be typed in separately by the admin, but the pasted
-  // thread always already states them (the original email's date line/subject,
-  // e.g. "Saturday, June 27" or "Vadim ..., 2026-06-27:") — so Gemini's own
-  // extraction (see prompt.ts's date/league fields) is now the only source.
-  // No silent fallback to "today"/"unknown": a wrong guess here would produce
-  // a wrong gameId and a mislabeled game record, so this is a hard error
-  // instead, telling the admin to make sure that line is in the pasted text.
+  // Date used to be typed in separately by the admin, but the pasted thread
+  // always already states it (the original email's date line/subject, e.g.
+  // "Saturday, June 27" or "Vadim ..., 2026-06-27:") — so Gemini's own
+  // extraction (see prompt.ts's date field) is now the only source. No silent
+  // fallback to "today": a wrong guess here would produce a wrong gameId and
+  // a mislabeled game record, so this is a hard error instead, telling the
+  // admin to make sure that line is in the pasted text.
   if (!extraction.date) {
     return {
       ok: false,
       error: "Couldn't find a date in that text — make sure the pasted thread includes the original date/subject line.",
     };
   }
-  if (extraction.league !== "saturday" && extraction.league !== "sunday") {
-    return {
-      ok: false,
-      error: "Couldn't tell whether this was the Saturday or Sunday league from that text — make sure the pasted thread includes the original subject line.",
-    };
-  }
 
-  const gameId = `report-${extraction.date}-${extraction.league}`;
-  const source = `manual:${extraction.date}-${extraction.league}`;
+  // League is derived from the date's actual day of the week
+  // (deriveLeagueFromDate), not trusted from Gemini's own "league" field —
+  // confirmed project rule (2026-07-20): only a genuine Sunday counts as the
+  // Sunday league; every other day (including an irregular one-off like a
+  // Monday holiday game or a Friday game) buckets into Saturday's data,
+  // since those off-day games are normally played at Kaiser (Saturday's
+  // venue) anyway. This also means there's no more "unknown" league case to
+  // hard-error on — every date maps definitively to one or the other.
+  const league = deriveLeagueFromDate(extraction.date);
+
+  const gameId = `report-${extraction.date}-${league}`;
+  const source = `manual:${extraction.date}-${league}`;
 
   const resolved = resolveExtractionToGameRecord(
     extraction,
     knownPlayers,
-    { gameId, source, fallbackDate: extraction.date, fallbackLeague: extraction.league },
+    { gameId, source, fallbackDate: extraction.date, fallbackLeague: league },
     input.firstPickRaw,
+    input.manualResolutions,
   );
 
   return {
@@ -130,9 +137,73 @@ export async function previewReportImport(input: {
   };
 }
 
+/** Every non-deferred player, for the "pick a different player" search when resolving a flagged name — unlike the draft pool picker, this deliberately includes 'provisional' rows (an unresolved name's correct target is very often exactly one of those). */
+export async function listPlayersForNameResolution(): Promise<{ canonicalId: string; displayName: string }[]> {
+  const admin = await requireAdminResult();
+  if ("ok" in admin) return [];
+
+  const client = createServiceRoleClient();
+  const { data } = await client
+    .from("players")
+    .select("canonical_id, display_name")
+    .neq("status", "deferred")
+    .order("display_name");
+
+  return (data ?? []).map((row) => ({ canonicalId: row.canonical_id, displayName: row.display_name }));
+}
+
+/**
+ * Permanently remembers each flagged-name decision confirmed in the preview
+ * (see ReportImportForm's "Accept"/"pick a player" controls) — appends the
+ * raw text as an alias on the chosen player (so it auto-resolves next time,
+ * no re-confirming) and writes an already-resolved unresolved_names_log row
+ * as the audit trail: keeps every raw-name-to-player merge decision as its
+ * own record, separate from the alias list itself, so a bad merge can be
+ * identified and undone (drop the alias, clear the log row) without having
+ * to reverse-engineer which report caused it.
+ */
+async function persistManualResolutions(
+  client: ReturnType<typeof createServiceRoleClient>,
+  resolutions: { raw: string; canonicalId: string }[],
+  source: string,
+): Promise<void> {
+  if (resolutions.length === 0) return;
+
+  await Promise.all(
+    resolutions.map(async ({ raw, canonicalId }) => {
+      const { data: player } = await client
+        .from("players")
+        .select("aliases")
+        .eq("canonical_id", canonicalId)
+        .maybeSingle();
+      if (!player) return;
+
+      const aliases: string[] = player.aliases ?? [];
+      const alreadyKnown = aliases.some((a: string) => a.trim().toLowerCase() === raw.trim().toLowerCase());
+      if (!alreadyKnown) {
+        await client
+          .from("players")
+          .update({ aliases: [...aliases, raw.trim()] })
+          .eq("canonical_id", canonicalId);
+      }
+
+      await client.from("unresolved_names_log").insert({
+        raw_name: raw.trim(),
+        status: "flagged",
+        candidate_canonical_id: canonicalId,
+        candidate_distance: null,
+        source,
+        resolved_at: new Date().toISOString(),
+        resolved_canonical_id: canonicalId,
+      });
+    }),
+  );
+}
+
 export async function saveReportImport(
   preview: ReportPreview,
   rawText: string,
+  confirmedResolutions?: { raw: string; canonicalId: string }[],
 ): Promise<SaveResult> {
   const admin = await requireAdminResult();
   if ("ok" in admin) return admin;
@@ -163,6 +234,10 @@ export async function saveReportImport(
         flaggedNames: preview.flaggedNames,
         rawText,
       });
+
+  if (result.ok) {
+    await persistManualResolutions(client, confirmedResolutions ?? [], preview.gameRecord.source);
+  }
 
   // Invalidate /matches server-side, authoritatively, right here — the
   // client just navigates there afterward with a plain router.push(), no

@@ -161,12 +161,22 @@ export function resolveExtractionToGameRecord(
   knownPlayers: PlayerIdentity[],
   meta: { gameId: string; source: string; fallbackDate: string; fallbackLeague: "saturday" | "sunday" | "unknown" },
   firstPickRaw?: string | null,
+  // A human's answer to a flagged name from a previous preview of this same
+  // text — see ReportImportForm's "Accept"/"pick a player" controls. Keyed by
+  // raw.trim().toLowerCase() so it matches regardless of the exact casing
+  // Gemini re-extracts on a repeat parse. Checked before resolvePlayerName so
+  // a confirmed name never re-flags, and short-circuits straight to a real
+  // canonicalId instead of the usual candidates-only flag.
+  manualResolutions?: Record<string, string>,
 ): ResolvedReport {
   const flaggedNames: NameResolution[] = [];
   const provisionedByRaw = new Map<string, PlayerIdentity>();
   const seenFlagged = new Set<string>();
 
   function resolve(raw: string): string | null {
+    const manual = manualResolutions?.[raw.trim().toLowerCase()];
+    if (manual) return manual;
+
     const pool = [...knownPlayers, ...provisionedByRaw.values()];
     const resolution = resolvePlayerName(raw, pool);
 
