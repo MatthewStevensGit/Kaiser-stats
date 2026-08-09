@@ -262,6 +262,36 @@ describe("resolveExtractionToGameRecord", () => {
     ]);
   });
 
+  it("handles two pre-draft-balance players on one side, one right after the captain and one at the very end — real picks between them still number consecutively", () => {
+    const extraction: RawExtraction = {
+      date: "2026-08-08",
+      league: "saturday",
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka", "Eli Cruz", "Gus Vance", "Ivy Lang"],
+      awayRosterRaw: ["Cy Okafor"],
+      homeTeamLabelRaw: null,
+      awayTeamLabelRaw: null,
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: null,
+      preDraftBalanceRaw: ["Bex Tanaka", "Ivy Lang"],
+    };
+
+    const result = resolveExtractionToGameRecord(extraction, players, meta);
+    // Home side numbers odd (1, 3, 5...) by convention — Eli Cruz and Gus
+    // Vance are back-to-back real picks (1, 3), completely unaffected by
+    // Bex Tanaka before them or Ivy Lang after them.
+    expect(result.gameRecord.homeRoster).toEqual([
+      { canonicalId: "p1", pickNumber: null },
+      { canonicalId: "p2", pickNumber: null },
+      { canonicalId: "auto-eli-cruz", pickNumber: 1 },
+      { canonicalId: "auto-gus-vance", pickNumber: 3 },
+      { canonicalId: "auto-ivy-lang", pickNumber: null },
+    ]);
+  });
+
   it("keeps a flagged name's gap in the pick-number sequence instead of shifting everyone after it (real bug, found 2026-07-17)", () => {
     const flaggedPlayers: PlayerIdentity[] = [
       ...players,
