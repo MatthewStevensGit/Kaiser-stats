@@ -18,6 +18,7 @@ import { formatPlusMinus, formatWDL } from "@/lib/format";
 import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { GoldenBootChip } from "./_components/GoldenBootChip";
 import { LeagueTitleChip } from "./_components/LeagueTitleChip";
+import { ResultBadge } from "./_components/ResultBadge";
 import { ScrollRestoration } from "./_components/ScrollRestoration";
 import { SortableHeader } from "./_components/SortableHeader";
 import type { SortDir } from "./_components/SortableHeader";
@@ -49,6 +50,18 @@ function PlayerNameLink({
         </span>
       )}
     </a>
+  );
+}
+
+/** The Recent Form tab's rightmost column: this window's actual results as a row of small boxes, oldest-to-newest (see RecentFormStats.results' doc comment) — the classic sports-table "form" readout, distinct from the goals/assists/MVP counts the rest of the tab shows. */
+function RecentFormBoxes({ results }: { results: ("win" | "draw" | "loss" | null)[] }) {
+  if (results.length === 0) return <>—</>;
+  return (
+    <span className="recent-form-boxes">
+      {results.map((result, i) => (
+        <ResultBadge key={i} result={result} />
+      ))}
+    </span>
   );
 }
 
@@ -295,6 +308,13 @@ export default async function Home({
   );
   const awardTally = tallyAwardCounts(awards);
 
+  // Plus-Minus and Golden Boot both read from `totals` (spreadsheet merged
+  // with cutoff-eligible tracked games) — for a year with no
+  // season_stats_cutoff row, that merge is 100% spreadsheet (see
+  // selectStatsEligibleGames's doc comment), so a player's own per-game log
+  // for that year is a genuinely separate view, not a subset of this total.
+  const isSpreadsheetOnlyYear = year !== ALL_YEARS_ID && !cutoffs.has(Number(year));
+
   return (
     <main>
       <ScrollRestoration />
@@ -321,6 +341,15 @@ export default async function Home({
           ]}
         />
       </div>
+
+      {tab === "plus-minus" && isSpreadsheetOnlyYear && (
+        <p className="note">
+          * {year}&rsquo;s totals come from the official season spreadsheet — each player&rsquo;s
+          individually tracked games for {year}
+          {" "}are shown on their own profile for reference, but aren&rsquo;t added on top here
+          since the spreadsheet already covers the season in full.
+        </p>
+      )}
 
       {tab === "plus-minus" &&
         (plusMinusRanked.length === 0 ? (
@@ -373,6 +402,15 @@ export default async function Home({
             </table>
           </div>
         ))}
+
+      {tab === "golden-boot" && isSpreadsheetOnlyYear && (
+        <p className="note">
+          * {year}&rsquo;s goal totals come from the official season spreadsheet — each
+          player&rsquo;s individually tracked games for {year}
+          {" "}are shown on their own profile for reference, but aren&rsquo;t added on top here
+          since the spreadsheet already covers the season in full.
+        </p>
+      )}
 
       {tab === "golden-boot" &&
         (goldenBoot.length === 0 ? (
@@ -592,6 +630,7 @@ export default async function Home({
                     isActive={recentFormSort === "draftpos"}
                     dir={dir}
                   />
+                  <th className="num">Form</th>
                 </tr>
               </thead>
               <tbody>
@@ -606,6 +645,9 @@ export default async function Home({
                     <td className="num">{p.assists}</td>
                     <td className="num">{p.mvpCount}</td>
                     <td className="num">{p.avgDraftPosition === null ? "—" : p.avgDraftPosition.toFixed(1)}</td>
+                    <td className="num">
+                      <RecentFormBoxes results={p.results} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
