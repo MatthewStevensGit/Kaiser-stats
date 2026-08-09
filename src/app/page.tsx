@@ -334,10 +334,10 @@ export default async function Home({
           options={[
             { id: "plus-minus", label: "Plus-Minus", href: `/?tab=plus-minus&year=${year}` },
             { id: "golden-boot", label: "Golden Boot", href: `/?tab=golden-boot&year=${year}` },
+            { id: "recent-form", label: "Recent Form", href: `/?tab=recent-form&year=${year}` },
             { id: "mvp", label: "MVP", href: `/?tab=mvp&year=${year}` },
             { id: "draft-position", label: "Draft Position", href: `/?tab=draft-position&year=${year}` },
             { id: "assists", label: "Assists", href: `/?tab=assists&year=${year}` },
-            { id: "recent-form", label: "Recent Form", href: `/?tab=recent-form&year=${year}` },
           ]}
         />
       </div>
