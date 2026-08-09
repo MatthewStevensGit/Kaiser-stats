@@ -20,6 +20,8 @@ export function buildExtractionPrompt(threadText: string, todayIso: string): str
 
 12. Date without a stated year: Gmail's own copy-paste format routinely omits the year entirely — a message header like "Sun, Jun 21, 11:14 AM" or a subject line like "Sunday, June 21," no 4-digit year anywhere in the thread. Do NOT leave date null just because the year specifically is missing — infer it, since this is a real, ongoing recurring league and the report always describes a game already played, never a future one: pick whichever year makes the stated month/day fall on or before today's date (given above), and consistent with any stated day-of-week (e.g. confirm "June 21" actually falls on a Sunday that year, if the text says Sunday). Only leave date null if there isn't enough of a month/day stated anywhere to make any calendar inference at all (e.g. only "last week" with no specific date).
 
+13. Pre-draft balance: a report sometimes separately notes that one or two specific players were handed straight to a side BEFORE the draft/team-picking happened at all, usually to balance a lopsided pool (e.g. "To balance the teams Kimran was given to me and Matthew got Mike, so disclude those from the average draft position," or "X and Y were added pre-draft"). This is a distinct fact from rule 10's normal draft order — these players were never actually drafted in sequence, regardless of where their name happens to sit in the roster listing. When the report states this, extract preDraftBalanceRaw as the raw name(s) it names this way. Being on this list doesn't remove them from homeRosterRaw/awayRosterRaw — they still played, they just weren't a real draft pick. Leave preDraftBalanceRaw null if the report never mentions this.
+
 Respond with ONLY a JSON object matching this exact shape, no other text:
 {
   "date": "YYYY-MM-DD or null",
@@ -33,7 +35,8 @@ Respond with ONLY a JSON object matching this exact shape, no other text:
   "goals": [{ "scorerRaw": string, "assistRaw": string or null, "team": "home" | "away" | "unknown" }],
   "mvpRaw": string or null,
   "notableMentions": [{ "playerRaw": string, "quote": string }],
-  "pickOrderRaw": (string | string[])[] or null
+  "pickOrderRaw": (string | string[])[] or null,
+  "preDraftBalanceRaw": string[] or null
 }
 
 --- THREAD START ---
