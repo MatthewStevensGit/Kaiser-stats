@@ -434,6 +434,19 @@ main {
   margin-top: 1rem;
 }
 
+.report-import-roster-order {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.report-import-roster-order-buttons {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
 .report-import-flag-list {
   margin-top: 1rem;
   font-size: 0.85rem;

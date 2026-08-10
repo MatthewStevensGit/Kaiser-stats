@@ -98,6 +98,43 @@ describe("resolveExtractionToGameRecord", () => {
     const result = resolveExtractionToGameRecord(extraction, players, meta);
     expect(result.gameRecord.homeRoster.every((s) => s.pickNumber === null)).toBe(true);
     expect(result.gameRecord.awayRoster.every((s) => s.pickNumber === null)).toBe(true);
+    // Unanswered — the team-label heuristic's own guess is reported back for the UI to show.
+    expect(result.rosterOrderIsDraftOrder).toBe(false);
+  });
+
+  it("a human's explicit rosterOrderIsDraftOrderOverride wins outright, either direction, regardless of team labels", () => {
+    // Team-labeled report the heuristic alone would treat as NOT draft order —
+    // an explicit `true` override numbers it anyway (a real case: a report
+    // names "Team Orange"/"Team Blue" but the listed order genuinely was the
+    // draft order this time).
+    const labeledExtraction: RawExtraction = {
+      date: "2026-06-27",
+      league: "saturday",
+      homeRosterRaw: ["Ari Fox", "Bex Tanaka"],
+      awayRosterRaw: ["Cy Okafor", "Dana Petrov"],
+      homeTeamLabelRaw: "Orange",
+      awayTeamLabelRaw: "Blue",
+      homeScore: 0,
+      awayScore: 0,
+      goals: [],
+      mvpRaw: null,
+      notableMentions: [],
+      pickOrderRaw: null,
+      preDraftBalanceRaw: null,
+    };
+    const forcedOn = resolveExtractionToGameRecord(labeledExtraction, players, meta, null, undefined, true);
+    expect(forcedOn.rosterOrderIsDraftOrder).toBe(true);
+    expect(forcedOn.gameRecord.homeRoster).toEqual([
+      { canonicalId: "p1", pickNumber: null },
+      { canonicalId: "p2", pickNumber: 1 },
+    ]);
+
+    // Unlabeled report the heuristic alone would treat AS draft order — an
+    // explicit `false` override suppresses numbering anyway.
+    const unlabeledExtraction: RawExtraction = { ...labeledExtraction, homeTeamLabelRaw: null, awayTeamLabelRaw: null };
+    const forcedOff = resolveExtractionToGameRecord(unlabeledExtraction, players, meta, null, undefined, false);
+    expect(forcedOff.rosterOrderIsDraftOrder).toBe(false);
+    expect(forcedOff.gameRecord.homeRoster.every((s) => s.pickNumber === null)).toBe(true);
   });
 
   it("flags goal-sum mismatches instead of silently trusting the parse", () => {
