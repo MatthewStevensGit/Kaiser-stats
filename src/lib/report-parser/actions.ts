@@ -19,6 +19,8 @@ export interface ReportPreview {
   goalSumMismatch: boolean;
   firstPickWarning: string | null;
   pickOrderWarning: string | null;
+  /** See ResolvedReport's doc comment — always shown to the admin as a yes/no question, never silently trusted either way. */
+  rosterOrderIsDraftOrder: boolean;
 }
 
 type PreviewResult = { ok: true; preview: ReportPreview } | { ok: false; error: string };
@@ -68,6 +70,8 @@ export async function previewReportImport(input: {
   text: string;
   firstPickRaw: string | null;
   manualResolutions?: Record<string, string>;
+  /** The admin's yes/no answer to "is the roster listing above real draft order?" — see ResolvedReport's doc comment. Null/omitted means not answered yet. */
+  rosterOrderIsDraftOrder?: boolean | null;
 }): Promise<PreviewResult> {
   const admin = await requireAdminResult();
   if ("ok" in admin) return admin;
@@ -120,6 +124,7 @@ export async function previewReportImport(input: {
     { gameId, source, fallbackDate: extraction.date, fallbackLeague: league },
     input.firstPickRaw,
     input.manualResolutions,
+    input.rosterOrderIsDraftOrder,
   );
 
   return {
@@ -133,6 +138,7 @@ export async function previewReportImport(input: {
       goalSumMismatch: resolved.goalSumMismatch,
       firstPickWarning: resolved.firstPickWarning,
       pickOrderWarning: resolved.pickOrderWarning,
+      rosterOrderIsDraftOrder: resolved.rosterOrderIsDraftOrder,
     },
   };
 }

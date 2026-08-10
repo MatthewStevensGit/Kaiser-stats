@@ -33,6 +33,12 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
   // naturally rather than as a lowercased lookup key.
   const [confirmedResolutions, setConfirmedResolutions] = useState<{ raw: string; canonicalId: string }[]>([]);
   const [pickerDrafts, setPickerDrafts] = useState<Record<string, string>>({});
+  // The admin's explicit yes/no answer to "is the roster listing real draft
+  // order?" (see ResolvedReport's doc comment) — null until answered, in
+  // which case the preview shows the team-label heuristic's own guess
+  // instead. Re-sent on every re-parse of this same text, same reasoning as
+  // manualResolutions: an earlier answer must survive a flagged-name fix.
+  const [rosterOrderOverride, setRosterOrderOverride] = useState<boolean | null>(null);
 
   useEffect(() => {
     listPlayersForNameResolution().then(setAllPlayers).catch(() => {});
@@ -94,6 +100,7 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     setManualResolutions({});
     setConfirmedResolutions([]);
     setPickerDrafts({});
+    setRosterOrderOverride(null);
 
     startParsing(async () => {
       try {
@@ -133,7 +140,35 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
     setError(null);
     startParsing(async () => {
       try {
-        const result = await previewReportImport({ text, firstPickRaw: null, manualResolutions: nextManual });
+        const result = await previewReportImport({
+          text,
+          firstPickRaw: null,
+          manualResolutions: nextManual,
+          rosterOrderIsDraftOrder: rosterOrderOverride,
+        });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setPreview(result.preview);
+      } catch {
+        setError("Something went wrong re-checking that report — please try again.");
+      }
+    });
+  }
+
+  /** The admin's explicit yes/no answer to the roster-order question — re-checks the report immediately so pick numbers update right away. */
+  function handleSetRosterOrder(value: boolean) {
+    setRosterOrderOverride(value);
+    setError(null);
+    startParsing(async () => {
+      try {
+        const result = await previewReportImport({
+          text,
+          firstPickRaw: null,
+          manualResolutions,
+          rosterOrderIsDraftOrder: value,
+        });
         if (!result.ok) {
           setError(result.error);
           return;
@@ -210,6 +245,31 @@ export function ReportImportForm({ currentUserCanonicalId }: { currentUserCanoni
           )}
           {preview.firstPickWarning && <p className="report-import-warning">{preview.firstPickWarning}</p>}
           {preview.pickOrderWarning && <p className="report-import-warning">{preview.pickOrderWarning}</p>}
+
+          <div className="report-import-roster-order">
+            <p className="note">Is the roster listing below the real draft order?</p>
+            <div className="report-import-roster-order-buttons">
+              <button
+                type="button"
+                className={preview.rosterOrderIsDraftOrder ? "login-form-submit" : "edit-game-button"}
+                disabled={isPending}
+                onClick={() => handleSetRosterOrder(true)}
+              >
+                Yes, draft order
+              </button>
+              <button
+                type="button"
+                className={!preview.rosterOrderIsDraftOrder ? "login-form-submit" : "edit-game-button"}
+                disabled={isPending}
+                onClick={() => handleSetRosterOrder(false)}
+              >
+                No, just who played
+              </button>
+            </div>
+            {rosterOrderOverride === null && (
+              <p className="note">Not answered yet — showing the automatic guess below. Pick one to confirm it.</p>
+            )}
+          </div>
 
           <h3>{preview.gameRecord.homeTeamLabel} roster</h3>
           <p>{renderNameList(preview.gameRecord.homeRoster.map((s) => s.canonicalId))}</p>

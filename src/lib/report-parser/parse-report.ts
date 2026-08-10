@@ -116,6 +116,14 @@ export interface ResolvedReport {
    * applied, but this game's pick numbers may be incomplete.
    */
   pickOrderWarning: string | null;
+  /**
+   * Whether the roster listing above was actually treated as real draft
+   * order for pick-number purposes — either the human's explicit answer
+   * (rosterOrderIsDraftOrderOverride) or, unanswered, the team-label
+   * heuristic's own guess. ReportImportForm always shows this as a yes/no
+   * question rather than silently trusting the guess either way.
+   */
+  rosterOrderIsDraftOrder: boolean;
 }
 
 /**
@@ -168,6 +176,14 @@ export function resolveExtractionToGameRecord(
   // a confirmed name never re-flags, and short-circuits straight to a real
   // canonicalId instead of the usual candidates-only flag.
   manualResolutions?: Record<string, string>,
+  // A human's explicit yes/no answer (see ReportImportForm's roster-order
+  // question) to "is the roster listing above real draft order?" — always
+  // shown and always decides the outcome once answered, overriding the
+  // team-label heuristic below entirely (a report can name "Team Orange"/
+  // "Team Blue" and STILL have listed players in real draft order — the
+  // label alone was never reliable enough to fully trust). Null/undefined
+  // means "not answered yet," so the heuristic is used as the shown default.
+  rosterOrderIsDraftOrderOverride?: boolean | null,
 ): ResolvedReport {
   const flaggedNames: NameResolution[] = [];
   const provisionedByRaw = new Map<string, PlayerIdentity>();
@@ -245,13 +261,17 @@ export function resolveExtractionToGameRecord(
     }
   }
 
-  // A report that explicitly names both sides (e.g. "Team Orange:"/"Team
-  // Blue:") is just listing who's playing — confirmed 2026-07-17 this is
-  // NOT the same as the "N people" blank-line-separated convention, whose
-  // listed order IS real draft order. Only the latter format gets the
-  // default alternating assumption; a team-labeled game's pick numbers stay
-  // null unless a narrated pickOrderRaw (real, explicit prose) says otherwise.
-  const rosterOrderIsDraftOrder = !extraction.homeTeamLabelRaw && !extraction.awayTeamLabelRaw;
+  // Shown default only: a report that explicitly names both sides (e.g.
+  // "Team Orange:"/"Team Blue:") USUALLY is just listing who's playing, not
+  // draft order — confirmed 2026-07-17, the "N people" blank-line-separated
+  // convention is the one whose listed order is normally real draft order.
+  // "Usually" because this heuristic alone isn't trustworthy enough on its
+  // own (a team-labeled report can still happen to list players in real
+  // draft order) — rosterOrderIsDraftOrderOverride is the human's actual
+  // answer to the question ReportImportForm always asks, and wins outright
+  // once given.
+  const rosterOrderIsDraftOrder =
+    rosterOrderIsDraftOrderOverride ?? (!extraction.homeTeamLabelRaw && !extraction.awayTeamLabelRaw);
 
   let pickOrderWarning: string | null = null;
   if (!firstPickWarning && rosterOrderIsDraftOrder) {
@@ -358,5 +378,6 @@ export function resolveExtractionToGameRecord(
     goalSumMismatch,
     firstPickWarning,
     pickOrderWarning,
+    rosterOrderIsDraftOrder,
   };
 }
