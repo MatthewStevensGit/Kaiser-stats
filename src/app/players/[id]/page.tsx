@@ -5,6 +5,7 @@ import { mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } f
 import { formatPlusMinus, formatWDL } from "@/lib/format";
 import { rosterDisplayName } from "@/lib/stats-engine/identity";
 import { getPlayerGameLog } from "@/lib/stats-engine/player-game-log";
+import { getPlayerDossier } from "@/lib/player-dossiers";
 import { BackLink } from "../../_components/BackLink";
 import { PlayerMatchRow } from "../../_components/PlayerMatchRow";
 import { ScrollRestoration } from "../../_components/ScrollRestoration";
@@ -53,6 +54,8 @@ export default async function PlayerDetailPage({
     ? `${formatWDL(stats.wins, stats.ties, stats.losses)} · ${formatPlusMinus(stats.plusMinus)} · ${stats.goals} GOALS`
     : "0-0-0 · 0 · 0 GOALS";
 
+  const dossier = getPlayerDossier(id);
+
   const fullLog = getPlayerGameLog(id, games);
   const log = year === ALL_YEARS_ID ? fullLog : fullLog.filter((entry) => entry.date.startsWith(year));
 
@@ -72,6 +75,30 @@ export default async function PlayerDetailPage({
         <h1 className="screen-header screen-header-name-case">{rosterDisplayName(player)}</h1>
         <p className="player-summary-line">{summary}</p>
       </header>
+
+      {dossier && (
+        <a
+          className="dossier-card"
+          href={dossier.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span className="dossier-card-icon" aria-hidden>
+            ⚽
+          </span>
+          <span className="dossier-card-body">
+            <span className="dossier-card-kicker">Scouting dossier</span>
+            <span className="dossier-card-blurb">{dossier.blurb}</span>
+            <span className="dossier-card-meta">
+              Full write-up on claude.ai · data snapshot {dossier.snapshot}
+              <span className="dossier-card-arrow" aria-hidden>
+                {" "}
+                ↗
+              </span>
+            </span>
+          </span>
+        </a>
+      )}
 
       <div className="tab-select-row">
         <TabSelect
