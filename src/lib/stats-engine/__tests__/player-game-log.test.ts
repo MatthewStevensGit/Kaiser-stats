@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resultForSide } from "../game-records";
-import { getPlayerGameLog } from "../player-game-log";
+import { getPlayerGameLog, reconcileSpreadsheetYear } from "../player-game-log";
+import type { PlayerGameLogEntry } from "../player-game-log";
 import type { GameRecord } from "../types";
 
 const games: GameRecord[] = [
@@ -65,6 +66,48 @@ describe("getPlayerGameLog", () => {
     const log = getPlayerGameLog("p2", games);
     expect(log.find((e) => e.gameId === "g1")?.isMvp).toBe(false);
     expect(getPlayerGameLog("p1", games).find((e) => e.gameId === "g1")?.isMvp).toBe(true);
+  });
+});
+
+describe("reconcileSpreadsheetYear", () => {
+  const entry = (over: Partial<PlayerGameLogEntry>): PlayerGameLogEntry => ({
+    gameId: "g",
+    date: "2024-01-01",
+    league: "saturday",
+    side: "home",
+    homeScore: 3,
+    awayScore: 1,
+    result: "win",
+    goals: 0,
+    assists: 0,
+    isMvp: false,
+    ...over,
+  });
+
+  it("splits an official total into tracked vs. unaccounted goals", () => {
+    const log = [
+      entry({ gameId: "a", goals: 2 }),
+      entry({ gameId: "b", goals: 1 }),
+      entry({ gameId: "c", homeScore: null, awayScore: null, result: null, goals: 0 }),
+      entry({ gameId: "d", homeScore: null, awayScore: null, result: null, goals: 0 }),
+    ];
+    expect(reconcileSpreadsheetYear(10, log)).toEqual({
+      officialGoals: 10,
+      trackedGoals: 3,
+      unaccountedGoals: 7,
+      reportedGames: 2,
+      noReportGames: 2,
+    });
+  });
+
+  it("never returns a negative unaccounted count when reports over-credit vs. the spreadsheet", () => {
+    const log = [entry({ goals: 5 })];
+    expect(reconcileSpreadsheetYear(3, log).unaccountedGoals).toBe(0);
+  });
+
+  it("reconciles cleanly when every game was reported", () => {
+    const log = [entry({ goals: 2 }), entry({ goals: 1 })];
+    expect(reconcileSpreadsheetYear(3, log)).toMatchObject({ trackedGoals: 3, unaccountedGoals: 0, noReportGames: 0 });
   });
 });
 
