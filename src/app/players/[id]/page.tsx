@@ -4,7 +4,7 @@ import { listGameRecords, listPlayers, listSeasonStandingRows, listSeasonStatsCu
 import { mergePlayerSeasonStats, rollupGameRecords, selectStatsEligibleGames } from "@/lib/stats-engine/game-records";
 import { formatPlusMinus, formatWDL } from "@/lib/format";
 import { rosterDisplayName } from "@/lib/stats-engine/identity";
-import { getPlayerGameLog } from "@/lib/stats-engine/player-game-log";
+import { getPlayerGameLog, reconcileSpreadsheetYear } from "@/lib/stats-engine/player-game-log";
 import { getPlayerDossier } from "@/lib/player-dossiers";
 import { BackLink } from "../../_components/BackLink";
 import { PlayerMatchRow } from "../../_components/PlayerMatchRow";
@@ -67,6 +67,15 @@ export default async function PlayerDetailPage({
   const yearsShown = year === ALL_YEARS_ID ? YEARS.filter((y) => y !== ALL_YEARS_ID).map(Number) : [Number(year)];
   const hasSpreadsheetOnlyYear = yearsShown.some((y) => !cutoffs.has(y));
 
+  // For a single spreadsheet-only season, spell out why the game list below
+  // won't sum to the header's goal total: some of that player's games that
+  // year were never reported per-scorer (no report at all, or a report that
+  // gave only the score). Only meaningful for one concrete year — "All Years"
+  // mixes cutoff and non-cutoff seasons, so it keeps the generic note.
+  const singleSpreadsheetYear =
+    year !== ALL_YEARS_ID && hasSpreadsheetOnlyYear && stats !== undefined && log.length > 0;
+  const reconciliation = singleSpreadsheetYear ? reconcileSpreadsheetYear(stats.goals, log) : null;
+
   return (
     <main>
       <ScrollRestoration />
@@ -112,7 +121,33 @@ export default async function PlayerDetailPage({
         />
       </div>
 
-      {hasSpreadsheetOnlyYear && log.length > 0 && (
+      {reconciliation && (
+        <p className="note">
+          <strong>
+            {year}: {reconciliation.officialGoals} {reconciliation.officialGoals === 1 ? "goal" : "goals"}
+          </strong>{" "}
+          from the official {year} season spreadsheet.{" "}
+          {reconciliation.trackedGoals} of {reconciliation.trackedGoals === 1 ? "it is" : "them are"}{" "}
+          individually tracked in the {reconciliation.reportedGames} reported{" "}
+          {reconciliation.reportedGames === 1 ? "game" : "games"} below
+          {reconciliation.unaccountedGoals > 0 && (
+            <>
+              ; the other {reconciliation.unaccountedGoals}{" "}
+              {reconciliation.noReportGames > 0 ? (
+                <>
+                  came in {reconciliation.noReportGames}{" "}
+                  {reconciliation.noReportGames === 1 ? "game" : "games"} with no report
+                </>
+              ) : (
+                <>weren&rsquo;t broken down to a scorer in that game&rsquo;s report</>
+              )}
+            </>
+          )}
+          . The games below aren&rsquo;t added on top of the spreadsheet total.
+        </p>
+      )}
+
+      {hasSpreadsheetOnlyYear && log.length > 0 && !reconciliation && (
         <p className="note">
           * The totals above come from the official season spreadsheet for any year without
           live per-game tracking yet. The games below are individually tracked from email

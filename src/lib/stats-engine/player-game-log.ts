@@ -53,3 +53,51 @@ export function getPlayerGameLog(canonicalId: string, games: GameRecord[]): Play
 
   return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
+
+export interface SpreadsheetYearReconciliation {
+  /** The player's goal total for the year straight from the season spreadsheet — the source of truth. */
+  officialGoals: number;
+  /** Of `officialGoals`, how many are individually attributable to a specific reported game in `log`. */
+  trackedGoals: number;
+  /**
+   * `officialGoals - trackedGoals`, floored at 0. Goals the spreadsheet counted
+   * that no report ever broke down to a scorer — they happened in a game with no
+   * report at all, or in a report that gave the score without naming every scorer.
+   * Not recoverable; the spreadsheet stays authoritative.
+   */
+  unaccountedGoals: number;
+  /** Games in `log` that have a final score (a real report exists). */
+  reportedGames: number;
+  /** Games in `log` with no score — roster known, no report ever sent. */
+  noReportGames: number;
+}
+
+/**
+ * For a season the app only has the spreadsheet for (no per-game `season_stats_cutoff`),
+ * explains why a player's game-by-game log doesn't sum to their season goal total:
+ * some of their games were never reported per-scorer. Pure — the page passes in the
+ * spreadsheet total and that player's year-filtered log.
+ */
+export function reconcileSpreadsheetYear(
+  officialGoals: number,
+  log: PlayerGameLogEntry[],
+): SpreadsheetYearReconciliation {
+  let trackedGoals = 0;
+  let reportedGames = 0;
+  let noReportGames = 0;
+  for (const entry of log) {
+    if (entry.homeScore === null || entry.awayScore === null) {
+      noReportGames += 1;
+      continue;
+    }
+    reportedGames += 1;
+    trackedGoals += entry.goals;
+  }
+  return {
+    officialGoals,
+    trackedGoals,
+    unaccountedGoals: Math.max(0, officialGoals - trackedGoals),
+    reportedGames,
+    noReportGames,
+  };
+}
