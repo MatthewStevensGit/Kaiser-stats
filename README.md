@@ -2,6 +2,8 @@
 
 LLM-powered stats tracker for a recurring pickup soccer league.
 
+**Live site:** https://kaiser-stats.vercel.app
+
 Portfolio project. Planning docs are checked in at the repo root
 (`kaiser_BUILD_SPEC.md` is the entry point). **No real player data lives in
 this repo** — see the Privacy section below.
@@ -10,7 +12,7 @@ this repo** — see the Privacy section below.
 [`PHASE_2_HANDOFF.md`](PHASE_2_HANDOFF.md) first** — full current state,
 infrastructure map, credentials/access notes, and the Phase 2 checklist.
 
-## Status: Phase 1 (stats engine) complete
+## Status: stats engine live; matchday check-ins and draft also built
 
 - `src/lib/stats-engine/` — core engine: player identity resolution (never
   auto-merges a fuzzy name match), a header-based parser for the historical
@@ -21,6 +23,10 @@ infrastructure map, credentials/access notes, and the Phase 2 checklist.
 - `src/app/` — a Next.js demo (`/`) rendering the engine's output against a
   fake sample dataset, plus a `/rules` page explaining how the stats are
   computed.
+- `src/lib/matchday/` — weekly check-in windows, registration-window logic,
+  a live snake draft, and automated reminder/expiry emails, backed by two
+  scheduled GitHub Actions cron jobs (`.github/workflows/`) hitting the live
+  site's own API routes.
 - See [`docs/data-contract.md`](docs/data-contract.md) for the stable data
   shapes (`PlayerSeasonStats`, `GameRecord`) both the spreadsheet backfill and
   the live-report parser converge on, and for where new raw data files should go.
@@ -33,8 +39,6 @@ infrastructure map, credentials/access notes, and the Phase 2 checklist.
   via the Gemini API. See [`docs/report-parsing.md`](docs/report-parsing.md).
   Manual/one-file-at-a-time for now; no automatic pipeline or Supabase write
   path yet.
-- Not yet built: the admin-editable per-game review screen, and Phase 2 (the
-  check-in app — blocked on the owner conversation).
 
 ## Running it
 
