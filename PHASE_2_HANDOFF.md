@@ -17,8 +17,9 @@ Two phases, always kept separate:
 - **Phase 1 (stats engine)** — DONE, live, described below. Backfills
   historical results, parses live report emails for goals/assists/MVP,
   computes standings and rankings.
-- **Phase 2 (check-in app)** — NOT STARTED. See "Phase 2" section below for
-  why and what it needs.
+- **Phase 2 (check-in app)** — DONE, live. Weekly check-in windows, the live
+  snake draft, and automated reminders (`src/lib/matchday/`) are built,
+  tested, and running against the live site via scheduled cron jobs.
 
 ## Phase 1 status: complete and live
 
@@ -33,8 +34,8 @@ Two phases, always kept separate:
   git are already installed and working there. **Real credentials only exist
   on that machine's `.env.local`** — not in this repo (gitignored), not
   necessarily in whatever sandbox you're running in.
-- **Tests:** 26 passing (`npm test`). Also clean: `npx tsc --noEmit`,
-  `npx eslint .`, `npx next build`.
+- **Tests:** 259 passing across 18 files (`npm test`). Also clean:
+  `npx tsc --noEmit`, `npx eslint .`, `npx next build`.
 
 ### What actually works right now
 
@@ -140,6 +141,10 @@ src/lib/stats-engine/       Core engine: identity resolution, spreadsheet
                              computed — both ingestion paths converge here
                              (see docs/data-contract.md).
 src/lib/report-parser/      Gemini-based report email -> GameRecord.
+src/lib/matchday/           Check-in windows, live snake draft, reminders.
+                             Two scheduled GitHub Actions cron jobs
+                             (.github/workflows/) hit its API routes on the
+                             live site.
 src/lib/supabase/client.ts  Service-role Supabase client. Server/script-only,
                              never imported by src/app/.
 src/app/                    The public Next.js site (demo data only).
@@ -219,39 +224,13 @@ verify with a real API call before building on top of it.
 - Real data has never been exposed on the live site — first time that
   happens should be a deliberate conversation, not an accident.
 
-## Phase 2: what's next, and the actual blocker
-
-**Do not start writing Phase 2 code without checking with the user first.**
-The original spec is explicit about this, and nothing has changed it: Phase
-2 (the check-in app replacing Vadim's email-based weekly sign-up) should not
-be built until the owner conversation with Vadim happens — whether he'll
-actually adopt this as his real process. Full batched ask: `kaiser_owner_ask_list.md`.
-If the user tells you that conversation has happened and Vadim is in,
-proceed; if unclear, ask before building.
-
-Full Phase 2 spec: `kaiser_step1_concept.md`. Headline pieces once unblocked:
-- Roles: Player / Captain / Admin.
-- Weekly check-in window, default first-N-by-timestamp staging, admin manual
-  override always wins, every override logged.
-- **Live snake draft** — the most technically involved piece, needs
-  Supabase's realtime feature (already the reason Supabase was chosen over
-  alternatives).
-- Guest handling (name attached to inviting regular, no login).
-- Admin permission model as a data-model role grant from day one, not a
-  hardcoded single user (so a second admin, e.g. Eduard, can be added later
-  without a code change).
-- Attendance backfill for the cold-start problem: already solved by Phase 1's
-  spreadsheet backfill.
-
 ## How to get productive immediately
 
-1. Confirm with the user: has the Vadim conversation happened? If not, ask
-   whether to proceed anyway or hold.
-2. `git fetch origin main && git checkout -B <new-branch> origin/main`.
-3. Read `docs/data-contract.md` and `kaiser_step1_concept.md` in full before
-   writing code.
-4. If you need real credentials (Supabase/Gemini), ask the user — they exist
+1. `git fetch origin main && git checkout -B <new-branch> origin/main`.
+2. Read `docs/data-contract.md` before touching engine logic, and
+   `src/lib/matchday/` before touching check-in/draft logic.
+3. If you need real credentials (Supabase/Gemini), ask the user — they exist
    only on their local machine's `.env.local`, not in this repo, and this
    sandbox likely can't reach Supabase's network directly (see above).
-5. Same verification gate as always before shipping: `npx tsc --noEmit`,
+4. Same verification gate as always before shipping: `npx tsc --noEmit`,
    `npx eslint .`, `npm test`, `npx next build`, then PR + squash-merge.
